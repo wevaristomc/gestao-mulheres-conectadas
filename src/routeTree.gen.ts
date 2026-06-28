@@ -9,27 +9,261 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedPendenciasRouteImport } from './routes/_authenticated/pendencias'
+import { Route as AuthenticatedPedagogicoRouteImport } from './routes/_authenticated/pedagogico'
+import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
+import { Route as AuthenticatedCaptacaoRouteImport } from './routes/_authenticated/captacao'
+import { Route as AuthenticatedBaseConhecimentoRouteImport } from './routes/_authenticated/base-conhecimento'
+import { Route as AuthenticatedAdministrativoRouteImport } from './routes/_authenticated/administrativo'
 
-export interface FileRoutesByFullPath {}
-export interface FileRoutesByTo {}
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPendenciasRoute = AuthenticatedPendenciasRouteImport.update({
+  id: '/pendencias',
+  path: '/pendencias',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPedagogicoRoute = AuthenticatedPedagogicoRouteImport.update({
+  id: '/pedagogico',
+  path: '/pedagogico',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCaptacaoRoute = AuthenticatedCaptacaoRouteImport.update({
+  id: '/captacao',
+  path: '/captacao',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBaseConhecimentoRoute =
+  AuthenticatedBaseConhecimentoRouteImport.update({
+    id: '/base-conhecimento',
+    path: '/base-conhecimento',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdministrativoRoute =
+  AuthenticatedAdministrativoRouteImport.update({
+    id: '/administrativo',
+    path: '/administrativo',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+
+export interface FileRoutesByFullPath {
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
+  '/administrativo': typeof AuthenticatedAdministrativoRoute
+  '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
+  '/captacao': typeof AuthenticatedCaptacaoRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/pedagogico': typeof AuthenticatedPedagogicoRoute
+  '/pendencias': typeof AuthenticatedPendenciasRoute
+}
+export interface FileRoutesByTo {
+  '/auth': typeof AuthRoute
+  '/administrativo': typeof AuthenticatedAdministrativoRoute
+  '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
+  '/captacao': typeof AuthenticatedCaptacaoRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/pedagogico': typeof AuthenticatedPedagogicoRoute
+  '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/': typeof AuthenticatedIndexRoute
+}
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRoute
+  '/_authenticated/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
+  '/_authenticated/captacao': typeof AuthenticatedCaptacaoRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
+  '/_authenticated/pedagogico': typeof AuthenticatedPedagogicoRoute
+  '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: never
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/administrativo'
+    | '/base-conhecimento'
+    | '/captacao'
+    | '/configuracoes'
+    | '/financeiro'
+    | '/pedagogico'
+    | '/pendencias'
   fileRoutesByTo: FileRoutesByTo
-  to: never
-  id: '__root__'
+  to:
+    | '/auth'
+    | '/administrativo'
+    | '/base-conhecimento'
+    | '/captacao'
+    | '/configuracoes'
+    | '/financeiro'
+    | '/pedagogico'
+    | '/pendencias'
+    | '/'
+  id:
+    | '__root__'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/administrativo'
+    | '/_authenticated/base-conhecimento'
+    | '/_authenticated/captacao'
+    | '/_authenticated/configuracoes'
+    | '/_authenticated/financeiro'
+    | '/_authenticated/pedagogico'
+    | '/_authenticated/pendencias'
+    | '/_authenticated/'
   fileRoutesById: FileRoutesById
 }
-export interface RootRouteChildren {}
-
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {}
+export interface RootRouteChildren {
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
-const rootRouteChildren: RootRouteChildren = {}
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/pendencias': {
+      id: '/_authenticated/pendencias'
+      path: '/pendencias'
+      fullPath: '/pendencias'
+      preLoaderRoute: typeof AuthenticatedPendenciasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/pedagogico': {
+      id: '/_authenticated/pedagogico'
+      path: '/pedagogico'
+      fullPath: '/pedagogico'
+      preLoaderRoute: typeof AuthenticatedPedagogicoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financeiro': {
+      id: '/_authenticated/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/captacao': {
+      id: '/_authenticated/captacao'
+      path: '/captacao'
+      fullPath: '/captacao'
+      preLoaderRoute: typeof AuthenticatedCaptacaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/base-conhecimento': {
+      id: '/_authenticated/base-conhecimento'
+      path: '/base-conhecimento'
+      fullPath: '/base-conhecimento'
+      preLoaderRoute: typeof AuthenticatedBaseConhecimentoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/administrativo': {
+      id: '/_authenticated/administrativo'
+      path: '/administrativo'
+      fullPath: '/administrativo'
+      preLoaderRoute: typeof AuthenticatedAdministrativoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+  }
+}
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdministrativoRoute: typeof AuthenticatedAdministrativoRoute
+  AuthenticatedBaseConhecimentoRoute: typeof AuthenticatedBaseConhecimentoRoute
+  AuthenticatedCaptacaoRoute: typeof AuthenticatedCaptacaoRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
+  AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
+  AuthenticatedPedagogicoRoute: typeof AuthenticatedPedagogicoRoute
+  AuthenticatedPendenciasRoute: typeof AuthenticatedPendenciasRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdministrativoRoute: AuthenticatedAdministrativoRoute,
+  AuthenticatedBaseConhecimentoRoute: AuthenticatedBaseConhecimentoRoute,
+  AuthenticatedCaptacaoRoute: AuthenticatedCaptacaoRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
+  AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
+  AuthenticatedPedagogicoRoute: AuthenticatedPedagogicoRoute,
+  AuthenticatedPendenciasRoute: AuthenticatedPendenciasRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+const rootRouteChildren: RootRouteChildren = {
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
