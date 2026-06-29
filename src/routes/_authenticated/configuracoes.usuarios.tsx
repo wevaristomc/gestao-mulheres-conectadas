@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Plus, KeyRound, Trash2, AlertCircle, Copy, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, KeyRound, Trash2, AlertCircle, Copy, CheckCircle2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,24 @@ function UsuariosPage() {
   });
 
   const [criarOpen, setCriarOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [filtroRole, setFiltroRole] = useState<string>("todos");
+
+  const usuariosFiltrados = useMemo(() => {
+    const lista = usuariosQuery.data ?? [];
+    const termo = busca.trim().toLowerCase();
+    return lista.filter((u) => {
+      if (filtroRole !== "todos" && u.role !== filtroRole) return false;
+      if (!termo) return true;
+      return (
+        (u.nome ?? "").toLowerCase().includes(termo) ||
+        u.email.toLowerCase().includes(termo)
+      );
+    });
+  }, [usuariosQuery.data, busca, filtroRole]);
+
+  const totalUsuarios = usuariosQuery.data?.length ?? 0;
+  const temFiltro = busca.trim().length > 0 || filtroRole !== "todos";
 
   if (!isCoord) {
     return (
@@ -97,6 +115,48 @@ function UsuariosPage() {
         </Dialog>
       </div>
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome ou e-mail…"
+            className="pl-8 pr-8"
+          />
+          {busca ? (
+            <button
+              type="button"
+              onClick={() => setBusca("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Limpar busca"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+        <Select value={filtroRole} onValueChange={setFiltroRole}>
+          <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectValue placeholder="Filtrar por papel" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os papéis</SelectItem>
+            {APP_ROLES.map((r) => (
+              <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {temFiltro ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setBusca(""); setFiltroRole("todos"); }}
+          >
+            Limpar
+          </Button>
+        ) : null}
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {usuariosQuery.isLoading ? (
@@ -119,14 +179,20 @@ function UsuariosPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(usuariosQuery.data ?? []).length === 0 ? (
+                {totalUsuarios === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                       Nenhum usuário cadastrado neste projeto.
                     </TableCell>
                   </TableRow>
+                ) : usuariosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      Nenhum usuário encontrado com os filtros aplicados.
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  usuariosQuery.data!.map((u) => (
+                  usuariosFiltrados.map((u) => (
                     <UsuarioLinha
                       key={u.id}
                       usuario={u}
@@ -141,6 +207,12 @@ function UsuariosPage() {
           )}
         </CardContent>
       </Card>
+
+      {totalUsuarios > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Exibindo {usuariosFiltrados.length} de {totalUsuarios} usuário{totalUsuarios === 1 ? "" : "s"}.
+        </p>
+      ) : null}
     </div>
   );
 }
