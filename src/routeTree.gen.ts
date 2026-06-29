@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedTrocarSenhaRouteImport } from './routes/_authenticated/trocar-senha'
 import { Route as AuthenticatedPendenciasRouteImport } from './routes/_authenticated/pendencias'
 import { Route as AuthenticatedPedagogicoRouteImport } from './routes/_authenticated/pedagogico'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
@@ -19,6 +20,8 @@ import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authen
 import { Route as AuthenticatedCaptacaoRouteImport } from './routes/_authenticated/captacao'
 import { Route as AuthenticatedBaseConhecimentoRouteImport } from './routes/_authenticated/base-conhecimento'
 import { Route as AuthenticatedAdministrativoRouteImport } from './routes/_authenticated/administrativo'
+import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
+import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -34,6 +37,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTrocarSenhaRoute =
+  AuthenticatedTrocarSenhaRouteImport.update({
+    id: '/trocar-senha',
+    path: '/trocar-senha',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPendenciasRoute = AuthenticatedPendenciasRouteImport.update({
   id: '/pendencias',
   path: '/pendencias',
@@ -72,6 +81,18 @@ const AuthenticatedAdministrativoRoute =
     path: '/administrativo',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedConfiguracoesIndexRoute =
+  AuthenticatedConfiguracoesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
+const AuthenticatedConfiguracoesUsuariosRoute =
+  AuthenticatedConfiguracoesUsuariosRouteImport.update({
+    id: '/usuarios',
+    path: '/usuarios',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -79,21 +100,26 @@ export interface FileRoutesByFullPath {
   '/administrativo': typeof AuthenticatedAdministrativoRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
-  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/pedagogico': typeof AuthenticatedPedagogicoRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
+  '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/administrativo': typeof AuthenticatedAdministrativoRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
-  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/financeiro': typeof AuthenticatedFinanceiroRoute
   '/pedagogico': typeof AuthenticatedPedagogicoRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
+  '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -102,11 +128,14 @@ export interface FileRoutesById {
   '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRoute
   '/_authenticated/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/_authenticated/captacao': typeof AuthenticatedCaptacaoRoute
-  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRoute
   '/_authenticated/pedagogico': typeof AuthenticatedPedagogicoRoute
   '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
+  '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,17 +149,22 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/pedagogico'
     | '/pendencias'
+    | '/trocar-senha'
+    | '/configuracoes/usuarios'
+    | '/configuracoes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
     | '/administrativo'
     | '/base-conhecimento'
     | '/captacao'
-    | '/configuracoes'
     | '/financeiro'
     | '/pedagogico'
     | '/pendencias'
+    | '/trocar-senha'
     | '/'
+    | '/configuracoes/usuarios'
+    | '/configuracoes'
   id:
     | '__root__'
     | '/_authenticated'
@@ -142,7 +176,10 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro'
     | '/_authenticated/pedagogico'
     | '/_authenticated/pendencias'
+    | '/_authenticated/trocar-senha'
     | '/_authenticated/'
+    | '/_authenticated/configuracoes/usuarios'
+    | '/_authenticated/configuracoes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,6 +208,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/trocar-senha': {
+      id: '/_authenticated/trocar-senha'
+      path: '/trocar-senha'
+      fullPath: '/trocar-senha'
+      preLoaderRoute: typeof AuthenticatedTrocarSenhaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/pendencias': {
@@ -222,17 +266,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdministrativoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/configuracoes/': {
+      id: '/_authenticated/configuracoes/'
+      path: '/'
+      fullPath: '/configuracoes/'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesIndexRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
+    '/_authenticated/configuracoes/usuarios': {
+      id: '/_authenticated/configuracoes/usuarios'
+      path: '/usuarios'
+      fullPath: '/configuracoes/usuarios'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesUsuariosRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
   }
 }
+
+interface AuthenticatedConfiguracoesRouteChildren {
+  AuthenticatedConfiguracoesUsuariosRoute: typeof AuthenticatedConfiguracoesUsuariosRoute
+  AuthenticatedConfiguracoesIndexRoute: typeof AuthenticatedConfiguracoesIndexRoute
+}
+
+const AuthenticatedConfiguracoesRouteChildren: AuthenticatedConfiguracoesRouteChildren =
+  {
+    AuthenticatedConfiguracoesUsuariosRoute:
+      AuthenticatedConfiguracoesUsuariosRoute,
+    AuthenticatedConfiguracoesIndexRoute: AuthenticatedConfiguracoesIndexRoute,
+  }
+
+const AuthenticatedConfiguracoesRouteWithChildren =
+  AuthenticatedConfiguracoesRoute._addFileChildren(
+    AuthenticatedConfiguracoesRouteChildren,
+  )
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdministrativoRoute: typeof AuthenticatedAdministrativoRoute
   AuthenticatedBaseConhecimentoRoute: typeof AuthenticatedBaseConhecimentoRoute
   AuthenticatedCaptacaoRoute: typeof AuthenticatedCaptacaoRoute
-  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRoute
   AuthenticatedPedagogicoRoute: typeof AuthenticatedPedagogicoRoute
   AuthenticatedPendenciasRoute: typeof AuthenticatedPendenciasRoute
+  AuthenticatedTrocarSenhaRoute: typeof AuthenticatedTrocarSenhaRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
@@ -240,10 +316,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdministrativoRoute: AuthenticatedAdministrativoRoute,
   AuthenticatedBaseConhecimentoRoute: AuthenticatedBaseConhecimentoRoute,
   AuthenticatedCaptacaoRoute: AuthenticatedCaptacaoRoute,
-  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRoute,
   AuthenticatedPedagogicoRoute: AuthenticatedPedagogicoRoute,
   AuthenticatedPendenciasRoute: AuthenticatedPendenciasRoute,
+  AuthenticatedTrocarSenhaRoute: AuthenticatedTrocarSenhaRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 

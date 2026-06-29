@@ -1,5 +1,6 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
+import { useEffect } from "react";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   return (
     <ActiveContextProvider>
+      <PasswordChangeGate />
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-background">
@@ -30,6 +32,18 @@ function AuthenticatedLayout() {
       </SidebarProvider>
     </ActiveContextProvider>
   );
+}
+
+function PasswordChangeGate() {
+  const { mustChangePassword, user } = useActiveContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (user && mustChangePassword && pathname !== "/trocar-senha") {
+      navigate({ to: "/trocar-senha", replace: true });
+    }
+  }, [user, mustChangePassword, pathname, navigate]);
+  return null;
 }
 
 function BackendNotice() {

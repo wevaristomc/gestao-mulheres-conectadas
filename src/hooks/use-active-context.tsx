@@ -16,6 +16,7 @@ type RoleRow = { role: string; projeto_id: string | null };
 
 type ActiveContextValue = {
   user: { id: string; email: string } | null;
+  mustChangePassword: boolean;
   projetoId: string | null;
   projetoNome: string | null;
   role: AppRole | null;
@@ -42,6 +43,7 @@ function pickRole(rows: RoleRow[], projetoId: string | null): AppRole | null {
 
 export function ActiveContextProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [roleRows, setRoleRows] = useState<RoleRow[]>([]);
   const [projetoId, setProjetoId] = useState<string | null>(null);
@@ -53,9 +55,11 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       const s = data.session;
       setUser(s?.user ? { id: s.user.id, email: s.user.email ?? "" } : null);
+      setMustChangePassword(!!s?.user?.user_metadata?.must_change_password);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null);
+      setMustChangePassword(!!session?.user?.user_metadata?.must_change_password);
       if (!session) {
         setRoleRows([]);
         setProjetos([]);
@@ -128,6 +132,7 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ActiveContextValue>(
     () => ({
       user,
+      mustChangePassword,
       projetoId,
       projetoNome,
       role,
@@ -135,7 +140,7 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
       setProjetoAtivo,
       isBackendConnected: !!user,
     }),
-    [user, projetoId, projetoNome, role, projetos, setProjetoAtivo],
+    [user, mustChangePassword, projetoId, projetoNome, role, projetos, setProjetoAtivo],
   );
 
   return <ActiveContext.Provider value={value}>{children}</ActiveContext.Provider>;
