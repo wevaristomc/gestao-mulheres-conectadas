@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, LogOut, User } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +20,16 @@ import {
 } from "@/components/ui/popover";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { ROLE_LABELS } from "@/lib/role-access";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AppTopbar() {
   const { user, projetoNome, role, isBackendConnected } = useActiveContext();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
 
   // Sem backend, contagem de pendências fica indisponível.
   const pendenciasAbertas: number | null = null;
@@ -94,7 +102,14 @@ export function AppTopbar() {
               {user?.email ?? "Sessão não iniciada"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled className="gap-2">
+            <DropdownMenuItem
+              disabled={!user}
+              onSelect={(e) => {
+                e.preventDefault();
+                handleSignOut();
+              }}
+              className="gap-2"
+            >
               <LogOut className="h-4 w-4" />
               Sair
             </DropdownMenuItem>
