@@ -1,10 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Entrar · Painel Mulheres Conectadas" }] }),
@@ -12,6 +14,44 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled && data.session) {
+        navigate({ to: "/", replace: true });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg(null);
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+    if (error) {
+      const msg =
+        error.message === "Invalid login credentials"
+          ? "E-mail ou senha inválidos."
+          : error.message;
+      setErrorMsg(msg);
+      return;
+    }
+    navigate({ to: "/", replace: true });
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <Card className="w-full max-w-sm border-border/60 shadow-sm">
@@ -25,23 +65,26 @@ function AuthPage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              Autenticação aguardando a conexão da integração Supabase. Por enquanto,
-              este formulário é apenas visual.
-            </span>
-          </div>
+          {errorMsg ? (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          ) : null}
 
-          <form
-            className="space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-            }}
-          >
+          <form className="space-y-3" onSubmit={onSubmit}>
             <div className="space-y-1.5">
               <Label htmlFor="email">E-mail</Label>
-              <Input id="email" type="email" placeholder="nome@organizacao.org.br" autoComplete="email" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="nome@organizacao.org.br"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+              />
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -54,18 +97,27 @@ function AuthPage() {
                   Esqueci minha senha
                 </button>
               </div>
-              <Input id="password" type="password" autoComplete="current-password" />
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+              />
             </div>
-            <Button type="submit" className="w-full" disabled>
-              Entrar
+            <Button type="submit" className="w-full" disabled={loading || !email || !password}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Entrando…
+                </>
+              ) : (
+                "Entrar"
+              )}
             </Button>
           </form>
-
-          <p className="text-center text-xs text-muted-foreground">
-            <Link to="/" className="text-primary hover:underline">
-              Voltar ao painel
-            </Link>
-          </p>
         </CardContent>
       </Card>
     </div>

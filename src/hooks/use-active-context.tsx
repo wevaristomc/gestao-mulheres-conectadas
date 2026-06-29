@@ -1,45 +1,141 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { AppRole } from "@/lib/role-access";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { APP_ROLES, type AppRole } from "@/lib/role-access";
+import { supabase } from "@/integrations/supabase/client";
+import { setCachedRole } from "@/lib/auth-guard";
 
-/**
- * Contexto do "projeto ativo" + role do usuário corrente nesse projeto.
- *
- * STUB: enquanto a integração Supabase externa não está conectada, este provider
- * fornece valores de placeholder para que o shell renderize. Ao conectar o
- * Supabase, substituir o conteúdo deste arquivo por queries reais a
- * `user_roles` / `projetos` via TanStack Query + server functions.
- */
+type Projeto = { id: string; nome: string };
+type RoleRow = { role: string; projeto_id: string | null };
 
 type ActiveContextValue = {
   user: { id: string; email: string } | null;
   projetoId: string | null;
   projetoNome: string | null;
   role: AppRole | null;
-  projetosDisponiveis: Array<{ id: string; nome: string }>;
+  projetosDisponiveis: Projeto[];
   setProjetoAtivo: (id: string) => void;
   isBackendConnected: boolean;
 };
 
 const ActiveContext = createContext<ActiveContextValue | null>(null);
+const PROJETO_STORAGE_KEY = "mc.active_projeto";
+
+function isAppRole(value: string): value is AppRole {
+  return (APP_ROLES as readonly string[]).includes(value);
+}
+
+function pickRole(rows: RoleRow[], projetoId: string | null): AppRole | null {
+  if (!rows.length) return null;
+  const match =
+    (projetoId && rows.find((r) => r.projeto_id === projetoId)) ||
+    rows.find((r) => r.projeto_id === null) ||
+    rows[0];
+  return match && isAppRole(match.role) ? match.role : null;
+}
 
 export function ActiveContextProvider({ children }: { children: ReactNode }) {
-  // Placeholder enquanto Supabase não está conectado.
-  // Fail-closed: nenhum papel é assumido. Quando o backend estiver conectado,
-  // ler de `user_roles` via server function (`get_user_role`).
-  const [role] = useState<AppRole | null>(null);
+  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [roleRows, setRoleRows] = useState<RoleRow[]>([]);
   const [projetoId, setProjetoId] = useState<string | null>(null);
+
+  // Subscrever sessão
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      const s = data.session;
+      setUser(s?.user ? { id: s.user.id, email: s.user.email ?? "" } : null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null);
+      if (!session) {
+        setRoleRows([]);
+        setProjetos([]);
+        setProjetoId(null);
+        setCachedRole(null);
+        try {
+          window.localStorage.removeItem(PROJETO_STORAGE_KEY);
+        } catch {
+          /* noop */
+        }
+      }
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Carregar projetos + papéis quando usuário muda
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const [projRes, rolesRes] = await Promise.all([
+        supabase.from("projetos").select("id, nome").order("nome"),
+        supabase.from("user_roles").select("role, projeto_id").eq("user_id", user.id),
+      ]);
+      if (cancelled) return;
+      const projList = (projRes.data ?? []) as Projeto[];
+      const roles = (rolesRes.data ?? []) as RoleRow[];
+      setProjetos(projList);
+      setRoleRows(roles);
+
+      let initial: string | null = null;
+      try {
+        initial = window.localStorage.getItem(PROJETO_STORAGE_KEY);
+      } catch {
+        /* noop */
+      }
+      if (!initial || !projList.some((p) => p.id === initial)) {
+        initial = projList[0]?.id ?? null;
+      }
+      setProjetoId(initial);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const role = useMemo(() => pickRole(roleRows, projetoId), [roleRows, projetoId]);
+
+  useEffect(() => {
+    setCachedRole(role);
+  }, [role]);
+
+  const setProjetoAtivo = useCallback((id: string) => {
+    setProjetoId(id);
+    try {
+      window.localStorage.setItem(PROJETO_STORAGE_KEY, id);
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  const projetoNome = useMemo(
+    () => projetos.find((p) => p.id === projetoId)?.nome ?? null,
+    [projetos, projetoId],
+  );
 
   const value = useMemo<ActiveContextValue>(
     () => ({
-      user: null,
+      user,
       projetoId,
-      projetoNome: null,
+      projetoNome,
       role,
-      projetosDisponiveis: [],
-      setProjetoAtivo: setProjetoId,
-      isBackendConnected: false,
+      projetosDisponiveis: projetos,
+      setProjetoAtivo,
+      isBackendConnected: !!user,
     }),
-    [projetoId, role],
+    [user, projetoId, projetoNome, role, projetos, setProjetoAtivo],
   );
 
   return <ActiveContext.Provider value={value}>{children}</ActiveContext.Provider>;
