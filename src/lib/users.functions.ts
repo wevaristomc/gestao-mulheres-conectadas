@@ -8,7 +8,7 @@ const RoleEnum = z.enum(APP_ROLES);
 const ProjetoIdSchema = z.string().uuid();
 
 async function assertCoordenadorGeral(
-  supabase: ReturnType<typeof requireSupabaseAuth> extends never ? never : any,
+  supabase: any,
   userId: string,
   projetoId: string,
 ) {
