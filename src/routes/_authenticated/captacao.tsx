@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, PlaceholderPanel } from "@/components/page-header";
+import { requireModuleAccess } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/_authenticated/captacao")({
   head: () => ({ meta: [{ title: "Captação · Painel Mulheres Conectadas" }] }),
+  beforeLoad: () => requireModuleAccess("captacao"),
   component: () => (
     <div>
       <PageHeader title="Captação" description="Editais, propostas e acompanhamento de novas parcerias." />
