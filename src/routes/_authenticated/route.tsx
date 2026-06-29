@@ -5,9 +5,13 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopbar } from "@/components/app-topbar";
 import { ActiveContextProvider, useActiveContext } from "@/hooks/use-active-context";
+import { requireSession } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
+  beforeLoad: () => {
+    requireSession();
+  },
   component: AuthenticatedLayout,
 });
 
