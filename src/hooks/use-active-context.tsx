@@ -24,8 +24,9 @@ const ActiveContext = createContext<ActiveContextValue | null>(null);
 
 export function ActiveContextProvider({ children }: { children: ReactNode }) {
   // Placeholder enquanto Supabase não está conectado.
-  // Default: assume coordenador_geral para o builder ver todos os módulos.
-  const [role] = useState<AppRole | null>("coordenador_geral");
+  // Fail-closed: nenhum papel é assumido. Quando o backend estiver conectado,
+  // ler de `user_roles` via server function (`get_user_role`).
+  const [role] = useState<AppRole | null>(null);
   const [projetoId, setProjetoId] = useState<string | null>(null);
 
   const value = useMemo<ActiveContextValue>(
