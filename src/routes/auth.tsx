@@ -84,6 +84,10 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMsg, setResetMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,6 +100,21 @@ function SignInForm() {
       return;
     }
     navigate({ to: "/", replace: true });
+  }
+
+  async function onResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setResetMsg(null);
+    setResetLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setResetLoading(false);
+    if (error) {
+      setResetMsg({ type: "err", text: error.message });
+      return;
+    }
+    setResetMsg({ type: "ok", text: "Se este e-mail estiver cadastrado, um link de recuperação foi enviado." });
   }
 
   return (
@@ -119,6 +138,43 @@ function SignInForm() {
       <Button type="submit" className="w-full" disabled={loading || !email || !password}>
         {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando…</> : "Entrar"}
       </Button>
+      <button
+        type="button"
+        onClick={() => {
+          setResetEmail(email);
+          setResetMsg(null);
+          setResetOpen(true);
+        }}
+        className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      >
+        Esqueci minha senha
+      </button>
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Recuperar senha</DialogTitle>
+            <DialogDescription>
+              Informe seu e-mail e enviaremos um link para redefinir a senha.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-3" onSubmit={onResetSubmit}>
+            {resetMsg ? (
+              <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${resetMsg.type === "ok" ? "border-primary/30 bg-primary/5" : "border-destructive/30 bg-destructive/10 text-destructive"}`}>
+                {resetMsg.type === "ok" ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-primary" /> : <AlertCircle className="mt-0.5 h-3.5 w-3.5" />}
+                <span>{resetMsg.text}</span>
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor="reset-email">E-mail</Label>
+              <Input id="reset-email" type="email" value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)} required disabled={resetLoading} />
+            </div>
+            <Button type="submit" className="w-full" disabled={resetLoading || !resetEmail}>
+              {resetLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando…</> : "Enviar link de recuperação"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
