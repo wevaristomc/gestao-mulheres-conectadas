@@ -24,6 +24,7 @@ import { Route as AuthenticatedAdministrativoRouteImport } from './routes/_authe
 import { Route as AuthenticatedPedagogicoIndexRouteImport } from './routes/_authenticated/pedagogico.index'
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
+import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
@@ -112,6 +113,12 @@ const AuthenticatedConfiguracoesIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedFinanceiroOrcamentoRoute =
+  AuthenticatedFinanceiroOrcamentoRouteImport.update({
+    id: '/orcamento',
+    path: '/orcamento',
+    getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
 const AuthenticatedConfiguracoesUsuariosRoute =
   AuthenticatedConfiguracoesUsuariosRouteImport.update({
     id: '/usuarios',
@@ -162,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
   '/pedagogico/': typeof AuthenticatedPedagogicoIndexRoute
@@ -181,6 +189,7 @@ export interface FileRoutesByTo {
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro': typeof AuthenticatedFinanceiroIndexRoute
   '/pedagogico': typeof AuthenticatedPedagogicoIndexRoute
@@ -204,6 +213,7 @@ export interface FileRoutesById {
   '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
   '/_authenticated/pedagogico/': typeof AuthenticatedPedagogicoIndexRoute
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/pendencias'
     | '/trocar-senha'
     | '/configuracoes/usuarios'
+    | '/financeiro/orcamento'
     | '/configuracoes/'
     | '/financeiro/'
     | '/pedagogico/'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/trocar-senha'
     | '/'
     | '/configuracoes/usuarios'
+    | '/financeiro/orcamento'
     | '/configuracoes'
     | '/financeiro'
     | '/pedagogico'
@@ -269,6 +281,7 @@ export interface FileRouteTypes {
     | '/_authenticated/trocar-senha'
     | '/_authenticated/'
     | '/_authenticated/configuracoes/usuarios'
+    | '/_authenticated/financeiro/orcamento'
     | '/_authenticated/configuracoes/'
     | '/_authenticated/financeiro/'
     | '/_authenticated/pedagogico/'
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesIndexRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
+    '/_authenticated/financeiro/orcamento': {
+      id: '/_authenticated/financeiro/orcamento'
+      path: '/orcamento'
+      fullPath: '/financeiro/orcamento'
+      preLoaderRoute: typeof AuthenticatedFinanceiroOrcamentoRouteImport
+      parentRoute: typeof AuthenticatedFinanceiroRoute
+    }
     '/_authenticated/configuracoes/usuarios': {
       id: '/_authenticated/configuracoes/usuarios'
       path: '/usuarios'
@@ -455,11 +475,14 @@ const AuthenticatedConfiguracoesRouteWithChildren =
   )
 
 interface AuthenticatedFinanceiroRouteChildren {
+  AuthenticatedFinanceiroOrcamentoRoute: typeof AuthenticatedFinanceiroOrcamentoRoute
   AuthenticatedFinanceiroIndexRoute: typeof AuthenticatedFinanceiroIndexRoute
 }
 
 const AuthenticatedFinanceiroRouteChildren: AuthenticatedFinanceiroRouteChildren =
   {
+    AuthenticatedFinanceiroOrcamentoRoute:
+      AuthenticatedFinanceiroOrcamentoRoute,
     AuthenticatedFinanceiroIndexRoute: AuthenticatedFinanceiroIndexRoute,
   }
 
