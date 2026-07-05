@@ -105,13 +105,23 @@ function SignInForm() {
   async function onResetSubmit(e: React.FormEvent) {
     e.preventDefault();
     setResetMsg(null);
+    const emailNorm = resetEmail.trim();
+    // RFC 5322-simplified check: local@domain.tld (TLD 2+ chars, subdomínios OK)
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRe.test(emailNorm)) {
+      setResetMsg({ type: "err", text: "Informe um e-mail no formato nome@dominio.com." });
+      return;
+    }
     setResetLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+    const { error } = await supabase.auth.resetPasswordForEmail(emailNorm, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetLoading(false);
     if (error) {
-      setResetMsg({ type: "err", text: error.message });
+      const msg = /email.*invalid|invalid.*email/i.test(error.message)
+        ? "O servidor de autenticação rejeitou este e-mail. Verifique se está correto ou contate a coordenação — pode ser uma restrição de domínio configurada no Supabase."
+        : error.message;
+      setResetMsg({ type: "err", text: msg });
       return;
     }
     setResetMsg({ type: "ok", text: "Se este e-mail estiver cadastrado, um link de recuperação foi enviado." });
