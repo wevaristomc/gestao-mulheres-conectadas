@@ -20,7 +20,6 @@ import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authentic
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedCaptacaoRouteImport } from './routes/_authenticated/captacao'
 import { Route as AuthenticatedBaseConhecimentoRouteImport } from './routes/_authenticated/base-conhecimento'
-import { Route as AuthenticatedAdministrativoRouteImport } from './routes/_authenticated/administrativo'
 import { Route as AuthenticatedPedagogicoIndexRouteImport } from './routes/_authenticated/pedagogico.index'
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
@@ -89,12 +88,6 @@ const AuthenticatedBaseConhecimentoRoute =
   AuthenticatedBaseConhecimentoRouteImport.update({
     id: '/base-conhecimento',
     path: '/base-conhecimento',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedAdministrativoRoute =
-  AuthenticatedAdministrativoRouteImport.update({
-    id: '/administrativo',
-    path: '/administrativo',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPedagogicoIndexRoute =
@@ -174,7 +167,6 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/administrativo': typeof AuthenticatedAdministrativoRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -198,7 +190,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/administrativo': typeof AuthenticatedAdministrativoRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
@@ -221,7 +212,6 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRoute
   '/_authenticated/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/_authenticated/captacao': typeof AuthenticatedCaptacaoRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -249,7 +239,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
-    | '/administrativo'
     | '/base-conhecimento'
     | '/captacao'
     | '/configuracoes'
@@ -273,7 +262,6 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/reset-password'
-    | '/administrativo'
     | '/base-conhecimento'
     | '/captacao'
     | '/pendencias'
@@ -295,7 +283,6 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
-    | '/_authenticated/administrativo'
     | '/_authenticated/base-conhecimento'
     | '/_authenticated/captacao'
     | '/_authenticated/configuracoes'
@@ -401,13 +388,6 @@ declare module '@tanstack/react-router' {
       path: '/base-conhecimento'
       fullPath: '/base-conhecimento'
       preLoaderRoute: typeof AuthenticatedBaseConhecimentoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/administrativo': {
-      id: '/_authenticated/administrativo'
-      path: '/administrativo'
-      fullPath: '/administrativo'
-      preLoaderRoute: typeof AuthenticatedAdministrativoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/pedagogico/': {
@@ -578,7 +558,6 @@ const AuthenticatedPedagogicoRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAdministrativoRoute: typeof AuthenticatedAdministrativoRoute
   AuthenticatedBaseConhecimentoRoute: typeof AuthenticatedBaseConhecimentoRoute
   AuthenticatedCaptacaoRoute: typeof AuthenticatedCaptacaoRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -590,7 +569,6 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAdministrativoRoute: AuthenticatedAdministrativoRoute,
   AuthenticatedBaseConhecimentoRoute: AuthenticatedBaseConhecimentoRoute,
   AuthenticatedCaptacaoRoute: AuthenticatedCaptacaoRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
