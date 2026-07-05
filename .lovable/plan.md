@@ -1,50 +1,57 @@
-## Onde estamos vs PRD (PROMPT 0 — Fund)
+## Módulo Pedagógico — Fase 1
 
-O PRD original pede: shell + auth + papéis + 8 rotas + Visão Geral com 4 KPIs preenchidos por Supabase + Pendências (com sino no topbar) + módulos vazios prontos para receber leituras reais.
+Objetivo: transformar `/pedagogico` (hoje placeholder) em um módulo funcional com listagem de turmas, detalhe da turma com suas aulas, e grade de frequência dos cursistas — mais CRUD básico para lançar aulas e marcar presença. Todo o schema é descoberto em runtime; queries são defensivas (colunas faltantes → "—", RLS negando → "sem acesso").
 
-Status atual:
+### Rotas novas (`src/routes/_authenticated/`)
 
-| Área | Estado |
-|---|---|
-| Shell (sidebar, topbar, layout) | ✅ pronto |
-| Auth (login, reset, troca de senha, primeiro admin) | ✅ pronto |
-| RLS + papéis (`user_roles`, `has_role`) | ✅ desbloqueado hoje |
-| Configurações → Usuários | ✅ CRUD completo |
-| Visão Geral — 4 KPIs | 🟡 cards renderizam "—" (nunca consultam Supabase) |
-| Pendências | 🔴 placeholder |
-| Sino de pendências no topbar | 🔴 sem contador real |
-| Pedagógico / Administrativo / Financeiro / Captação | 🔴 placeholders |
-| Base de Conhecimento | 🔴 placeholder |
+```text
+pedagogico.tsx                    → lista de turmas do projeto ativo
+pedagogico.turmas.$id.tsx         → layout com abas (Aulas | Frequência | Cursistas)
+pedagogico.turmas.$id.index.tsx   → redirect p/ aba Aulas
+pedagogico.turmas.$id.aulas.tsx
+pedagogico.turmas.$id.frequencia.tsx
+pedagogico.turmas.$id.cursistas.tsx
+```
 
-Módulos de negócio (Pedagógico → matrícula/frequência/entregas, Financeiro → orçamento/despesas, Captação → fornecedores/cotações, etc.) são um esforço grande e ainda não foram detalhados no PRD. O **próximo passo canônico do PRD** é fechar a fundação: Visão Geral com números reais + Pendências funcionando + sino ligado. Só depois abrimos o escopo de cada módulo.
+Todas com `beforeLoad: () => requireModuleAccess("pedagogico")`.
 
-## Próximo passo proposto
+### Queries (`src/lib/pedagogico-queries.ts` — novo arquivo)
 
-**Fase 1 — Fechar a fundação lendo do Supabase (uma sessão de trabalho)**
+- `turmasListOptions(projetoId)` → `turmas.select('*').eq('projeto_id', ...)`; renderiza qualquer coluna reconhecida (nome, turno, carga_horaria, data_inicio, data_fim, professor_id, local).
+- `turmaByIdOptions(turmaId)` → detalhe da turma.
+- `aulasByTurmaOptions(turmaId)` → `aulas.select('*').eq('turma_id', ...).order('data')`.
+- `cursistasByTurmaOptions(turmaId)` → `matriculas.select('id, cursista_id, cursistas(*)').eq('turma_id', ...)`.
+- `frequenciaGridOptions(turmaId)` → tenta `frequencias` primeiro; se PostgREST devolver 42P01 (tabela inexistente), tenta `presencas`; guarda a tabela detectada em memória para reuso. Se ambas falharem, retorna `{ tableName: null, rows: [] }` e a UI mostra estado vazio explicando.
+- Mutations: `upsertAula`, `deleteAula`, `upsertFrequencia` (recebe `{ aula_id, matricula_id, presente }`).
 
-1. **Visão Geral com KPIs reais**, escopados pelo `projetoId` ativo do `useActiveContext`:
-   - `Cursistas ativas` = `count(cursistas)` via `matriculas` do projeto com `status = 'ativa'`.
-   - `Turmas em andamento` = `count(turmas)` do projeto com data corrente entre `data_inicio` e `data_fim` (ou `status = 'em_andamento'` — a decidir ao inspecionar o schema).
-   - `Execução orçamentária` = `sum(despesas.valor) / sum(orcamento_itens.valor)` do projeto, formatado como %.
-   - `Pendências abertas` = `count(pendencias)` do projeto com `status = 'aberta'`.
-   - Usar TanStack Query (`useQuery`) por KPI, com Skeleton enquanto carrega e fallback "—" em caso de erro/vazio.
+Todas as queries retornam `{ data, error }` no mesmo padrão de `dashboard-queries.ts`.
 
-2. **Sino do topbar**: reusar o mesmo count de pendências abertas e mostrar badge com o número; clique navega para `/pendencias`.
+### Telas
 
-3. **/pendencias**: tabela real com colunas `titulo`, `tipo`, `prioridade`, `responsavel`, `prazo`, `status`, filtro por status (Aberta / Em andamento / Resolvida) e busca por texto. Sem CRUD nesta fase — só leitura + link para a origem quando existir.
+**`/pedagogico`** — tabela de turmas do `projetoId` ativo. Colunas montadas dinamicamente a partir da primeira row (whitelist: nome, turno, data_inicio, data_fim, carga_horaria). Cada linha é `<Link to="/pedagogico/turmas/$id">`. Skeleton enquanto carrega, "Sem turmas neste projeto" quando vazio.
 
-4. **Selector de projeto no topbar** (se houver mais de um projeto visível ao usuário): garantir que os KPIs e pendências reagem a `setProjetoAtivo`.
+**`/pedagogico/turmas/$id`** — header com nome/turno/período da turma + `<Tabs>` shadcn navegando entre aulas/frequência/cursistas via `<Link>` (não `useState`) para manter URL como fonte de verdade. `<Outlet />` renderiza a aba.
 
-5. **Estados de erro/RLS**: se uma query retornar erro, o card mostra "Sem acesso" em vez de quebrar — importante enquanto policies de outras tabelas ainda não foram revisadas.
+**Aba Aulas** — tabela ordenada por data (data, tema/título, duração, ações). Botão "Nova aula" abre `<Dialog>` com form (data obrigatória; demais campos aparecem se existirem na primeira row detectada). Editar/excluir por linha. Mutations invalidam `["aulas", turmaId]` e `["frequencia", turmaId]`.
 
-**Fora do escopo desta fase:** módulos Pedagógico/Administrativo/Financeiro/Captação/Base de Conhecimento continuam placeholders — cada um vai virar seu próprio PRD depois.
+**Aba Frequência** — grade cursistas (linhas) × aulas (colunas). Cada célula é um `<Checkbox>` que dispara `upsertFrequencia` otimista. Cabeçalho fixo com data da aula. Se `frequenciaGridOptions` retorna `tableName: null`, mostra painel vazio: "Tabela de frequência não encontrada no banco. Configure `frequencias(aula_id, matricula_id, presente)` para habilitar esta grade."
 
-## Perguntas antes de eu escrever a Fase 1
+**Aba Cursistas** — tabela simples com nome/email do cursista + status da matrícula.
 
-Preciso confirmar o schema para não sair chutando nomes de coluna:
+### Sidebar / navegação
 
-1. Você quer que eu leia o schema real do Supabase (via `supabase.from(...).select(...).limit(0)` ou olhando `src/integrations/supabase/types.ts` gerado) e derive os KPIs pelas colunas que existem, ou você me passa os nomes exatos das colunas de `cursistas`, `turmas`, `orcamento_itens`, `despesas` e `pendencias`?
+`app-sidebar.tsx` já tem entrada Pedagógico apontando pra `/pedagogico` — nenhuma mudança. A navegação entre abas usa `<Link>` do TanStack.
 
-2. Quando um usuário tem acesso a **mais de um projeto**, o `projeto_id` ativo já persiste em `localStorage` — o topbar deve ganhar um dropdown de projetos agora, ou fica implícito (primeiro projeto do usuário) até termos mais de um cadastrado?
+### Fora do escopo desta fase
 
-Assim que responder, eu abro a Fase 1 em build mode.
+- Criar/editar turmas (só listar — turmas continuam sendo gerenciadas fora da UI por enquanto).
+- Criar/editar cursistas e matrículas.
+- Relatórios / exportação de frequência.
+- Notificações de aulas sem frequência lançada.
+
+### Detalhes técnicos
+
+- Segue padrão existente: `queryOptions` + `useSuspenseQuery` em componentes; `useMutation` + `queryClient.invalidateQueries` para escrita.
+- Nenhum server function novo — tudo via `supabase` client no browser sob RLS (mesmo padrão de `dashboard-queries.ts` e da tela de Usuários).
+- Se RLS bloquear escrita de aula/frequência para o papel atual, a mutation devolve erro e um `toast` (`sonner`) mostra a mensagem — sem tratamento especial por papel no cliente (RLS é a fonte da verdade).
+- Rotas seguem `tanstack-route-architecture`: layout `pedagogico.turmas.$id.tsx` retorna `<Outlet />` e uma `index.tsx` irmã faz `throw redirect({ to: "/pedagogico/turmas/$id/aulas", params })`.
