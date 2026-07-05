@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 import { canAccess, type ModuleKey } from "@/lib/role-access";
 import { useActiveContext } from "@/hooks/use-active-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Item = {
   key: ModuleKey;
@@ -50,11 +51,25 @@ const APOIO: Item[] = [
 ];
 
 export function AppSidebar() {
-  const { role } = useActiveContext();
+  const { role, isLoadingRoles } = useActiveContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
 
   const renderGroup = (label: string, items: Item[]) => {
+    if (isLoadingRoles) {
+      return (
+        <SidebarGroup>
+          <SidebarGroupLabel>{label}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <div className="space-y-1 px-2 py-1">
+              {items.map((i) => (
+                <Skeleton key={i.key} className="h-7 w-full" />
+              ))}
+            </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      );
+    }
     const visible = items.filter((i) => canAccess(i.key, role));
     if (visible.length === 0) return null;
     return (

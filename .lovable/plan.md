@@ -1,83 +1,36 @@
-## Objetivo
+## Diagnóstico
 
-Facilitar o bootstrap do primeiro admin exibindo, na própria tela `/auth`, o SQL necessário para criar `public.tem_admin` e o trigger `on_auth_user_created_first_admin`, junto com instruções de teste no Supabase.
+A role no banco está correta (`coordenador_geral` com `projeto_id = d91d…302`), então o problema está no cliente. Duas causas prováveis, precisamos confirmar qual:
 
-## Onde aparece
+**Hipótese A — RLS bloqueia `select` em `user_roles`.** O hook faz `supabase.from("user_roles").select(...).eq("user_id", user.id)`. Se não existe policy `SELECT` permitindo o usuário ler as próprias rows, `rolesRes.data` volta vazio → `pickRole` retorna `null` → `canAccess` retorna `false` para tudo → sidebar quase vazio.
 
-Na `src/routes/auth.tsx`, abaixo do `CardHeader` (ou como link discreto no rodapé do card), um botão secundário:
+**Hipótese B — Race de renderização.** Sidebar renderiza antes das rows chegarem: com `role=null` o filtro `canAccess` esconde os itens; quando a role chega, o React re-renderiza, mas se algum consumidor (ex.: cache de role, `requireModuleAccess`) leu antes, o estado "capado" persiste.
 
-> **"Primeiro acesso? Ver SQL de setup"**
+## Passos
 
-Sempre visível (útil para debug), mas com destaque maior quando `temAdmin === false` — sinal de que o projeto ainda precisa do bootstrap.
+1. **Instrumentar o `use-active-context`** com logs temporários do resultado bruto de `projetos` e `user_roles` (contagem, primeiro row, erro). Isso mostra na console se é RLS (data vazio + erro) ou timing.
 
-## O que o modal mostra
+2. **Adicionar estado de loading** em `useActiveContext` (`isLoadingRoles`) e expor via contexto. O `AppSidebar` renderiza skeletons enquanto `isLoadingRoles` for `true`, evitando o flash com role `null`.
 
-Um `Dialog` (shadcn) com:
-
-1. **Passo 1 — Rode este SQL no Supabase**
-   Bloco de código com botão "Copiar" contendo:
+3. **Se for Hipótese A**, adicionar migration com policy de leitura própria em `user_roles`:
 
    ```sql
-   -- 1) Função pública para checar se o projeto já tem admin
-   create or replace function public.tem_admin(_projeto_id uuid)
-   returns boolean
-   language sql stable security definer set search_path = public as $$
-     select exists (
-       select 1 from public.user_roles
-       where projeto_id = _projeto_id and role = 'coordenador_geral'
-     )
-   $$;
-   grant execute on function public.tem_admin(uuid) to anon, authenticated;
-
-   -- 2) Trigger: 1º usuário do projeto vira coordenador_geral automaticamente
-   create or replace function public.handle_first_user()
-   returns trigger language plpgsql security definer set search_path = public as $$
-   declare _projeto_id uuid := 'd91d2e5a-3d0b-4539-915c-5db6c95dd302'::uuid;
-   begin
-     if not public.tem_admin(_projeto_id) then
-       insert into public.user_roles(user_id, projeto_id, role)
-       values (new.id, _projeto_id, 'coordenador_geral');
-     end if;
-     return new;
-   end $$;
-
-   drop trigger if exists on_auth_user_created_first_admin on auth.users;
-   create trigger on_auth_user_created_first_admin
-     after insert on auth.users
-     for each row execute function public.handle_first_user();
+   create policy "Users can read own roles"
+     on public.user_roles for select
+     to authenticated
+     using (auth.uid() = user_id);
    ```
 
-2. **Passo 2 — Como executar**
-   Lista curta:
-   - Abra o painel do Supabase → **SQL Editor** → **New query**.
-   - Cole o SQL acima e clique em **Run**.
-   - Espere ver "Success. No rows returned".
+   (mantendo `has_role` como security-definer para checagens cruzadas).
 
-3. **Passo 3 — Testar**
-   - Volte para esta tela e recarregue: a aba **"Criar conta admin"** deve aparecer.
-   - Cadastre nome + e-mail + senha (mín. 8). Você é logado direto e recebe `coordenador_geral`.
-   - Verifique no Supabase: `select * from public.user_roles;` deve mostrar sua linha.
-   - A aba "Criar conta admin" some depois — novos usuários passam a ser criados em **Configurações › Usuários**.
+4. **Endurecer `pickRole`**: quando houver múltiplas rows, priorizar a role de maior privilégio (ordem: `coordenador_geral` > `gestor_financeiro` > `coordenador_pedagogico` > `administrativo` > `professor` > `auxiliar_pedagogico`) em vez de depender só do `projeto_id` casado. Isso evita que uma row secundária mascare a role global.
 
-4. **Passo 4 (opcional) — Habilitar gestão de usuários**
-   Nota curta: "Para criar outros usuários pela tela Configurações › Usuários, também configure o secret `ADMIN_SERVICE_ROLE_KEY` no painel."
+5. **Validar no preview**: logar na console após login com Rita — esperado `role: coordenador_geral`, sidebar com todos os grupos (Geral, Módulos completo, Apoio com Configurações visível).
+
+6. **Remover logs** após confirmação e manter apenas `isLoadingRoles` + policy + `pickRole` reforçado.
 
 ## Detalhes técnicos
 
-**Arquivos modificados:**
-- `src/routes/auth.tsx` — adicionar estado `sqlOpen`, botão que abre o `Dialog`, e o conteúdo do modal. Um pequeno componente `SqlSetupDialog` no mesmo arquivo (não vale extrair).
-- Reutilizar `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` de `@/components/ui/dialog` e `Button` de `@/components/ui/button`.
-
-**Cópia para clipboard:**
-- Botão "Copiar SQL" usa `navigator.clipboard.writeText(sql)` e mostra "Copiado!" por 2s via `useState`. Sem dependência nova.
-
-**Estilo:**
-- SQL num `<pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">` para não estourar o modal.
-- Modal com `max-w-2xl` para caber o SQL confortavelmente.
-
-**Não muda nada de backend/lógica** — é puramente informacional/UX. Nenhum arquivo novo, nenhum SQL rodando pelo app.
-
-## Fora de escopo
-
-- Rodar o SQL automaticamente a partir do app.
-- Detectar se o trigger já existe (isso continua implícito pelo comportamento do `tem_admin`).
+- Arquivos: `src/hooks/use-active-context.tsx` (loading state, pickRole, logs), `src/components/app-sidebar.tsx` (skeleton), nova migration se hipótese A.
+- Não altera `role-access.ts` nem rotas.
+- `requireModuleAccess` continua lendo `mc.active_role` do `localStorage`; após o fix, o cache é atualizado assim que a role real chega.
