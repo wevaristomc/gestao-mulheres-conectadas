@@ -26,6 +26,7 @@ import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
+import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
@@ -126,6 +127,12 @@ const AuthenticatedFinanceiroFornecedoresRoute =
     path: '/fornecedores',
     getParentRoute: () => AuthenticatedFinanceiroRoute,
   } as any)
+const AuthenticatedFinanceiroDespesasRoute =
+  AuthenticatedFinanceiroDespesasRouteImport.update({
+    id: '/despesas',
+    path: '/despesas',
+    getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
 const AuthenticatedConfiguracoesUsuariosRoute =
   AuthenticatedConfiguracoesUsuariosRouteImport.update({
     id: '/usuarios',
@@ -176,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
@@ -197,6 +205,7 @@ export interface FileRoutesByTo {
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
@@ -222,6 +231,7 @@ export interface FileRoutesById {
   '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
@@ -248,6 +258,7 @@ export interface FileRouteTypes {
     | '/pendencias'
     | '/trocar-senha'
     | '/configuracoes/usuarios'
+    | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
     | '/configuracoes/'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/trocar-senha'
     | '/'
     | '/configuracoes/usuarios'
+    | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
     | '/configuracoes'
@@ -293,6 +305,7 @@ export interface FileRouteTypes {
     | '/_authenticated/trocar-senha'
     | '/_authenticated/'
     | '/_authenticated/configuracoes/usuarios'
+    | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
     | '/_authenticated/configuracoes/'
@@ -432,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceiroFornecedoresRouteImport
       parentRoute: typeof AuthenticatedFinanceiroRoute
     }
+    '/_authenticated/financeiro/despesas': {
+      id: '/_authenticated/financeiro/despesas'
+      path: '/despesas'
+      fullPath: '/financeiro/despesas'
+      preLoaderRoute: typeof AuthenticatedFinanceiroDespesasRouteImport
+      parentRoute: typeof AuthenticatedFinanceiroRoute
+    }
     '/_authenticated/configuracoes/usuarios': {
       id: '/_authenticated/configuracoes/usuarios'
       path: '/usuarios'
@@ -495,6 +515,7 @@ const AuthenticatedConfiguracoesRouteWithChildren =
   )
 
 interface AuthenticatedFinanceiroRouteChildren {
+  AuthenticatedFinanceiroDespesasRoute: typeof AuthenticatedFinanceiroDespesasRoute
   AuthenticatedFinanceiroFornecedoresRoute: typeof AuthenticatedFinanceiroFornecedoresRoute
   AuthenticatedFinanceiroOrcamentoRoute: typeof AuthenticatedFinanceiroOrcamentoRoute
   AuthenticatedFinanceiroIndexRoute: typeof AuthenticatedFinanceiroIndexRoute
@@ -502,6 +523,7 @@ interface AuthenticatedFinanceiroRouteChildren {
 
 const AuthenticatedFinanceiroRouteChildren: AuthenticatedFinanceiroRouteChildren =
   {
+    AuthenticatedFinanceiroDespesasRoute: AuthenticatedFinanceiroDespesasRoute,
     AuthenticatedFinanceiroFornecedoresRoute:
       AuthenticatedFinanceiroFornecedoresRoute,
     AuthenticatedFinanceiroOrcamentoRoute:
