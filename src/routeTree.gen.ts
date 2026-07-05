@@ -29,6 +29,7 @@ import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
+import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
 import { Route as AuthenticatedPedagogicoTurmasIdFrequenciaRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.frequencia'
@@ -146,6 +147,12 @@ const AuthenticatedConfiguracoesUsuariosRoute =
     path: '/usuarios',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedAdministrativoQualificacaoRoute =
+  AuthenticatedAdministrativoQualificacaoRouteImport.update({
+    id: '/qualificacao',
+    path: '/qualificacao',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
 const AuthenticatedPedagogicoTurmasIdRoute =
   AuthenticatedPedagogicoTurmasIdRouteImport.update({
     id: '/turmas/$id',
@@ -189,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
+  '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -211,6 +219,7 @@ export interface FileRoutesByTo {
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
+  '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -238,6 +247,7 @@ export interface FileRoutesById {
   '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
   '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/pedagogico'
     | '/pendencias'
     | '/trocar-senha'
+    | '/administrativo/qualificacao'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/pendencias'
     | '/trocar-senha'
     | '/'
+    | '/administrativo/qualificacao'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
@@ -314,6 +326,7 @@ export interface FileRouteTypes {
     | '/_authenticated/pendencias'
     | '/_authenticated/trocar-senha'
     | '/_authenticated/'
+    | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/usuarios'
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
@@ -477,6 +490,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesUsuariosRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
+    '/_authenticated/administrativo/qualificacao': {
+      id: '/_authenticated/administrativo/qualificacao'
+      path: '/qualificacao'
+      fullPath: '/administrativo/qualificacao'
+      preLoaderRoute: typeof AuthenticatedAdministrativoQualificacaoRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
     '/_authenticated/pedagogico/turmas/$id': {
       id: '/_authenticated/pedagogico/turmas/$id'
       path: '/turmas/$id'
@@ -516,11 +536,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAdministrativoRouteChildren {
+  AuthenticatedAdministrativoQualificacaoRoute: typeof AuthenticatedAdministrativoQualificacaoRoute
   AuthenticatedAdministrativoIndexRoute: typeof AuthenticatedAdministrativoIndexRoute
 }
 
 const AuthenticatedAdministrativoRouteChildren: AuthenticatedAdministrativoRouteChildren =
   {
+    AuthenticatedAdministrativoQualificacaoRoute:
+      AuthenticatedAdministrativoQualificacaoRoute,
     AuthenticatedAdministrativoIndexRoute:
       AuthenticatedAdministrativoIndexRoute,
   }
