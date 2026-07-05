@@ -8,11 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type KpiResult = { value: number | null; error?: string };
 
-async function countHead(builder: { count: "exact"; head: true }): Promise<never> {
-  throw new Error("unused");
-}
-void countHead;
-
 export function kpiCursistasAtivasOptions(projetoId: string | null) {
   return queryOptions({
     queryKey: ["kpi", "cursistas-ativas", projetoId],
