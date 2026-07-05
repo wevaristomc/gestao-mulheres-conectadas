@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { gerarCertificadoPDF, slugifyNome } from "@/lib/certificado-pdf";
+import { BUCKET as DOCUMENTOS_BUCKET } from "@/lib/base-conhecimento-queries";
 
 // Padrão: cada query retorna { rows, error? } com descoberta de colunas em runtime.
 // Tabelas esperadas (todas com RLS por projeto): turmas, matriculas, cursistas,
@@ -127,17 +129,75 @@ export async function emitirCertificado(input: {
   cursistaId: string | null;
   turmaId: string;
   projetoId: string | null;
-  certificadoUrl?: string | null;
   observacoes?: string | null;
-}) {
+  nome: string;
+  cpf?: string | null;
+  turmaNome: string;
+  projetoNome?: string | null;
+}): Promise<{ storagePath: string }> {
+  // 1) Gera PDF
+  const dataConclusao = new Date();
+  const blob = gerarCertificadoPDF({
+    nome: input.nome,
+    cpf: input.cpf,
+    turma: input.turmaNome,
+    projeto: input.projetoNome,
+    dataConclusao,
+    observacoes: input.observacoes,
+  });
+  const arrayBuf = await blob.arrayBuffer();
+
+  // 2) Upload no bucket `documentos`
+  const uid = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
+  const slug = slugifyNome(input.nome) || "cursista";
+  const projetoSeg = input.projetoId ?? "sem-projeto";
+  const path = `${projetoSeg}/certificados/${uid}-${slug}.pdf`;
+  const up = await supabase.storage.from(DOCUMENTOS_BUCKET).upload(path, arrayBuf, {
+    contentType: "application/pdf",
+    upsert: false,
+  });
+  if (up.error) throw new Error(`Falha ao enviar certificado: ${up.error.message}`);
+
+  // 3) Registra em `documentos` (best-effort: se a tabela/coluna faltar, seguimos)
+  try {
+    const docPayload: Record<string, unknown> = {
+      titulo: `Certificado — ${input.nome}`,
+      categoria: "outros",
+      storage_path: path,
+      nome_arquivo: `${slug}.pdf`,
+      mime_type: "application/pdf",
+      tamanho_bytes: arrayBuf.byteLength,
+      descricao: `Certificado de qualificação da turma "${input.turmaNome}".`,
+    };
+    if (input.projetoId) docPayload.projeto_id = input.projetoId;
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData?.user?.id) docPayload.created_by = userData.user.id;
+    let docRes = await supabase.from("documentos").insert(docPayload);
+    if (docRes.error && /column .* does not exist/i.test(docRes.error.message)) {
+      for (const k of ["descricao", "created_by", "mime_type", "tamanho_bytes", "nome_arquivo"]) {
+        if (k in docPayload) delete docPayload[k];
+      }
+      docRes = await supabase.from("documentos").insert(docPayload);
+    }
+    if (docRes.error) {
+      // Não bloqueia — apenas loga.
+      // eslint-disable-next-line no-console
+      console.warn("[administrativo] Falha ao registrar certificado em documentos:", docRes.error.message);
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[administrativo] Registro em documentos ignorado:", e);
+  }
+
+  // 4) Insere em `qualificados`
   const payload: Record<string, unknown> = {
     matricula_id: input.matriculaId,
     turma_id: input.turmaId,
-    data_qualificacao: new Date().toISOString(),
+    data_qualificacao: dataConclusao.toISOString(),
+    certificado_url: path,
   };
   if (input.cursistaId) payload.cursista_id = input.cursistaId;
   if (input.projetoId) payload.projeto_id = input.projetoId;
-  if (input.certificadoUrl) payload.certificado_url = input.certificadoUrl;
   if (input.observacoes) payload.observacoes = input.observacoes;
   let res = await supabase.from("qualificados").insert(payload);
   // Se colunas opcionais não existirem, remove e tenta novamente.
@@ -147,12 +207,38 @@ export async function emitirCertificado(input: {
     }
     res = await supabase.from("qualificados").insert(payload);
   }
-  if (res.error) throw new Error(res.error.message);
+  if (res.error) {
+    // rollback do arquivo se o insert falhar
+    await supabase.storage.from(DOCUMENTOS_BUCKET).remove([path]);
+    throw new Error(res.error.message);
+  }
+  return { storagePath: path };
 }
 
 export async function revogarCertificado(qualificadoId: string) {
+  // busca certificado_url para remover arquivo
+  const { data: row } = await supabase
+    .from("qualificados")
+    .select("id, certificado_url")
+    .eq("id", qualificadoId)
+    .maybeSingle();
   const { error } = await supabase.from("qualificados").delete().eq("id", qualificadoId);
   if (error) throw new Error(error.message);
+  const path = (row as { certificado_url?: string | null } | null)?.certificado_url;
+  if (path && !/^https?:/i.test(path)) {
+    await supabase.storage.from(DOCUMENTOS_BUCKET).remove([path]);
+    await supabase.from("documentos").delete().eq("storage_path", path);
+  }
+}
+
+export async function baixarCertificado(certificadoUrl: string): Promise<string> {
+  // Se já é URL http(s), retorna direto; caso contrário, gera signed url.
+  if (/^https?:/i.test(certificadoUrl)) return certificadoUrl;
+  const { data, error } = await supabase.storage
+    .from(DOCUMENTOS_BUCKET)
+    .createSignedUrl(certificadoUrl, 300);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
 }
 
 // ---------- Entregas ----------

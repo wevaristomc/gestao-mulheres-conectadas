@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Award, ExternalLink, Loader2, Undo2 } from "lucide-react";
+import { AlertCircle, Award, Download, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -34,6 +33,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
+  baixarCertificado,
   cursistasComStatusOptions,
   emitirCertificado,
   formatarData,
@@ -48,12 +48,15 @@ export const Route = createFileRoute("/_authenticated/administrativo/qualificaca
 });
 
 function QualificacaoTab() {
-  const { projetoId } = useActiveContext();
+  const { projetoId, projetoNome } = useActiveContext();
   const qc = useQueryClient();
   const turmasQ = useQuery(turmasDoProjetoOptions(projetoId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string | null>(null);
   const turmaIdAtiva = turmaId ?? turmas[0]?.id ?? null;
+  const turmaAtiva = turmas.find((t) => t.id === turmaIdAtiva) ?? null;
+  const turmaNomeAtiva =
+    (pickFirst(turmaAtiva, ["nome", "titulo"]) as string | null) ?? "Turma";
 
   const cursistasQ = useQuery(cursistasComStatusOptions(turmaIdAtiva));
   const linhas = cursistasQ.data?.rows ?? [];
@@ -61,7 +64,6 @@ function QualificacaoTab() {
   const qualificadas = linhas.filter((l) => !!l.qualificado).length;
 
   const [alvo, setAlvo] = useState<CursistaLinha | null>(null);
-  const [certUrl, setCertUrl] = useState("");
   const [obs, setObs] = useState("");
 
   const emitirMut = useMutation({
@@ -72,15 +74,17 @@ function QualificacaoTab() {
         cursistaId: alvo.cursistaId,
         turmaId: turmaIdAtiva,
         projetoId,
-        certificadoUrl: certUrl.trim() || null,
         observacoes: obs.trim() || null,
+        nome: alvo.nome,
+        cpf: alvo.cpf,
+        turmaNome: turmaNomeAtiva,
+        projetoNome,
       });
     },
     onSuccess: () => {
-      toast.success("Cursista marcada como qualificada.");
+      toast.success("Certificado emitido com sucesso.");
       qc.invalidateQueries({ queryKey: ["administrativo"] });
       setAlvo(null);
-      setCertUrl("");
       setObs("");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -94,6 +98,15 @@ function QualificacaoTab() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  async function abrirCertificado(url: string) {
+    try {
+      const link = await baixarCertificado(url);
+      window.open(link, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao abrir certificado.");
+    }
+  }
 
   const erro = turmasQ.data?.error ?? cursistasQ.data?.error;
 
@@ -200,14 +213,13 @@ function QualificacaoTab() {
                             {formatarData(l.qualificado.data_qualificacao)}
                           </span>
                           {l.qualificado.certificado_url ? (
-                            <a
-                              href={l.qualificado.certificado_url}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => abrirCertificado(l.qualificado!.certificado_url!)}
                               className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                             >
-                              Certificado <ExternalLink className="h-3 w-3" />
-                            </a>
+                              <Download className="h-3 w-3" /> Baixar certificado
+                            </button>
                           ) : null}
                         </div>
                       ) : (
@@ -229,7 +241,6 @@ function QualificacaoTab() {
                           size="sm"
                           onClick={() => {
                             setAlvo(l);
-                            setCertUrl("");
                             setObs("");
                           }}
                         >
@@ -251,15 +262,10 @@ function QualificacaoTab() {
             <DialogTitle>Emitir certificado — {alvo?.nome}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>URL do certificado (opcional)</Label>
-              <Input
-                value={certUrl}
-                onChange={(e) => setCertUrl(e.target.value)}
-                placeholder="https://..."
-                className="mt-1"
-              />
-            </div>
+            <p className="text-sm text-muted-foreground">
+              O certificado será gerado em PDF, salvo no armazenamento e ficará disponível
+              para download nesta lista e na Base de Conhecimento.
+            </p>
             <div>
               <Label>Observações (opcional)</Label>
               <Textarea
@@ -280,7 +286,7 @@ function QualificacaoTab() {
               ) : (
                 <Award className="mr-1 h-3.5 w-3.5" />
               )}
-              Confirmar qualificação
+              Gerar e emitir certificado
             </Button>
           </DialogFooter>
         </DialogContent>
