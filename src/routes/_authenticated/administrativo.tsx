@@ -1,0 +1,48 @@
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+
+import { PageHeader } from "@/components/page-header";
+import { requireModuleAccess } from "@/lib/auth-guard";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/_authenticated/administrativo")({
+  head: () => ({ meta: [{ title: "Administrativo · Painel Mulheres Conectadas" }] }),
+  beforeLoad: () => requireModuleAccess("administrativo"),
+  component: AdministrativoLayout,
+});
+
+function AdministrativoLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const tabs = [
+    { to: "/administrativo/qualificacao", label: "Qualificação" },
+    { to: "/administrativo/beneficios", label: "Benefícios" },
+    { to: "/administrativo/materiais", label: "Materiais" },
+  ];
+  return (
+    <div>
+      <PageHeader
+        title="Administrativo"
+        description="Qualificação de cursistas, certificados e entregas de benefícios/materiais."
+      />
+      <nav className="mb-4 flex gap-1 border-b">
+        {tabs.map((t) => {
+          const active = pathname.startsWith(t.to);
+          return (
+            <Link
+              key={t.to}
+              to={t.to}
+              className={cn(
+                "border-b-2 px-3 py-2 text-sm transition-colors",
+                active
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <Outlet />
+    </div>
+  );
+}
