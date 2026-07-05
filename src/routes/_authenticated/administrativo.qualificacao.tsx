@@ -1,0 +1,290 @@
+import { useMemo, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Award, ExternalLink, Loader2, Undo2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { useActiveContext } from "@/hooks/use-active-context";
+import {
+  cursistasComStatusOptions,
+  emitirCertificado,
+  formatarData,
+  pickFirst,
+  revogarCertificado,
+  turmasDoProjetoOptions,
+  type CursistaLinha,
+} from "@/lib/administrativo-queries";
+
+export const Route = createFileRoute("/_authenticated/administrativo/qualificacao")({
+  component: QualificacaoTab,
+});
+
+function QualificacaoTab() {
+  const { projetoId } = useActiveContext();
+  const qc = useQueryClient();
+  const turmasQ = useQuery(turmasDoProjetoOptions(projetoId));
+  const turmas = turmasQ.data?.rows ?? [];
+  const [turmaId, setTurmaId] = useState<string | null>(null);
+  const turmaIdAtiva = turmaId ?? turmas[0]?.id ?? null;
+
+  const cursistasQ = useQuery(cursistasComStatusOptions(turmaIdAtiva));
+  const linhas = cursistasQ.data?.rows ?? [];
+  const total = linhas.length;
+  const qualificadas = linhas.filter((l) => !!l.qualificado).length;
+
+  const [alvo, setAlvo] = useState<CursistaLinha | null>(null);
+  const [certUrl, setCertUrl] = useState("");
+  const [obs, setObs] = useState("");
+
+  const emitirMut = useMutation({
+    mutationFn: async () => {
+      if (!alvo || !turmaIdAtiva) throw new Error("Selecione uma cursista.");
+      await emitirCertificado({
+        matriculaId: alvo.matriculaId,
+        cursistaId: alvo.cursistaId,
+        turmaId: turmaIdAtiva,
+        projetoId,
+        certificadoUrl: certUrl.trim() || null,
+        observacoes: obs.trim() || null,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Cursista marcada como qualificada.");
+      qc.invalidateQueries({ queryKey: ["administrativo"] });
+      setAlvo(null);
+      setCertUrl("");
+      setObs("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const revogarMut = useMutation({
+    mutationFn: async (id: string) => revogarCertificado(id),
+    onSuccess: () => {
+      toast.success("Qualificação revogada.");
+      qc.invalidateQueries({ queryKey: ["administrativo"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const erro = turmasQ.data?.error ?? cursistasQ.data?.error;
+
+  const turmasOrdenadas = useMemo(
+    () =>
+      [...turmas].sort((a, b) => {
+        const na = pickFirst(a, ["nome", "titulo"]) ?? "";
+        const nb = pickFirst(b, ["nome", "titulo"]) ?? "";
+        return na.localeCompare(nb, "pt-BR");
+      }),
+    [turmas],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[260px]">
+          <Label className="text-xs text-muted-foreground">Turma</Label>
+          <Select
+            value={turmaIdAtiva ?? undefined}
+            onValueChange={(v) => setTurmaId(v)}
+            disabled={turmasQ.isLoading || turmasOrdenadas.length === 0}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Selecione uma turma" />
+            </SelectTrigger>
+            <SelectContent>
+              {turmasOrdenadas.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {pickFirst(t, ["nome", "titulo"]) ?? t.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="ml-auto flex gap-3 text-sm">
+          <div className="rounded-md border bg-card px-3 py-2">
+            <div className="text-[10px] uppercase text-muted-foreground">Matriculadas</div>
+            <div className="text-lg font-semibold">{cursistasQ.isLoading ? "…" : total}</div>
+          </div>
+          <div className="rounded-md border bg-card px-3 py-2">
+            <div className="text-[10px] uppercase text-muted-foreground">Qualificadas</div>
+            <div className="text-lg font-semibold">
+              {cursistasQ.isLoading
+                ? "…"
+                : `${qualificadas}${total ? ` (${Math.round((qualificadas / total) * 100)}%)` : ""}`}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {erro ? (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-medium">Não foi possível carregar cursistas</div>
+            <div className="text-xs opacity-80">{erro}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cursista</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead className="w-32">Status</TableHead>
+                <TableHead className="w-40">Qualificação</TableHead>
+                <TableHead className="w-40 text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cursistasQ.isLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={5}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : linhas.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                    {turmaIdAtiva
+                      ? "Nenhuma cursista matriculada nesta turma."
+                      : "Selecione uma turma para visualizar as cursistas."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                linhas.map((l) => (
+                  <TableRow key={l.matriculaId}>
+                    <TableCell className="font-medium">{l.nome}</TableCell>
+                    <TableCell className="text-muted-foreground">{l.email ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="capitalize">
+                        {l.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {l.qualificado ? (
+                        <div className="flex flex-col">
+                          <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                            <Award className="h-3.5 w-3.5" />
+                            {formatarData(l.qualificado.data_qualificacao)}
+                          </span>
+                          {l.qualificado.certificado_url ? (
+                            <a
+                              href={l.qualificado.certificado_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                              Certificado <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">Não qualificada</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {l.qualificado ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={revogarMut.isPending}
+                          onClick={() => revogarMut.mutate(l.qualificado!.id)}
+                        >
+                          <Undo2 className="mr-1 h-3.5 w-3.5" /> Revogar
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setAlvo(l);
+                            setCertUrl("");
+                            setObs("");
+                          }}
+                        >
+                          <Award className="mr-1 h-3.5 w-3.5" /> Emitir certificado
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <Dialog open={!!alvo} onOpenChange={(o) => !o && setAlvo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Emitir certificado — {alvo?.nome}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>URL do certificado (opcional)</Label>
+              <Input
+                value={certUrl}
+                onChange={(e) => setCertUrl(e.target.value)}
+                placeholder="https://..."
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Observações (opcional)</Label>
+              <Textarea
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAlvo(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => emitirMut.mutate()} disabled={emitirMut.isPending}>
+              {emitirMut.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Award className="mr-1 h-3.5 w-3.5" />
+              )}
+              Confirmar qualificação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
