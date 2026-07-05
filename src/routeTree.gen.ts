@@ -24,10 +24,14 @@ import { Route as AuthenticatedAdministrativoRouteImport } from './routes/_authe
 import { Route as AuthenticatedPedagogicoIndexRouteImport } from './routes/_authenticated/pedagogico.index'
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
+import { Route as AuthenticatedAdministrativoIndexRouteImport } from './routes/_authenticated/administrativo.index'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
+import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
+import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
+import { Route as AuthenticatedAdministrativoBeneficiosRouteImport } from './routes/_authenticated/administrativo.beneficios'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
 import { Route as AuthenticatedPedagogicoTurmasIdFrequenciaRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.frequencia'
@@ -115,6 +119,12 @@ const AuthenticatedConfiguracoesIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedAdministrativoIndexRoute =
+  AuthenticatedAdministrativoIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -138,6 +148,24 @@ const AuthenticatedConfiguracoesUsuariosRoute =
     id: '/usuarios',
     path: '/usuarios',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
+const AuthenticatedAdministrativoQualificacaoRoute =
+  AuthenticatedAdministrativoQualificacaoRouteImport.update({
+    id: '/qualificacao',
+    path: '/qualificacao',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
+const AuthenticatedAdministrativoMateriaisRoute =
+  AuthenticatedAdministrativoMateriaisRouteImport.update({
+    id: '/materiais',
+    path: '/materiais',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
+const AuthenticatedAdministrativoBeneficiosRoute =
+  AuthenticatedAdministrativoBeneficiosRouteImport.update({
+    id: '/beneficios',
+    path: '/beneficios',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
 const AuthenticatedPedagogicoTurmasIdRoute =
   AuthenticatedPedagogicoTurmasIdRouteImport.update({
@@ -174,7 +202,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/administrativo': typeof AuthenticatedAdministrativoRoute
+  '/administrativo': typeof AuthenticatedAdministrativoRouteWithChildren
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -182,10 +210,14 @@ export interface FileRoutesByFullPath {
   '/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
+  '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
+  '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
   '/pedagogico/': typeof AuthenticatedPedagogicoIndexRoute
@@ -198,16 +230,19 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/administrativo': typeof AuthenticatedAdministrativoRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
+  '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
+  '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/administrativo': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro': typeof AuthenticatedFinanceiroIndexRoute
   '/pedagogico': typeof AuthenticatedPedagogicoIndexRoute
@@ -221,7 +256,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRoute
+  '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRouteWithChildren
   '/_authenticated/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/_authenticated/captacao': typeof AuthenticatedCaptacaoRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -230,10 +265,14 @@ export interface FileRoutesById {
   '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
   '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
+  '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/_authenticated/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
   '/_authenticated/pedagogico/': typeof AuthenticatedPedagogicoIndexRoute
@@ -257,10 +296,14 @@ export interface FileRouteTypes {
     | '/pedagogico'
     | '/pendencias'
     | '/trocar-senha'
+    | '/administrativo/beneficios'
+    | '/administrativo/materiais'
+    | '/administrativo/qualificacao'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/administrativo/'
     | '/configuracoes/'
     | '/financeiro/'
     | '/pedagogico/'
@@ -273,16 +316,19 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/reset-password'
-    | '/administrativo'
     | '/base-conhecimento'
     | '/captacao'
     | '/pendencias'
     | '/trocar-senha'
     | '/'
+    | '/administrativo/beneficios'
+    | '/administrativo/materiais'
+    | '/administrativo/qualificacao'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/administrativo'
     | '/configuracoes'
     | '/financeiro'
     | '/pedagogico'
@@ -304,10 +350,14 @@ export interface FileRouteTypes {
     | '/_authenticated/pendencias'
     | '/_authenticated/trocar-senha'
     | '/_authenticated/'
+    | '/_authenticated/administrativo/beneficios'
+    | '/_authenticated/administrativo/materiais'
+    | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/usuarios'
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
+    | '/_authenticated/administrativo/'
     | '/_authenticated/configuracoes/'
     | '/_authenticated/financeiro/'
     | '/_authenticated/pedagogico/'
@@ -431,6 +481,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesIndexRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
+    '/_authenticated/administrativo/': {
+      id: '/_authenticated/administrativo/'
+      path: '/'
+      fullPath: '/administrativo/'
+      preLoaderRoute: typeof AuthenticatedAdministrativoIndexRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
     '/_authenticated/financeiro/orcamento': {
       id: '/_authenticated/financeiro/orcamento'
       path: '/orcamento'
@@ -458,6 +515,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/configuracoes/usuarios'
       preLoaderRoute: typeof AuthenticatedConfiguracoesUsuariosRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
+    '/_authenticated/administrativo/qualificacao': {
+      id: '/_authenticated/administrativo/qualificacao'
+      path: '/qualificacao'
+      fullPath: '/administrativo/qualificacao'
+      preLoaderRoute: typeof AuthenticatedAdministrativoQualificacaoRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
+    '/_authenticated/administrativo/materiais': {
+      id: '/_authenticated/administrativo/materiais'
+      path: '/materiais'
+      fullPath: '/administrativo/materiais'
+      preLoaderRoute: typeof AuthenticatedAdministrativoMateriaisRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
+    '/_authenticated/administrativo/beneficios': {
+      id: '/_authenticated/administrativo/beneficios'
+      path: '/beneficios'
+      fullPath: '/administrativo/beneficios'
+      preLoaderRoute: typeof AuthenticatedAdministrativoBeneficiosRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
     }
     '/_authenticated/pedagogico/turmas/$id': {
       id: '/_authenticated/pedagogico/turmas/$id'
@@ -496,6 +574,30 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthenticatedAdministrativoRouteChildren {
+  AuthenticatedAdministrativoBeneficiosRoute: typeof AuthenticatedAdministrativoBeneficiosRoute
+  AuthenticatedAdministrativoMateriaisRoute: typeof AuthenticatedAdministrativoMateriaisRoute
+  AuthenticatedAdministrativoQualificacaoRoute: typeof AuthenticatedAdministrativoQualificacaoRoute
+  AuthenticatedAdministrativoIndexRoute: typeof AuthenticatedAdministrativoIndexRoute
+}
+
+const AuthenticatedAdministrativoRouteChildren: AuthenticatedAdministrativoRouteChildren =
+  {
+    AuthenticatedAdministrativoBeneficiosRoute:
+      AuthenticatedAdministrativoBeneficiosRoute,
+    AuthenticatedAdministrativoMateriaisRoute:
+      AuthenticatedAdministrativoMateriaisRoute,
+    AuthenticatedAdministrativoQualificacaoRoute:
+      AuthenticatedAdministrativoQualificacaoRoute,
+    AuthenticatedAdministrativoIndexRoute:
+      AuthenticatedAdministrativoIndexRoute,
+  }
+
+const AuthenticatedAdministrativoRouteWithChildren =
+  AuthenticatedAdministrativoRoute._addFileChildren(
+    AuthenticatedAdministrativoRouteChildren,
+  )
 
 interface AuthenticatedConfiguracoesRouteChildren {
   AuthenticatedConfiguracoesUsuariosRoute: typeof AuthenticatedConfiguracoesUsuariosRoute
@@ -578,7 +680,7 @@ const AuthenticatedPedagogicoRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAdministrativoRoute: typeof AuthenticatedAdministrativoRoute
+  AuthenticatedAdministrativoRoute: typeof AuthenticatedAdministrativoRouteWithChildren
   AuthenticatedBaseConhecimentoRoute: typeof AuthenticatedBaseConhecimentoRoute
   AuthenticatedCaptacaoRoute: typeof AuthenticatedCaptacaoRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -590,7 +692,8 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAdministrativoRoute: AuthenticatedAdministrativoRoute,
+  AuthenticatedAdministrativoRoute:
+    AuthenticatedAdministrativoRouteWithChildren,
   AuthenticatedBaseConhecimentoRoute: AuthenticatedBaseConhecimentoRoute,
   AuthenticatedCaptacaoRoute: AuthenticatedCaptacaoRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
