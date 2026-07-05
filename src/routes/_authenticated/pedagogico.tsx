@@ -1,23 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ChevronRight } from "lucide-react";
-
-import { PageHeader } from "@/components/page-header";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { requireModuleAccess } from "@/lib/auth-guard";
-import { useActiveContext } from "@/hooks/use-active-context";
-import { turmasListOptions, pickFirst, formatarData, type Row } from "@/lib/pedagogico-queries";
 
 export const Route = createFileRoute("/_authenticated/pedagogico")({
   head: () => ({ meta: [{ title: "Pedagógico · Painel Mulheres Conectadas" }] }),
   beforeLoad: () => requireModuleAccess("pedagogico"),
-  component: PedagogicoIndex,
+  component: () => <Outlet />,
 });
-
-function PedagogicoIndex() {
   const { projetoId, projetoNome } = useActiveContext();
   const q = useQuery(turmasListOptions(projetoId));
   const rows = q.data?.rows ?? [];
