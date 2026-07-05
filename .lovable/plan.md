@@ -1,36 +1,50 @@
-## Diagnóstico
+## Onde estamos vs PRD (PROMPT 0 — Fund)
 
-A role no banco está correta (`coordenador_geral` com `projeto_id = d91d…302`), então o problema está no cliente. Duas causas prováveis, precisamos confirmar qual:
+O PRD original pede: shell + auth + papéis + 8 rotas + Visão Geral com 4 KPIs preenchidos por Supabase + Pendências (com sino no topbar) + módulos vazios prontos para receber leituras reais.
 
-**Hipótese A — RLS bloqueia `select` em `user_roles`.** O hook faz `supabase.from("user_roles").select(...).eq("user_id", user.id)`. Se não existe policy `SELECT` permitindo o usuário ler as próprias rows, `rolesRes.data` volta vazio → `pickRole` retorna `null` → `canAccess` retorna `false` para tudo → sidebar quase vazio.
+Status atual:
 
-**Hipótese B — Race de renderização.** Sidebar renderiza antes das rows chegarem: com `role=null` o filtro `canAccess` esconde os itens; quando a role chega, o React re-renderiza, mas se algum consumidor (ex.: cache de role, `requireModuleAccess`) leu antes, o estado "capado" persiste.
+| Área | Estado |
+|---|---|
+| Shell (sidebar, topbar, layout) | ✅ pronto |
+| Auth (login, reset, troca de senha, primeiro admin) | ✅ pronto |
+| RLS + papéis (`user_roles`, `has_role`) | ✅ desbloqueado hoje |
+| Configurações → Usuários | ✅ CRUD completo |
+| Visão Geral — 4 KPIs | 🟡 cards renderizam "—" (nunca consultam Supabase) |
+| Pendências | 🔴 placeholder |
+| Sino de pendências no topbar | 🔴 sem contador real |
+| Pedagógico / Administrativo / Financeiro / Captação | 🔴 placeholders |
+| Base de Conhecimento | 🔴 placeholder |
 
-## Passos
+Módulos de negócio (Pedagógico → matrícula/frequência/entregas, Financeiro → orçamento/despesas, Captação → fornecedores/cotações, etc.) são um esforço grande e ainda não foram detalhados no PRD. O **próximo passo canônico do PRD** é fechar a fundação: Visão Geral com números reais + Pendências funcionando + sino ligado. Só depois abrimos o escopo de cada módulo.
 
-1. **Instrumentar o `use-active-context`** com logs temporários do resultado bruto de `projetos` e `user_roles` (contagem, primeiro row, erro). Isso mostra na console se é RLS (data vazio + erro) ou timing.
+## Próximo passo proposto
 
-2. **Adicionar estado de loading** em `useActiveContext` (`isLoadingRoles`) e expor via contexto. O `AppSidebar` renderiza skeletons enquanto `isLoadingRoles` for `true`, evitando o flash com role `null`.
+**Fase 1 — Fechar a fundação lendo do Supabase (uma sessão de trabalho)**
 
-3. **Se for Hipótese A**, adicionar migration com policy de leitura própria em `user_roles`:
+1. **Visão Geral com KPIs reais**, escopados pelo `projetoId` ativo do `useActiveContext`:
+   - `Cursistas ativas` = `count(cursistas)` via `matriculas` do projeto com `status = 'ativa'`.
+   - `Turmas em andamento` = `count(turmas)` do projeto com data corrente entre `data_inicio` e `data_fim` (ou `status = 'em_andamento'` — a decidir ao inspecionar o schema).
+   - `Execução orçamentária` = `sum(despesas.valor) / sum(orcamento_itens.valor)` do projeto, formatado como %.
+   - `Pendências abertas` = `count(pendencias)` do projeto com `status = 'aberta'`.
+   - Usar TanStack Query (`useQuery`) por KPI, com Skeleton enquanto carrega e fallback "—" em caso de erro/vazio.
 
-   ```sql
-   create policy "Users can read own roles"
-     on public.user_roles for select
-     to authenticated
-     using (auth.uid() = user_id);
-   ```
+2. **Sino do topbar**: reusar o mesmo count de pendências abertas e mostrar badge com o número; clique navega para `/pendencias`.
 
-   (mantendo `has_role` como security-definer para checagens cruzadas).
+3. **/pendencias**: tabela real com colunas `titulo`, `tipo`, `prioridade`, `responsavel`, `prazo`, `status`, filtro por status (Aberta / Em andamento / Resolvida) e busca por texto. Sem CRUD nesta fase — só leitura + link para a origem quando existir.
 
-4. **Endurecer `pickRole`**: quando houver múltiplas rows, priorizar a role de maior privilégio (ordem: `coordenador_geral` > `gestor_financeiro` > `coordenador_pedagogico` > `administrativo` > `professor` > `auxiliar_pedagogico`) em vez de depender só do `projeto_id` casado. Isso evita que uma row secundária mascare a role global.
+4. **Selector de projeto no topbar** (se houver mais de um projeto visível ao usuário): garantir que os KPIs e pendências reagem a `setProjetoAtivo`.
 
-5. **Validar no preview**: logar na console após login com Rita — esperado `role: coordenador_geral`, sidebar com todos os grupos (Geral, Módulos completo, Apoio com Configurações visível).
+5. **Estados de erro/RLS**: se uma query retornar erro, o card mostra "Sem acesso" em vez de quebrar — importante enquanto policies de outras tabelas ainda não foram revisadas.
 
-6. **Remover logs** após confirmação e manter apenas `isLoadingRoles` + policy + `pickRole` reforçado.
+**Fora do escopo desta fase:** módulos Pedagógico/Administrativo/Financeiro/Captação/Base de Conhecimento continuam placeholders — cada um vai virar seu próprio PRD depois.
 
-## Detalhes técnicos
+## Perguntas antes de eu escrever a Fase 1
 
-- Arquivos: `src/hooks/use-active-context.tsx` (loading state, pickRole, logs), `src/components/app-sidebar.tsx` (skeleton), nova migration se hipótese A.
-- Não altera `role-access.ts` nem rotas.
-- `requireModuleAccess` continua lendo `mc.active_role` do `localStorage`; após o fix, o cache é atualizado assim que a role real chega.
+Preciso confirmar o schema para não sair chutando nomes de coluna:
+
+1. Você quer que eu leia o schema real do Supabase (via `supabase.from(...).select(...).limit(0)` ou olhando `src/integrations/supabase/types.ts` gerado) e derive os KPIs pelas colunas que existem, ou você me passa os nomes exatos das colunas de `cursistas`, `turmas`, `orcamento_itens`, `despesas` e `pendencias`?
+
+2. Quando um usuário tem acesso a **mais de um projeto**, o `projeto_id` ativo já persiste em `localStorage` — o topbar deve ganhar um dropdown de projetos agora, ou fica implícito (primeiro projeto do usuário) até termos mais de um cadastrado?
+
+Assim que responder, eu abro a Fase 1 em build mode.

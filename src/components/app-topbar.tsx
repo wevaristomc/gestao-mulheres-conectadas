@@ -1,5 +1,6 @@
 import { Bell, ChevronDown, LogOut, User } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,18 +22,18 @@ import {
 import { useActiveContext } from "@/hooks/use-active-context";
 import { ROLE_LABELS } from "@/lib/role-access";
 import { supabase } from "@/integrations/supabase/client";
+import { pendenciasAbertasCountOptions } from "@/lib/dashboard-queries";
 
 export function AppTopbar() {
   const { user, projetoNome, role, isBackendConnected } = useActiveContext();
   const navigate = useNavigate();
+  const pendenciasQ = useQuery(pendenciasAbertasCountOptions());
+  const pendenciasAbertas = (pendenciasQ.data as { value: number | null } | undefined)?.value ?? null;
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }
-
-  // Sem backend, contagem de pendências fica indisponível.
-  const pendenciasAbertas: number | null = null;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -71,11 +72,29 @@ export function AppTopbar() {
           <PopoverContent align="end" className="w-80">
             <div className="space-y-2">
               <div className="text-sm font-semibold">Pendências</div>
-              <p className="text-xs text-muted-foreground">
-                {isBackendConnected
-                  ? "Nenhuma pendência aberta no projeto ativo."
-                  : "Conecte o Supabase para carregar pendências do projeto."}
-              </p>
+              {!isBackendConnected ? (
+                <p className="text-xs text-muted-foreground">
+                  Conecte o Supabase para carregar pendências.
+                </p>
+              ) : pendenciasQ.isLoading ? (
+                <p className="text-xs text-muted-foreground">Carregando…</p>
+              ) : pendenciasAbertas === null ? (
+                <p className="text-xs text-muted-foreground">
+                  Sem acesso à tabela de pendências.
+                </p>
+              ) : pendenciasAbertas === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma pendência aberta.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {pendenciasAbertas} pendência{pendenciasAbertas === 1 ? "" : "s"} aguardando ação.
+                </p>
+              )}
+              <Link
+                to="/pendencias"
+                className="inline-flex text-xs font-medium text-primary hover:underline"
+              >
+                Abrir lista completa →
+              </Link>
             </div>
           </PopoverContent>
         </Popover>
