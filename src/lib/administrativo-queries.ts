@@ -225,10 +225,14 @@ export async function revogarCertificado(qualificadoId: string) {
   const { error } = await supabase.from("qualificados").delete().eq("id", qualificadoId);
   if (error) throw new Error(error.message);
   const path = (row as { certificado_url?: string | null } | null)?.certificado_url;
+  const warnings: string[] = [];
   if (path && !/^https?:/i.test(path)) {
-    await supabase.storage.from(DOCUMENTOS_BUCKET).remove([path]);
-    await supabase.from("documentos").delete().eq("storage_path", path);
+    const rm = await supabase.storage.from(DOCUMENTOS_BUCKET).remove([path]);
+    if (rm.error) warnings.push(`arquivo do certificado (${rm.error.message})`);
+    const del = await supabase.from("documentos").delete().eq("storage_path", path);
+    if (del.error) warnings.push(`registro em documentos (${del.error.message})`);
   }
+  return { warnings };
 }
 
 export async function baixarCertificado(certificadoUrl: string): Promise<string> {

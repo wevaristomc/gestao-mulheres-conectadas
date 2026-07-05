@@ -7,6 +7,16 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -65,6 +75,7 @@ function QualificacaoTab() {
 
   const [alvo, setAlvo] = useState<CursistaLinha | null>(null);
   const [obs, setObs] = useState("");
+  const [revogarAlvo, setRevogarAlvo] = useState<CursistaLinha | null>(null);
 
   const emitirMut = useMutation({
     mutationFn: async () => {
@@ -92,9 +103,16 @@ function QualificacaoTab() {
 
   const revogarMut = useMutation({
     mutationFn: async (id: string) => revogarCertificado(id),
-    onSuccess: () => {
-      toast.success("Qualificação revogada.");
+    onSuccess: (res) => {
+      if (res?.warnings?.length) {
+        toast.warning(
+          `Qualificação revogada, mas houve avisos: ${res.warnings.join("; ")}.`,
+        );
+      } else {
+        toast.success("Qualificação revogada e certificado removido.");
+      }
       qc.invalidateQueries({ queryKey: ["administrativo"] });
+      setRevogarAlvo(null);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -231,10 +249,17 @@ function QualificacaoTab() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          disabled={revogarMut.isPending}
-                          onClick={() => revogarMut.mutate(l.qualificado!.id)}
+                          disabled={
+                            revogarMut.isPending && revogarAlvo?.matriculaId === l.matriculaId
+                          }
+                          onClick={() => setRevogarAlvo(l)}
                         >
-                          <Undo2 className="mr-1 h-3.5 w-3.5" /> Revogar
+                          {revogarMut.isPending && revogarAlvo?.matriculaId === l.matriculaId ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Undo2 className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Revogar
                         </Button>
                       ) : (
                         <Button
@@ -291,6 +316,42 @@ function QualificacaoTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!revogarAlvo}
+        onOpenChange={(o) => {
+          if (!o && !revogarMut.isPending) setRevogarAlvo(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revogar qualificação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá a qualificação de{" "}
+              <span className="font-medium text-foreground">{revogarAlvo?.nome}</span>,
+              apagará o arquivo do certificado no armazenamento e o registro correspondente
+              na Base de Conhecimento. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revogarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={revogarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (revogarAlvo?.qualificado) revogarMut.mutate(revogarAlvo.qualificado.id);
+              }}
+            >
+              {revogarMut.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Undo2 className="mr-1 h-3.5 w-3.5" />
+              )}
+              Revogar qualificação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
