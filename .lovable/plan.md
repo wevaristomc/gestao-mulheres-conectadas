@@ -1,86 +1,83 @@
 ## Objetivo
 
-Habilitar (1) bootstrap do seu usuário admin via tela de cadastro pública e (2) área para o admin cadastrar novos usuários com senha provisória, com papéis por projeto.
+Facilitar o bootstrap do primeiro admin exibindo, na própria tela `/auth`, o SQL necessário para criar `public.tem_admin` e o trigger `on_auth_user_created_first_admin`, junto com instruções de teste no Supabase.
 
-## 1. Bootstrap do primeiro admin
+## Onde aparece
 
-- Adicionar aba "Criar conta" na tela `/auth` (e-mail + senha + nome). Usa `supabase.auth.signUp` com `emailRedirectTo`.
-- SQL a rodar no Supabase (você executa no SQL Editor):
-  - Trigger `on_auth_user_created` que, ao inserir em `auth.users`, verifica se ainda não existe nenhum registro em `user_roles` para o `projeto_id` ativo (projeto único atual `yqvocpnvunaprpmhlswn`); se for o primeiro usuário do projeto, insere `role='coordenador_geral'` automaticamente.
-  - Para os próximos usuários, o trigger não atribui papel — eles ficam "sem papel" até o admin atribuir.
-- Após o cadastro do primeiro usuário, **desabilitar sign-up público**: a aba "Criar conta" some quando já existe pelo menos 1 `coordenador_geral` no projeto (checagem via RPC pública `tem_admin(projeto_id)`).
+Na `src/routes/auth.tsx`, abaixo do `CardHeader` (ou como link discreto no rodapé do card), um botão secundário:
 
-## 2. Tela "Configurações › Usuários"
+> **"Primeiro acesso? Ver SQL de setup"**
 
-Rota: `/_authenticated/configuracoes/usuarios` (visível só para `coordenador_geral`).
+Sempre visível (útil para debug), mas com destaque maior quando `temAdmin === false` — sinal de que o projeto ainda precisa do bootstrap.
 
-Funcionalidades:
-- **Lista de usuários** do projeto ativo: e-mail, nome, papel, último acesso, status.
-- **Criar usuário** (modal): e-mail, nome, papel (select com os 6 papéis), senha provisória (gerada/copiável).
-  - Chama server function `criarUsuario` (`createServerFn` + `requireSupabaseAuth` + checagem `has_role('coordenador_geral')`) que:
-    1. Usa `supabaseAdmin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { nome, must_change_password: true } })`.
-    2. Insere em `user_roles` (`user_id`, `projeto_id`, `role`).
-- **Editar papel** do usuário no projeto ativo.
-- **Remover acesso**: deleta linha de `user_roles` do projeto (não apaga o auth user).
-- **Reenviar senha provisória**: gera nova senha via `supabaseAdmin.auth.admin.updateUserById`.
+## O que o modal mostra
 
-## 3. Troca obrigatória no primeiro login
+Um `Dialog` (shadcn) com:
 
-- Hook no `ActiveContextProvider`: se `user.user_metadata.must_change_password === true`, redireciona para `/trocar-senha` antes de qualquer outra rota.
-- Tela `/trocar-senha`: form nova senha → `supabase.auth.updateUser({ password, data: { must_change_password: false } })` → redireciona para `/`.
+1. **Passo 1 — Rode este SQL no Supabase**
+   Bloco de código com botão "Copiar" contendo:
 
-## 4. Detalhes técnicos
+   ```sql
+   -- 1) Função pública para checar se o projeto já tem admin
+   create or replace function public.tem_admin(_projeto_id uuid)
+   returns boolean
+   language sql stable security definer set search_path = public as $$
+     select exists (
+       select 1 from public.user_roles
+       where projeto_id = _projeto_id and role = 'coordenador_geral'
+     )
+   $$;
+   grant execute on function public.tem_admin(uuid) to anon, authenticated;
 
-**Arquivos novos:**
-- `src/lib/users.functions.ts` — `criarUsuario`, `atualizarPapel`, `removerAcesso`, `resetarSenha`, `listarUsuariosProjeto` (server fns com `requireSupabaseAuth` + checagem de papel).
-- `src/integrations/supabase/client.server.ts` — cliente service role (lazy import dentro dos handlers).
-- `src/routes/_authenticated/configuracoes/usuarios.tsx` — tela CRUD.
-- `src/routes/_authenticated/trocar-senha.tsx` — troca de senha obrigatória.
-- `src/components/users/criar-usuario-dialog.tsx`, `editar-papel-dialog.tsx`.
+   -- 2) Trigger: 1º usuário do projeto vira coordenador_geral automaticamente
+   create or replace function public.handle_first_user()
+   returns trigger language plpgsql security definer set search_path = public as $$
+   declare _projeto_id uuid := 'd91d2e5a-3d0b-4539-915c-5db6c95dd302'::uuid;
+   begin
+     if not public.tem_admin(_projeto_id) then
+       insert into public.user_roles(user_id, projeto_id, role)
+       values (new.id, _projeto_id, 'coordenador_geral');
+     end if;
+     return new;
+   end $$;
+
+   drop trigger if exists on_auth_user_created_first_admin on auth.users;
+   create trigger on_auth_user_created_first_admin
+     after insert on auth.users
+     for each row execute function public.handle_first_user();
+   ```
+
+2. **Passo 2 — Como executar**
+   Lista curta:
+   - Abra o painel do Supabase → **SQL Editor** → **New query**.
+   - Cole o SQL acima e clique em **Run**.
+   - Espere ver "Success. No rows returned".
+
+3. **Passo 3 — Testar**
+   - Volte para esta tela e recarregue: a aba **"Criar conta admin"** deve aparecer.
+   - Cadastre nome + e-mail + senha (mín. 8). Você é logado direto e recebe `coordenador_geral`.
+   - Verifique no Supabase: `select * from public.user_roles;` deve mostrar sua linha.
+   - A aba "Criar conta admin" some depois — novos usuários passam a ser criados em **Configurações › Usuários**.
+
+4. **Passo 4 (opcional) — Habilitar gestão de usuários**
+   Nota curta: "Para criar outros usuários pela tela Configurações › Usuários, também configure o secret `ADMIN_SERVICE_ROLE_KEY` no painel."
+
+## Detalhes técnicos
 
 **Arquivos modificados:**
-- `src/routes/auth.tsx` — adicionar Tabs Login | Criar conta (com gate via `tem_admin`).
-- `src/hooks/use-active-context.tsx` — checar `must_change_password` e bloquear navegação.
-- `src/components/app-sidebar.tsx` — sub-item "Usuários" em Configurações (só `coordenador_geral`).
-- `.env` — adicionar `SUPABASE_SERVICE_ROLE_KEY` (você cola).
+- `src/routes/auth.tsx` — adicionar estado `sqlOpen`, botão que abre o `Dialog`, e o conteúdo do modal. Um pequeno componente `SqlSetupDialog` no mesmo arquivo (não vale extrair).
+- Reutilizar `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` de `@/components/ui/dialog` e `Button` de `@/components/ui/button`.
 
-**SQL que você roda no Supabase:**
-```sql
--- função pública para checar se projeto já tem admin
-create or replace function public.tem_admin(_projeto_id uuid)
-returns boolean language sql stable security definer set search_path=public as $$
-  select exists(select 1 from public.user_roles
-    where projeto_id = _projeto_id and role = 'coordenador_geral')
-$$;
-grant execute on function public.tem_admin(uuid) to anon, authenticated;
+**Cópia para clipboard:**
+- Botão "Copiar SQL" usa `navigator.clipboard.writeText(sql)` e mostra "Copiado!" por 2s via `useState`. Sem dependência nova.
 
--- trigger: 1º usuário do projeto vira coordenador_geral
-create or replace function public.handle_first_user()
-returns trigger language plpgsql security definer set search_path=public as $$
-declare _projeto_id uuid := 'yqvocpnvunaprpmhlswn'::uuid; -- ajustar para o id real
-begin
-  if not public.tem_admin(_projeto_id) then
-    insert into public.user_roles(user_id, projeto_id, role)
-    values (new.id, _projeto_id, 'coordenador_geral');
-  end if;
-  return new;
-end $$;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_first_user();
+**Estilo:**
+- SQL num `<pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">` para não estourar o modal.
+- Modal com `max-w-2xl` para caber o SQL confortavelmente.
 
--- policies: coordenador_geral gerencia user_roles do projeto
-create policy ur_cg_manage on public.user_roles
-  for all to authenticated
-  using (public.has_role(auth.uid(), 'coordenador_geral'))
-  with check (public.has_role(auth.uid(), 'coordenador_geral'));
-```
+**Não muda nada de backend/lógica** — é puramente informacional/UX. Nenhum arquivo novo, nenhum SQL rodando pelo app.
 
-**Segredos necessários:** `SUPABASE_SERVICE_ROLE_KEY` (você fornece via secrets — nunca vai pro front).
+## Fora de escopo
 
-## Sequência de entrega
-
-1. Crio arquivos + SQL (te entrego o bloco).
-2. Você roda o SQL e me dá o service role key.
-3. Você acessa `/auth` → "Criar conta" → vira admin automaticamente.
-4. Vai em Configurações › Usuários e cadastra a equipe.
+- Rodar o SQL automaticamente a partir do app.
+- Detectar se o trigger já existe (isso continua implícito pelo comportamento do `tem_admin`).
