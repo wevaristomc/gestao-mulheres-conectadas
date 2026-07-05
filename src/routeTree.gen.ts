@@ -25,6 +25,7 @@ import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
+import { Route as AuthenticatedPedagogicoTurmasIdFrequenciaRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.frequencia'
 import { Route as AuthenticatedPedagogicoTurmasIdAulasRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.aulas'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -114,6 +115,12 @@ const AuthenticatedPedagogicoTurmasIdIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedPedagogicoTurmasIdRoute,
   } as any)
+const AuthenticatedPedagogicoTurmasIdFrequenciaRoute =
+  AuthenticatedPedagogicoTurmasIdFrequenciaRouteImport.update({
+    id: '/frequencia',
+    path: '/frequencia',
+    getParentRoute: () => AuthenticatedPedagogicoTurmasIdRoute,
+  } as any)
 const AuthenticatedPedagogicoTurmasIdAulasRoute =
   AuthenticatedPedagogicoTurmasIdAulasRouteImport.update({
     id: '/aulas',
@@ -137,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdRouteWithChildren
   '/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  '/pedagogico/turmas/$id/frequencia': typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   '/pedagogico/turmas/$id/': typeof AuthenticatedPedagogicoTurmasIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -153,6 +161,7 @@ export interface FileRoutesByTo {
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  '/pedagogico/turmas/$id/frequencia': typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   '/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdIndexRoute
 }
 export interface FileRoutesById {
@@ -173,6 +182,7 @@ export interface FileRoutesById {
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdRouteWithChildren
   '/_authenticated/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  '/_authenticated/pedagogico/turmas/$id/frequencia': typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   '/_authenticated/pedagogico/turmas/$id/': typeof AuthenticatedPedagogicoTurmasIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/configuracoes/'
     | '/pedagogico/turmas/$id'
     | '/pedagogico/turmas/$id/aulas'
+    | '/pedagogico/turmas/$id/frequencia'
     | '/pedagogico/turmas/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/configuracoes'
     | '/pedagogico/turmas/$id/aulas'
+    | '/pedagogico/turmas/$id/frequencia'
     | '/pedagogico/turmas/$id'
   id:
     | '__root__'
@@ -228,6 +240,7 @@ export interface FileRouteTypes {
     | '/_authenticated/configuracoes/'
     | '/_authenticated/pedagogico/turmas/$id'
     | '/_authenticated/pedagogico/turmas/$id/aulas'
+    | '/_authenticated/pedagogico/turmas/$id/frequencia'
     | '/_authenticated/pedagogico/turmas/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -351,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPedagogicoTurmasIdIndexRouteImport
       parentRoute: typeof AuthenticatedPedagogicoTurmasIdRoute
     }
+    '/_authenticated/pedagogico/turmas/$id/frequencia': {
+      id: '/_authenticated/pedagogico/turmas/$id/frequencia'
+      path: '/frequencia'
+      fullPath: '/pedagogico/turmas/$id/frequencia'
+      preLoaderRoute: typeof AuthenticatedPedagogicoTurmasIdFrequenciaRouteImport
+      parentRoute: typeof AuthenticatedPedagogicoTurmasIdRoute
+    }
     '/_authenticated/pedagogico/turmas/$id/aulas': {
       id: '/_authenticated/pedagogico/turmas/$id/aulas'
       path: '/aulas'
@@ -380,6 +400,7 @@ const AuthenticatedConfiguracoesRouteWithChildren =
 
 interface AuthenticatedPedagogicoTurmasIdRouteChildren {
   AuthenticatedPedagogicoTurmasIdAulasRoute: typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  AuthenticatedPedagogicoTurmasIdFrequenciaRoute: typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   AuthenticatedPedagogicoTurmasIdIndexRoute: typeof AuthenticatedPedagogicoTurmasIdIndexRoute
 }
 
@@ -387,6 +408,8 @@ const AuthenticatedPedagogicoTurmasIdRouteChildren: AuthenticatedPedagogicoTurma
   {
     AuthenticatedPedagogicoTurmasIdAulasRoute:
       AuthenticatedPedagogicoTurmasIdAulasRoute,
+    AuthenticatedPedagogicoTurmasIdFrequenciaRoute:
+      AuthenticatedPedagogicoTurmasIdFrequenciaRoute,
     AuthenticatedPedagogicoTurmasIdIndexRoute:
       AuthenticatedPedagogicoTurmasIdIndexRoute,
   }
