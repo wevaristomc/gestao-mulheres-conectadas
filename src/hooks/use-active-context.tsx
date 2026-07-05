@@ -23,6 +23,7 @@ type ActiveContextValue = {
   projetosDisponiveis: Projeto[];
   setProjetoAtivo: (id: string) => void;
   isBackendConnected: boolean;
+  isLoadingRoles: boolean;
 };
 
 const ActiveContext = createContext<ActiveContextValue | null>(null);
@@ -32,13 +33,29 @@ function isAppRole(value: string): value is AppRole {
   return (APP_ROLES as readonly string[]).includes(value);
 }
 
+// Prioridade (maior → menor). Se o usuário tem mais de uma row, ganha a de maior privilégio.
+const ROLE_PRIORITY: AppRole[] = [
+  "coordenador_geral",
+  "gestor_financeiro",
+  "coordenador_pedagogico",
+  "administrativo",
+  "professor",
+  "auxiliar_pedagogico",
+];
+
 function pickRole(rows: RoleRow[], projetoId: string | null): AppRole | null {
   if (!rows.length) return null;
-  const match =
-    (projetoId && rows.find((r) => r.projeto_id === projetoId)) ||
-    rows.find((r) => r.projeto_id === null) ||
-    rows[0];
-  return match && isAppRole(match.role) ? match.role : null;
+  const candidates = rows.filter(
+    (r) => r.projeto_id === projetoId || r.projeto_id === null,
+  );
+  const pool = (candidates.length ? candidates : rows)
+    .map((r) => r.role)
+    .filter(isAppRole);
+  if (!pool.length) return null;
+  for (const r of ROLE_PRIORITY) {
+    if (pool.includes(r)) return r;
+  }
+  return pool[0] ?? null;
 }
 
 export function ActiveContextProvider({ children }: { children: ReactNode }) {
@@ -47,6 +64,7 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [roleRows, setRoleRows] = useState<RoleRow[]>([]);
   const [projetoId, setProjetoId] = useState<string | null>(null);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(true);
 
   // Subscrever sessão
   useEffect(() => {
@@ -82,12 +100,21 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    setIsLoadingRoles(true);
     (async () => {
       const [projRes, rolesRes] = await Promise.all([
         supabase.from("projetos").select("id, nome").order("nome"),
         supabase.from("user_roles").select("role, projeto_id").eq("user_id", user.id),
       ]);
       if (cancelled) return;
+      if (rolesRes.error) {
+        // eslint-disable-next-line no-console
+        console.error("[use-active-context] Falha ao ler user_roles:", rolesRes.error);
+      }
+      if (projRes.error) {
+        // eslint-disable-next-line no-console
+        console.error("[use-active-context] Falha ao ler projetos:", projRes.error);
+      }
       const projList = (projRes.data ?? []) as Projeto[];
       const roles = (rolesRes.data ?? []) as RoleRow[];
       setProjetos(projList);
@@ -103,6 +130,7 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
         initial = projList[0]?.id ?? null;
       }
       setProjetoId(initial);
+      setIsLoadingRoles(false);
     })();
     return () => {
       cancelled = true;
@@ -139,8 +167,9 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
       projetosDisponiveis: projetos,
       setProjetoAtivo,
       isBackendConnected: !!user,
+      isLoadingRoles,
     }),
-    [user, mustChangePassword, projetoId, projetoNome, role, projetos, setProjetoAtivo],
+    [user, mustChangePassword, projetoId, projetoNome, role, projetos, setProjetoAtivo, isLoadingRoles],
   );
 
   return <ActiveContext.Provider value={value}>{children}</ActiveContext.Provider>;
