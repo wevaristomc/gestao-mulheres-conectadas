@@ -23,6 +23,7 @@ import { Route as AuthenticatedBaseConhecimentoRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdministrativoRouteImport } from './routes/_authenticated/administrativo'
 import { Route as AuthenticatedPedagogicoIndexRouteImport } from './routes/_authenticated/pedagogico.index'
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
+import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
 import { Route as AuthenticatedAdministrativoIndexRouteImport } from './routes/_authenticated/administrativo.index'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
@@ -111,6 +112,12 @@ const AuthenticatedFinanceiroIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
+const AuthenticatedConfiguracoesIndexRoute =
+  AuthenticatedConfiguracoesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
 const AuthenticatedAdministrativoIndexRoute =
   AuthenticatedAdministrativoIndexRouteImport.update({
@@ -211,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
+  '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
   '/pedagogico/': typeof AuthenticatedPedagogicoIndexRoute
   '/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdRouteWithChildren
@@ -224,7 +232,6 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
-  '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/administrativo': typeof AuthenticatedAdministrativoIndexRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro': typeof AuthenticatedFinanceiroIndexRoute
   '/pedagogico': typeof AuthenticatedPedagogicoIndexRoute
   '/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
@@ -265,6 +273,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/_authenticated/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
+  '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
   '/_authenticated/pedagogico/': typeof AuthenticatedPedagogicoIndexRoute
   '/_authenticated/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdRouteWithChildren
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
     | '/administrativo/'
+    | '/configuracoes/'
     | '/financeiro/'
     | '/pedagogico/'
     | '/pedagogico/turmas/$id'
@@ -308,7 +318,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/base-conhecimento'
     | '/captacao'
-    | '/configuracoes'
     | '/pendencias'
     | '/trocar-senha'
     | '/'
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
     | '/administrativo'
+    | '/configuracoes'
     | '/financeiro'
     | '/pedagogico'
     | '/pedagogico/turmas/$id/aulas'
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
     | '/_authenticated/administrativo/'
+    | '/_authenticated/configuracoes/'
     | '/_authenticated/financeiro/'
     | '/_authenticated/pedagogico/'
     | '/_authenticated/pedagogico/turmas/$id'
@@ -462,6 +473,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/financeiro/'
       preLoaderRoute: typeof AuthenticatedFinanceiroIndexRouteImport
       parentRoute: typeof AuthenticatedFinanceiroRoute
+    }
+    '/_authenticated/configuracoes/': {
+      id: '/_authenticated/configuracoes/'
+      path: '/'
+      fullPath: '/configuracoes/'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesIndexRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
     '/_authenticated/administrativo/': {
       id: '/_authenticated/administrativo/'
@@ -583,12 +601,14 @@ const AuthenticatedAdministrativoRouteWithChildren =
 
 interface AuthenticatedConfiguracoesRouteChildren {
   AuthenticatedConfiguracoesUsuariosRoute: typeof AuthenticatedConfiguracoesUsuariosRoute
+  AuthenticatedConfiguracoesIndexRoute: typeof AuthenticatedConfiguracoesIndexRoute
 }
 
 const AuthenticatedConfiguracoesRouteChildren: AuthenticatedConfiguracoesRouteChildren =
   {
     AuthenticatedConfiguracoesUsuariosRoute:
       AuthenticatedConfiguracoesUsuariosRoute,
+    AuthenticatedConfiguracoesIndexRoute: AuthenticatedConfiguracoesIndexRoute,
   }
 
 const AuthenticatedConfiguracoesRouteWithChildren =
