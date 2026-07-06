@@ -1,57 +1,29 @@
-## Módulo Pedagógico — Fase 1
+## Corrigir erro `column turmas.nome does not exist`
 
-Objetivo: transformar `/pedagogico` (hoje placeholder) em um módulo funcional com listagem de turmas, detalhe da turma com suas aulas, e grade de frequência dos cursistas — mais CRUD básico para lançar aulas e marcar presença. Todo o schema é descoberto em runtime; queries são defensivas (colunas faltantes → "—", RLS negando → "sem acesso").
+### Causa
 
-### Rotas novas (`src/routes/_authenticated/`)
+Duas queries fazem `.order("nome", ...)` na tabela `turmas`, mas a coluna `nome` não existe nesse schema. O Postgres rejeita o pedido antes de devolver qualquer linha, então a tela `/pedagogico` mostra o erro e a de qualificação também depende disso.
 
-```text
-pedagogico.tsx                    → lista de turmas do projeto ativo
-pedagogico.turmas.$id.tsx         → layout com abas (Aulas | Frequência | Cursistas)
-pedagogico.turmas.$id.index.tsx   → redirect p/ aba Aulas
-pedagogico.turmas.$id.aulas.tsx
-pedagogico.turmas.$id.frequencia.tsx
-pedagogico.turmas.$id.cursistas.tsx
-```
+Arquivos afetados:
+- `src/lib/pedagogico-queries.ts` → `turmasListOptions` (`.order("nome")`)
+- `src/lib/administrativo-queries.ts` → `turmasDoProjetoOptions` (`.select("id, nome, titulo").order("nome")`)
 
-Todas com `beforeLoad: () => requireModuleAccess("pedagogico")`.
+### Correção
 
-### Queries (`src/lib/pedagogico-queries.ts` — novo arquivo)
+Como o resto do módulo já foi escrito para descobrir o nome da turma em runtime via `pickFirst(row, ["nome", "titulo", "descricao"])`, a correção é remover a dependência da coluna `nome` no servidor e ordenar no cliente:
 
-- `turmasListOptions(projetoId)` → `turmas.select('*').eq('projeto_id', ...)`; renderiza qualquer coluna reconhecida (nome, turno, carga_horaria, data_inicio, data_fim, professor_id, local).
-- `turmaByIdOptions(turmaId)` → detalhe da turma.
-- `aulasByTurmaOptions(turmaId)` → `aulas.select('*').eq('turma_id', ...).order('data')`.
-- `cursistasByTurmaOptions(turmaId)` → `matriculas.select('id, cursista_id, cursistas(*)').eq('turma_id', ...)`.
-- `frequenciaGridOptions(turmaId)` → tenta `frequencias` primeiro; se PostgREST devolver 42P01 (tabela inexistente), tenta `presencas`; guarda a tabela detectada em memória para reuso. Se ambas falharem, retorna `{ tableName: null, rows: [] }` e a UI mostra estado vazio explicando.
-- Mutations: `upsertAula`, `deleteAula`, `upsertFrequencia` (recebe `{ aula_id, matricula_id, presente }`).
+1. **`src/lib/pedagogico-queries.ts` → `turmasListOptions`**
+   - Trocar `.order("nome", { ascending: true })` por nada; manter `.select("*")`.
+   - Após receber `data`, ordenar client-side por `pickFirst(row, ["nome","titulo","descricao"]) ?? ""` com `localeCompare` pt-BR.
 
-Todas as queries retornam `{ data, error }` no mesmo padrão de `dashboard-queries.ts`.
+2. **`src/lib/administrativo-queries.ts` → `turmasDoProjetoOptions`**
+   - Trocar `.select("id, nome, titulo")` por `.select("*")` (o resto do código já usa `pickFirst`/`Row`, então nada quebra).
+   - Remover `.order("nome", { ascending: true })` e ordenar client-side com o mesmo critério acima.
+   - Se preferir manter o `select` enxuto: usar `.select("id, titulo, descricao, turno, data_inicio, data_fim")` — mas `*` é mais seguro porque também esconde qualquer outra coluna faltante e mantém o padrão "descubra em runtime" já adotado no plano do módulo.
 
-### Telas
+Nenhuma outra query precisa mudar: `turmaByIdOptions`, `aulasByTurmaOptions`, `cursistasByTurmaOptions` e `frequenciaByTurmaOptions` não referenciam `nome`.
 
-**`/pedagogico`** — tabela de turmas do `projetoId` ativo. Colunas montadas dinamicamente a partir da primeira row (whitelist: nome, turno, data_inicio, data_fim, carga_horaria). Cada linha é `<Link to="/pedagogico/turmas/$id">`. Skeleton enquanto carrega, "Sem turmas neste projeto" quando vazio.
+### Fora do escopo
 
-**`/pedagogico/turmas/$id`** — header com nome/turno/período da turma + `<Tabs>` shadcn navegando entre aulas/frequência/cursistas via `<Link>` (não `useState`) para manter URL como fonte de verdade. `<Outlet />` renderiza a aba.
-
-**Aba Aulas** — tabela ordenada por data (data, tema/título, duração, ações). Botão "Nova aula" abre `<Dialog>` com form (data obrigatória; demais campos aparecem se existirem na primeira row detectada). Editar/excluir por linha. Mutations invalidam `["aulas", turmaId]` e `["frequencia", turmaId]`.
-
-**Aba Frequência** — grade cursistas (linhas) × aulas (colunas). Cada célula é um `<Checkbox>` que dispara `upsertFrequencia` otimista. Cabeçalho fixo com data da aula. Se `frequenciaGridOptions` retorna `tableName: null`, mostra painel vazio: "Tabela de frequência não encontrada no banco. Configure `frequencias(aula_id, matricula_id, presente)` para habilitar esta grade."
-
-**Aba Cursistas** — tabela simples com nome/email do cursista + status da matrícula.
-
-### Sidebar / navegação
-
-`app-sidebar.tsx` já tem entrada Pedagógico apontando pra `/pedagogico` — nenhuma mudança. A navegação entre abas usa `<Link>` do TanStack.
-
-### Fora do escopo desta fase
-
-- Criar/editar turmas (só listar — turmas continuam sendo gerenciadas fora da UI por enquanto).
-- Criar/editar cursistas e matrículas.
-- Relatórios / exportação de frequência.
-- Notificações de aulas sem frequência lançada.
-
-### Detalhes técnicos
-
-- Segue padrão existente: `queryOptions` + `useSuspenseQuery` em componentes; `useMutation` + `queryClient.invalidateQueries` para escrita.
-- Nenhum server function novo — tudo via `supabase` client no browser sob RLS (mesmo padrão de `dashboard-queries.ts` e da tela de Usuários).
-- Se RLS bloquear escrita de aula/frequência para o papel atual, a mutation devolve erro e um `toast` (`sonner`) mostra a mensagem — sem tratamento especial por papel no cliente (RLS é a fonte da verdade).
-- Rotas seguem `tanstack-route-architecture`: layout `pedagogico.turmas.$id.tsx` retorna `<Outlet />` e uma `index.tsx` irmã faz `throw redirect({ to: "/pedagogico/turmas/$id/aulas", params })`.
+- Não vou renomear colunas no banco nem criar migração — o schema real é a fonte da verdade e o módulo já foi construído para se adaptar a ele.
+- Não vou mexer nos componentes das telas; eles já usam `pickFirst` para exibir o nome.

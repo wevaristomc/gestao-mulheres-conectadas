@@ -15,10 +15,14 @@ export function turmasListOptions(projetoId: string | null) {
       const { data, error } = await supabase
         .from("turmas")
         .select("*")
-        .eq("projeto_id", projetoId)
-        .order("nome", { ascending: true });
+        .eq("projeto_id", projetoId);
       if (error) return { rows: [], error: error.message };
-      return { rows: (data ?? []) as Row[] };
+      const rows = ((data ?? []) as Row[]).slice().sort((a, b) => {
+        const an = pickFirst(a, ["nome", "titulo", "descricao"]) ?? "";
+        const bn = pickFirst(b, ["nome", "titulo", "descricao"]) ?? "";
+        return an.localeCompare(bn, "pt-BR");
+      });
+      return { rows };
     },
   });
 }
