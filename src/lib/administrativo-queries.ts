@@ -19,11 +19,23 @@ export function turmasDoProjetoOptions(projetoId: string | null) {
       if (!projetoId) return { rows: [] };
       const { data, error } = await supabase
         .from("turmas")
-        .select("id, nome, titulo")
-        .eq("projeto_id", projetoId)
-        .order("nome", { ascending: true });
+        .select("*")
+        .eq("projeto_id", projetoId);
       if (error) return { rows: [], error: error.message };
-      return { rows: (data ?? []) as Row[] };
+      const rows = ((data ?? []) as Row[]).slice().sort((a, b) => {
+        const an =
+          (typeof a.nome === "string" && a.nome) ||
+          (typeof a.titulo === "string" && a.titulo) ||
+          (typeof a.descricao === "string" && a.descricao) ||
+          "";
+        const bn =
+          (typeof b.nome === "string" && b.nome) ||
+          (typeof b.titulo === "string" && b.titulo) ||
+          (typeof b.descricao === "string" && b.descricao) ||
+          "";
+        return String(an).localeCompare(String(bn), "pt-BR");
+      });
+      return { rows };
     },
   });
 }
