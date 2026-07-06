@@ -34,6 +34,7 @@ import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './route
 import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
 import { Route as AuthenticatedRelatoriosFrequenciaRouteImport } from './routes/_authenticated/relatorios.frequencia'
 import { Route as AuthenticatedMteTurmasRouteImport } from './routes/_authenticated/mte.turmas'
+import { Route as AuthenticatedMteMatriculasRouteImport } from './routes/_authenticated/mte.matriculas'
 import { Route as AuthenticatedMteBeneficiariasRouteImport } from './routes/_authenticated/mte.beneficiarias'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
@@ -185,6 +186,12 @@ const AuthenticatedMteTurmasRoute = AuthenticatedMteTurmasRouteImport.update({
   path: '/turmas',
   getParentRoute: () => AuthenticatedMteRoute,
 } as any)
+const AuthenticatedMteMatriculasRoute =
+  AuthenticatedMteMatriculasRouteImport.update({
+    id: '/matriculas',
+    path: '/matriculas',
+    getParentRoute: () => AuthenticatedMteRoute,
+  } as any)
 const AuthenticatedMteBeneficiariasRoute =
   AuthenticatedMteBeneficiariasRouteImport.update({
     id: '/beneficiarias',
@@ -286,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
+  '/mte/matriculas': typeof AuthenticatedMteMatriculasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
@@ -319,6 +327,7 @@ export interface FileRoutesByTo {
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
+  '/mte/matriculas': typeof AuthenticatedMteMatriculasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
@@ -359,6 +368,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/_authenticated/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
+  '/_authenticated/mte/matriculas': typeof AuthenticatedMteMatriculasRoute
   '/_authenticated/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/_authenticated/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
@@ -400,6 +410,7 @@ export interface FileRouteTypes {
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
     | '/mte/beneficiarias'
+    | '/mte/matriculas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
     | '/relatorios/metas'
@@ -433,6 +444,7 @@ export interface FileRouteTypes {
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
     | '/mte/beneficiarias'
+    | '/mte/matriculas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
     | '/relatorios/metas'
@@ -472,6 +484,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
     | '/_authenticated/mte/beneficiarias'
+    | '/_authenticated/mte/matriculas'
     | '/_authenticated/mte/turmas'
     | '/_authenticated/relatorios/frequencia'
     | '/_authenticated/relatorios/metas'
@@ -673,6 +686,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMteTurmasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
     }
+    '/_authenticated/mte/matriculas': {
+      id: '/_authenticated/mte/matriculas'
+      path: '/matriculas'
+      fullPath: '/mte/matriculas'
+      preLoaderRoute: typeof AuthenticatedMteMatriculasRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
     '/_authenticated/mte/beneficiarias': {
       id: '/_authenticated/mte/beneficiarias'
       path: '/beneficiarias'
@@ -832,12 +852,14 @@ const AuthenticatedFinanceiroRouteWithChildren =
 
 interface AuthenticatedMteRouteChildren {
   AuthenticatedMteBeneficiariasRoute: typeof AuthenticatedMteBeneficiariasRoute
+  AuthenticatedMteMatriculasRoute: typeof AuthenticatedMteMatriculasRoute
   AuthenticatedMteTurmasRoute: typeof AuthenticatedMteTurmasRoute
   AuthenticatedMteIndexRoute: typeof AuthenticatedMteIndexRoute
 }
 
 const AuthenticatedMteRouteChildren: AuthenticatedMteRouteChildren = {
   AuthenticatedMteBeneficiariasRoute: AuthenticatedMteBeneficiariasRoute,
+  AuthenticatedMteMatriculasRoute: AuthenticatedMteMatriculasRoute,
   AuthenticatedMteTurmasRoute: AuthenticatedMteTurmasRoute,
   AuthenticatedMteIndexRoute: AuthenticatedMteIndexRoute,
 }
