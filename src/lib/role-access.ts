@@ -22,6 +22,7 @@ export type ModuleKey =
   | "visao-geral"
   | "pendencias"
   | "pedagogico"
+  | "mte"
   | "administrativo"
   | "financeiro"
   | "captacao"
@@ -38,6 +39,12 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "coordenador_geral",
     "coordenador_pedagogico",
     "professor",
+    "auxiliar_pedagogico",
+  ],
+  mte: [
+    "coordenador_geral",
+    "coordenador_pedagogico",
+    "administrativo",
     "auxiliar_pedagogico",
   ],
   administrativo: ["coordenador_geral", "administrativo"],
