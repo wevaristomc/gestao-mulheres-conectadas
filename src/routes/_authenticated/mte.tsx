@@ -11,6 +11,10 @@ const TABS = [
   { key: "turmas", label: "Turmas", to: "/mte/turmas" as const },
   { key: "beneficiarias", label: "Beneficiárias", to: "/mte/beneficiarias" as const },
   { key: "matriculas", label: "Matrículas", to: "/mte/matriculas" as const },
+  { key: "aulas", label: "Aulas", to: "/mte/aulas" as const },
+  { key: "presencas", label: "Presenças", to: "/mte/presencas" as const },
+  { key: "evidencias", label: "Evidências", to: "/mte/evidencias" as const },
+  { key: "cronograma", label: "Cronograma", to: "/mte/cronograma" as const },
 ];
 
 function MteLayout() {

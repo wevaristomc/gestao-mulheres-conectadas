@@ -282,3 +282,199 @@ export async function uploadFichaInscricao(matriculaId: string, file: File): Pro
   await supabase.from("matriculas").update({ ficha_inscricao_url: url }).eq("id", matriculaId);
   return url;
 }
+
+// ============================== Aulas ===============================
+
+export type AulaMTE = {
+  id: string;
+  turma_id: string;
+  data: string | null;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  ch_prevista: number | null;
+  ch_ministrada: number | null;
+  tipo_ch: string | null; // "geral" | "especifico"
+  conteudo_programatico: string | null;
+  instrutor: string | null;
+  observacoes: string | null;
+  created_at?: string;
+};
+
+export const TIPOS_CH = ["geral", "especifico"] as const;
+
+export function aulasMteListOptions(turmaId: string | null) {
+  return queryOptions({
+    queryKey: ["mte", "aulas", turmaId],
+    enabled: !!turmaId,
+    queryFn: async (): Promise<{ rows: AulaMTE[]; error?: string }> => {
+      if (!turmaId) return { rows: [] };
+      const { data, error } = await supabase
+        .from("aulas")
+        .select("*")
+        .eq("turma_id", turmaId)
+        .order("data", { ascending: true });
+      if (error) return { rows: [], error: error.message };
+      return { rows: (data ?? []) as AulaMTE[] };
+    },
+  });
+}
+
+export function cronogramaGeralOptions() {
+  return queryOptions({
+    queryKey: ["mte", "cronograma"],
+    queryFn: async (): Promise<{
+      rows: (AulaMTE & { turma?: Partial<TurmaMTE> | null })[];
+      error?: string;
+    }> => {
+      let res = await supabase
+        .from("aulas")
+        .select("*, turma:turmas(id, codigo_turma, nome_curso, turno, municipio)")
+        .order("data", { ascending: true })
+        .limit(1000);
+      if (res.error) {
+        res = await supabase.from("aulas").select("*").order("data", { ascending: true }).limit(1000);
+      }
+      if (res.error) return { rows: [], error: res.error.message };
+      return { rows: (res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[] };
+    },
+  });
+}
+
+export async function upsertAulaMTE(input: Partial<AulaMTE> & { id?: string; turma_id: string }) {
+  const payload: Record<string, unknown> = {
+    turma_id: input.turma_id,
+    data: input.data || null,
+    hora_inicio: input.hora_inicio || null,
+    hora_fim: input.hora_fim || null,
+    ch_prevista: input.ch_prevista ?? null,
+    ch_ministrada: input.ch_ministrada ?? null,
+    tipo_ch: input.tipo_ch ?? null,
+    conteudo_programatico: input.conteudo_programatico ?? null,
+    instrutor: input.instrutor ?? null,
+    observacoes: input.observacoes ?? null,
+  };
+  if (input.id) {
+    const { error } = await supabase.from("aulas").update(payload).eq("id", input.id);
+    if (error) throw new Error(error.message);
+    return input.id;
+  }
+  const { data, error } = await supabase.from("aulas").insert(payload).select("id").single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export async function deleteAulaMTE(id: string) {
+  const { error } = await supabase.from("aulas").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// ============================ Presenças =============================
+
+export type PresencaMTE = {
+  id?: string;
+  aula_id: string;
+  matricula_id: string;
+  presente: boolean;
+  justificativa: string | null;
+};
+
+export function presencasByAulaOptions(aulaId: string | null) {
+  return queryOptions({
+    queryKey: ["mte", "presencas", aulaId],
+    enabled: !!aulaId,
+    queryFn: async (): Promise<{ rows: PresencaMTE[]; error?: string }> => {
+      if (!aulaId) return { rows: [] };
+      const { data, error } = await supabase.from("presencas").select("*").eq("aula_id", aulaId);
+      if (error) return { rows: [], error: error.message };
+      return { rows: (data ?? []) as PresencaMTE[] };
+    },
+  });
+}
+
+export async function upsertPresencaMTE(input: PresencaMTE) {
+  const payload = {
+    aula_id: input.aula_id,
+    matricula_id: input.matricula_id,
+    presente: input.presente,
+    justificativa: input.justificativa ?? null,
+  };
+  const { error } = await supabase
+    .from("presencas")
+    .upsert(payload, { onConflict: "aula_id,matricula_id" });
+  if (error) throw new Error(error.message);
+}
+
+// ============================ Evidências ============================
+
+export const TIPOS_EVIDENCIA = [
+  "lista_presenca",
+  "foto_aula",
+  "material_didatico",
+  "diario_classe",
+  "certificado",
+  "termo_compromisso",
+  "outro",
+] as const;
+export type TipoEvidencia = (typeof TIPOS_EVIDENCIA)[number];
+
+export type Evidencia = {
+  id: string;
+  turma_id: string | null;
+  aula_id: string | null;
+  tipo: string;
+  descricao: string | null;
+  arquivo_url: string;
+  arquivo_nome: string | null;
+  created_at?: string;
+};
+
+export function evidenciasByTurmaOptions(turmaId: string | null) {
+  return queryOptions({
+    queryKey: ["mte", "evidencias", turmaId],
+    enabled: !!turmaId,
+    queryFn: async (): Promise<{ rows: Evidencia[]; error?: string }> => {
+      if (!turmaId) return { rows: [] };
+      const { data, error } = await supabase
+        .from("evidencias")
+        .select("*")
+        .eq("turma_id", turmaId)
+        .order("created_at", { ascending: false });
+      if (error) return { rows: [], error: error.message };
+      return { rows: (data ?? []) as Evidencia[] };
+    },
+  });
+}
+
+export async function uploadEvidencia(input: {
+  turma_id: string;
+  aula_id?: string | null;
+  tipo: string;
+  descricao?: string | null;
+  file: File;
+}): Promise<Evidencia> {
+  const ext = input.file.name.split(".").pop()?.toLowerCase() || "bin";
+  const safeName = input.file.name.replace(/[^\w.\-]+/g, "_");
+  const path = `turmas/${input.turma_id}/evidencias/${Date.now()}-${safeName}`;
+  const up = await supabase.storage
+    .from("evidencias")
+    .upload(path, input.file, { upsert: false, contentType: input.file.type || `application/${ext}` });
+  if (up.error) throw new Error(up.error.message);
+  const pub = supabase.storage.from("evidencias").getPublicUrl(path);
+  const url = pub.data.publicUrl;
+  const payload: Record<string, unknown> = {
+    turma_id: input.turma_id,
+    aula_id: input.aula_id ?? null,
+    tipo: input.tipo,
+    descricao: input.descricao ?? null,
+    arquivo_url: url,
+    arquivo_nome: input.file.name,
+  };
+  const { data, error } = await supabase.from("evidencias").insert(payload).select("*").single();
+  if (error) throw new Error(error.message);
+  return data as Evidencia;
+}
+
+export async function deleteEvidencia(id: string) {
+  const { error } = await supabase.from("evidencias").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}

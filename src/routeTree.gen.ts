@@ -34,8 +34,12 @@ import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './route
 import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
 import { Route as AuthenticatedRelatoriosFrequenciaRouteImport } from './routes/_authenticated/relatorios.frequencia'
 import { Route as AuthenticatedMteTurmasRouteImport } from './routes/_authenticated/mte.turmas'
+import { Route as AuthenticatedMtePresencasRouteImport } from './routes/_authenticated/mte.presencas'
 import { Route as AuthenticatedMteMatriculasRouteImport } from './routes/_authenticated/mte.matriculas'
+import { Route as AuthenticatedMteEvidenciasRouteImport } from './routes/_authenticated/mte.evidencias'
+import { Route as AuthenticatedMteCronogramaRouteImport } from './routes/_authenticated/mte.cronograma'
 import { Route as AuthenticatedMteBeneficiariasRouteImport } from './routes/_authenticated/mte.beneficiarias'
+import { Route as AuthenticatedMteAulasRouteImport } from './routes/_authenticated/mte.aulas'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -186,10 +190,28 @@ const AuthenticatedMteTurmasRoute = AuthenticatedMteTurmasRouteImport.update({
   path: '/turmas',
   getParentRoute: () => AuthenticatedMteRoute,
 } as any)
+const AuthenticatedMtePresencasRoute =
+  AuthenticatedMtePresencasRouteImport.update({
+    id: '/presencas',
+    path: '/presencas',
+    getParentRoute: () => AuthenticatedMteRoute,
+  } as any)
 const AuthenticatedMteMatriculasRoute =
   AuthenticatedMteMatriculasRouteImport.update({
     id: '/matriculas',
     path: '/matriculas',
+    getParentRoute: () => AuthenticatedMteRoute,
+  } as any)
+const AuthenticatedMteEvidenciasRoute =
+  AuthenticatedMteEvidenciasRouteImport.update({
+    id: '/evidencias',
+    path: '/evidencias',
+    getParentRoute: () => AuthenticatedMteRoute,
+  } as any)
+const AuthenticatedMteCronogramaRoute =
+  AuthenticatedMteCronogramaRouteImport.update({
+    id: '/cronograma',
+    path: '/cronograma',
     getParentRoute: () => AuthenticatedMteRoute,
   } as any)
 const AuthenticatedMteBeneficiariasRoute =
@@ -198,6 +220,11 @@ const AuthenticatedMteBeneficiariasRoute =
     path: '/beneficiarias',
     getParentRoute: () => AuthenticatedMteRoute,
   } as any)
+const AuthenticatedMteAulasRoute = AuthenticatedMteAulasRouteImport.update({
+  id: '/aulas',
+  path: '/aulas',
+  getParentRoute: () => AuthenticatedMteRoute,
+} as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -292,8 +319,12 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
+  '/mte/cronograma': typeof AuthenticatedMteCronogramaRoute
+  '/mte/evidencias': typeof AuthenticatedMteEvidenciasRoute
   '/mte/matriculas': typeof AuthenticatedMteMatriculasRoute
+  '/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
@@ -326,8 +357,12 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
+  '/mte/cronograma': typeof AuthenticatedMteCronogramaRoute
+  '/mte/evidencias': typeof AuthenticatedMteEvidenciasRoute
   '/mte/matriculas': typeof AuthenticatedMteMatriculasRoute
+  '/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
@@ -367,8 +402,12 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/_authenticated/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/_authenticated/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
+  '/_authenticated/mte/cronograma': typeof AuthenticatedMteCronogramaRoute
+  '/_authenticated/mte/evidencias': typeof AuthenticatedMteEvidenciasRoute
   '/_authenticated/mte/matriculas': typeof AuthenticatedMteMatriculasRoute
+  '/_authenticated/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/_authenticated/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/_authenticated/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
@@ -409,8 +448,12 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/mte/aulas'
     | '/mte/beneficiarias'
+    | '/mte/cronograma'
+    | '/mte/evidencias'
     | '/mte/matriculas'
+    | '/mte/presencas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
     | '/relatorios/metas'
@@ -443,8 +486,12 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/mte/aulas'
     | '/mte/beneficiarias'
+    | '/mte/cronograma'
+    | '/mte/evidencias'
     | '/mte/matriculas'
+    | '/mte/presencas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
     | '/relatorios/metas'
@@ -483,8 +530,12 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
+    | '/_authenticated/mte/aulas'
     | '/_authenticated/mte/beneficiarias'
+    | '/_authenticated/mte/cronograma'
+    | '/_authenticated/mte/evidencias'
     | '/_authenticated/mte/matriculas'
+    | '/_authenticated/mte/presencas'
     | '/_authenticated/mte/turmas'
     | '/_authenticated/relatorios/frequencia'
     | '/_authenticated/relatorios/metas'
@@ -686,6 +737,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMteTurmasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
     }
+    '/_authenticated/mte/presencas': {
+      id: '/_authenticated/mte/presencas'
+      path: '/presencas'
+      fullPath: '/mte/presencas'
+      preLoaderRoute: typeof AuthenticatedMtePresencasRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
     '/_authenticated/mte/matriculas': {
       id: '/_authenticated/mte/matriculas'
       path: '/matriculas'
@@ -693,11 +751,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMteMatriculasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
     }
+    '/_authenticated/mte/evidencias': {
+      id: '/_authenticated/mte/evidencias'
+      path: '/evidencias'
+      fullPath: '/mte/evidencias'
+      preLoaderRoute: typeof AuthenticatedMteEvidenciasRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
+    '/_authenticated/mte/cronograma': {
+      id: '/_authenticated/mte/cronograma'
+      path: '/cronograma'
+      fullPath: '/mte/cronograma'
+      preLoaderRoute: typeof AuthenticatedMteCronogramaRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
     '/_authenticated/mte/beneficiarias': {
       id: '/_authenticated/mte/beneficiarias'
       path: '/beneficiarias'
       fullPath: '/mte/beneficiarias'
       preLoaderRoute: typeof AuthenticatedMteBeneficiariasRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
+    '/_authenticated/mte/aulas': {
+      id: '/_authenticated/mte/aulas'
+      path: '/aulas'
+      fullPath: '/mte/aulas'
+      preLoaderRoute: typeof AuthenticatedMteAulasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
     }
     '/_authenticated/financeiro/orcamento': {
@@ -851,15 +930,23 @@ const AuthenticatedFinanceiroRouteWithChildren =
   )
 
 interface AuthenticatedMteRouteChildren {
+  AuthenticatedMteAulasRoute: typeof AuthenticatedMteAulasRoute
   AuthenticatedMteBeneficiariasRoute: typeof AuthenticatedMteBeneficiariasRoute
+  AuthenticatedMteCronogramaRoute: typeof AuthenticatedMteCronogramaRoute
+  AuthenticatedMteEvidenciasRoute: typeof AuthenticatedMteEvidenciasRoute
   AuthenticatedMteMatriculasRoute: typeof AuthenticatedMteMatriculasRoute
+  AuthenticatedMtePresencasRoute: typeof AuthenticatedMtePresencasRoute
   AuthenticatedMteTurmasRoute: typeof AuthenticatedMteTurmasRoute
   AuthenticatedMteIndexRoute: typeof AuthenticatedMteIndexRoute
 }
 
 const AuthenticatedMteRouteChildren: AuthenticatedMteRouteChildren = {
+  AuthenticatedMteAulasRoute: AuthenticatedMteAulasRoute,
   AuthenticatedMteBeneficiariasRoute: AuthenticatedMteBeneficiariasRoute,
+  AuthenticatedMteCronogramaRoute: AuthenticatedMteCronogramaRoute,
+  AuthenticatedMteEvidenciasRoute: AuthenticatedMteEvidenciasRoute,
   AuthenticatedMteMatriculasRoute: AuthenticatedMteMatriculasRoute,
+  AuthenticatedMtePresencasRoute: AuthenticatedMtePresencasRoute,
   AuthenticatedMteTurmasRoute: AuthenticatedMteTurmasRoute,
   AuthenticatedMteIndexRoute: AuthenticatedMteIndexRoute,
 }
