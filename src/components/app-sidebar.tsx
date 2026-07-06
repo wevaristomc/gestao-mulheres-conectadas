@@ -8,6 +8,7 @@ import {
   Sprout,
   BarChart3,
   BookOpen,
+  HardDrive,
   Settings,
   ShieldCheck,
 } from "lucide-react";
@@ -51,6 +52,7 @@ const MODULOS: Item[] = [
 
 const APOIO: Item[] = [
   { key: "base-conhecimento", title: "Base de Conhecimento", url: "/base-conhecimento", icon: BookOpen },
+  { key: "drive", title: "Drive do Projeto", url: "/drive", icon: HardDrive },
   { key: "configuracoes", title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 

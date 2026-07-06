@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Loader2, Trash2, Upload } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { ExternalLink, HardDrive, Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -25,6 +26,9 @@ import {
   aulasMteListOptions, deleteEvidencia, evidenciasByTurmaOptions,
   turmasMteListOptions, uploadEvidencia, TIPOS_EVIDENCIA, type Evidencia,
 } from "@/lib/mte-queries";
+import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
+import { importGdriveToBucket } from "@/lib/gdrive.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/mte/evidencias")({
   component: EvidenciasIndex,
@@ -51,6 +55,8 @@ function EvidenciasIndex() {
   const [descricao, setDescricao] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [deleting, setDeleting] = useState<Evidencia | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const importGdrive = useServerFn(importGdriveToBucket);
 
   const up = useMutation({
     mutationFn: async () => {
@@ -79,6 +85,36 @@ function EvidenciasIndex() {
       setDeleting(null);
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao excluir"),
+  });
+
+  const importFromDrive = useMutation({
+    mutationFn: async (picked: GDriveFile[]) => {
+      for (const f of picked) {
+        const res = await importGdrive({
+          data: {
+            fileId: f.id,
+            bucket: "evidencias",
+            pathPrefix: `turmas/${effectiveTurma}/evidencias`,
+          },
+        });
+        const payload = {
+          turma_id: effectiveTurma,
+          aula_id: aulaVinc || null,
+          tipo,
+          descricao: descricao || `Importado do Drive: ${f.name}`,
+          arquivo_url: res.arquivo_url,
+          arquivo_nome: res.nome_arquivo,
+        };
+        const { error } = await supabase.from("evidencias").insert(payload);
+        if (error) throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Evidência(s) importada(s) do Drive");
+      setPickerOpen(false);
+      qc.invalidateQueries({ queryKey: ["mte", "evidencias"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao importar do Drive"),
   });
 
   return (
@@ -134,7 +170,17 @@ function EvidenciasIndex() {
             </div>
             <div className="grid gap-1.5 md:col-span-3">
               <Label className="text-xs">Arquivo *</Label>
-              <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              <div className="flex gap-2">
+                <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPickerOpen(true)}
+                  title="Escolher do Google Drive do Projeto"
+                >
+                  <HardDrive className="mr-1.5 h-4 w-4" /> Do Drive
+                </Button>
+              </div>
             </div>
             <div className="flex items-end">
               <Button className="w-full" onClick={() => up.mutate()} disabled={!file || up.isPending}>
@@ -209,6 +255,15 @@ function EvidenciasIndex() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GDrivePicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        multi
+        title="Escolher evidências do Drive"
+        description="Selecione um ou mais arquivos. Serão importados para o bucket de evidências e vinculados à turma."
+        onPick={(files) => importFromDrive.mutate(files)}
+      />
     </div>
   );
 }

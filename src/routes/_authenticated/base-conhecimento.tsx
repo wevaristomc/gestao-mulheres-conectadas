@@ -2,9 +2,10 @@ import { useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, Download, FileText, Loader2, Plus, Search, Trash2, Upload,
+  AlertCircle, Download, FileText, HardDrive, Loader2, Plus, Search, Trash2, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,9 @@ import {
   formatBytes, formatarData, getSignedUrl, uploadDocumento,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
+import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
+import { importGdriveToBucket } from "@/lib/gdrive.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
   head: () => ({ meta: [{ title: "Base de Conhecimento · Painel Mulheres Conectadas" }] }),
@@ -51,6 +55,41 @@ function BaseConhecimentoPage() {
   const [categoria, setCategoria] = useState<string>("todas");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [confirmDel, setConfirmDel] = useState<DocRow | null>(null);
+  const [tab, setTab] = useState<"biblioteca" | "drive">("biblioteca");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [importCat, setImportCat] = useState<CategoriaKey>("outros");
+  const importGdrive = useServerFn(importGdriveToBucket);
+
+  const importFromDrive = useMutation({
+    mutationFn: async (files: GDriveFile[]) => {
+      if (!projetoId) throw new Error("Selecione um projeto ativo.");
+      for (const f of files) {
+        const res = await importGdrive({
+          data: { fileId: f.id, bucket: "documentos", pathPrefix: projetoId },
+        });
+        const payload: Record<string, unknown> = {
+          projeto_id: projetoId,
+          titulo: f.name,
+          descricao: `Importado do Google Drive`,
+          categoria: importCat,
+          storage_path: res.storage_path,
+          nome_arquivo: res.nome_arquivo,
+          mime_type: res.mime_type,
+          tamanho_bytes: res.tamanho_bytes,
+        };
+        const { data: u } = await supabase.auth.getUser();
+        if (u?.user?.id) payload.created_by = u.user.id;
+        const { error } = await supabase.from("documentos").insert(payload);
+        if (error) throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Documento(s) importado(s) do Drive");
+      setPickerOpen(false);
+      qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao importar"),
+  });
 
   const filtered = useMemo(() => {
     const s = busca.trim().toLowerCase();
@@ -103,6 +142,18 @@ function BaseConhecimentoPage() {
         title="Base de Conhecimento"
         description="Documentos do Termo de Fomento, modelos, normas e materiais de apoio do projeto."
         actions={
+          <div className="flex gap-2">
+            <Select value={importCat} onValueChange={(v) => setImportCat(v as CategoriaKey)}>
+              <SelectTrigger className="h-9 w-[180px]" title="Categoria do import">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIAS.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!projetoId}>
+              <HardDrive className="mr-1.5 h-4 w-4" /> Importar do Drive
+            </Button>
           <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
             <DialogTrigger asChild>
               <Button size="sm" disabled={!projetoId}>
@@ -120,6 +171,7 @@ function BaseConhecimentoPage() {
               />
             ) : null}
           </Dialog>
+          </div>
         }
       />
 
@@ -271,6 +323,15 @@ function BaseConhecimentoPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GDrivePicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        multi
+        title="Importar do Google Drive"
+        description={`Os arquivos selecionados serão baixados e salvos como categoria "${categoriaLabel(importCat)}".`}
+        onPick={(files) => importFromDrive.mutate(files)}
+      />
     </div>
   );
 }
