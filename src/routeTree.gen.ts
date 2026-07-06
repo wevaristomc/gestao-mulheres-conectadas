@@ -19,6 +19,7 @@ import { Route as AuthenticatedPendenciasRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPedagogicoRouteImport } from './routes/_authenticated/pedagogico'
 import { Route as AuthenticatedMteRouteImport } from './routes/_authenticated/mte'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
+import { Route as AuthenticatedDriveRouteImport } from './routes/_authenticated/drive'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedCaptacaoRouteImport } from './routes/_authenticated/captacao'
 import { Route as AuthenticatedBaseConhecimentoRouteImport } from './routes/_authenticated/base-conhecimento'
@@ -101,6 +102,11 @@ const AuthenticatedMteRoute = AuthenticatedMteRouteImport.update({
 const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDriveRoute = AuthenticatedDriveRouteImport.update({
+  id: '/drive',
+  path: '/drive',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedConfiguracoesRoute =
@@ -306,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
+  '/drive': typeof AuthenticatedDriveRoute
   '/financeiro': typeof AuthenticatedFinanceiroRouteWithChildren
   '/mte': typeof AuthenticatedMteRouteWithChildren
   '/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
@@ -347,6 +354,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/captacao': typeof AuthenticatedCaptacaoRoute
+  '/drive': typeof AuthenticatedDriveRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
@@ -388,6 +396,7 @@ export interface FileRoutesById {
   '/_authenticated/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
   '/_authenticated/captacao': typeof AuthenticatedCaptacaoRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
+  '/_authenticated/drive': typeof AuthenticatedDriveRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRouteWithChildren
   '/_authenticated/mte': typeof AuthenticatedMteRouteWithChildren
   '/_authenticated/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
@@ -435,6 +444,7 @@ export interface FileRouteTypes {
     | '/base-conhecimento'
     | '/captacao'
     | '/configuracoes'
+    | '/drive'
     | '/financeiro'
     | '/mte'
     | '/pedagogico'
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/base-conhecimento'
     | '/captacao'
+    | '/drive'
     | '/pendencias'
     | '/trocar-senha'
     | '/'
@@ -516,6 +527,7 @@ export interface FileRouteTypes {
     | '/_authenticated/base-conhecimento'
     | '/_authenticated/captacao'
     | '/_authenticated/configuracoes'
+    | '/_authenticated/drive'
     | '/_authenticated/financeiro'
     | '/_authenticated/mte'
     | '/_authenticated/pedagogico'
@@ -630,6 +642,13 @@ declare module '@tanstack/react-router' {
       path: '/financeiro'
       fullPath: '/financeiro'
       preLoaderRoute: typeof AuthenticatedFinanceiroRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/drive': {
+      id: '/_authenticated/drive'
+      path: '/drive'
+      fullPath: '/drive'
+      preLoaderRoute: typeof AuthenticatedDriveRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/configuracoes': {
@@ -1025,6 +1044,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBaseConhecimentoRoute: typeof AuthenticatedBaseConhecimentoRoute
   AuthenticatedCaptacaoRoute: typeof AuthenticatedCaptacaoRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
+  AuthenticatedDriveRoute: typeof AuthenticatedDriveRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRouteWithChildren
   AuthenticatedMteRoute: typeof AuthenticatedMteRouteWithChildren
   AuthenticatedPedagogicoRoute: typeof AuthenticatedPedagogicoRouteWithChildren
@@ -1040,6 +1060,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBaseConhecimentoRoute: AuthenticatedBaseConhecimentoRoute,
   AuthenticatedCaptacaoRoute: AuthenticatedCaptacaoRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
+  AuthenticatedDriveRoute: AuthenticatedDriveRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRouteWithChildren,
   AuthenticatedMteRoute: AuthenticatedMteRouteWithChildren,
   AuthenticatedPedagogicoRoute: AuthenticatedPedagogicoRouteWithChildren,
