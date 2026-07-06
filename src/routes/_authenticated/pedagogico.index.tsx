@@ -1,14 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ChevronRight } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, ChevronRight, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { useActiveContext } from "@/hooks/use-active-context";
-import { turmasListOptions, pickFirst, formatarData, type Row } from "@/lib/pedagogico-queries";
+import { useActiveContext, useHasRole } from "@/hooks/use-active-context";
+import { turmasListOptions, pickFirst, formatarData, deleteTurma, type Row } from "@/lib/pedagogico-queries";
+import { TurmaDialog } from "@/components/turma-dialog";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/")({
   component: PedagogicoIndex,
@@ -16,9 +24,27 @@ export const Route = createFileRoute("/_authenticated/pedagogico/")({
 
 function PedagogicoIndex() {
   const { projetoId, projetoNome } = useActiveContext();
+  const { hasAnyRole } = useHasRole();
+  const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico"]);
+  const qc = useQueryClient();
   const q = useQuery(turmasListOptions(projetoId));
   const rows = q.data?.rows ?? [];
   const erro = q.data?.error ?? (q.isError ? String(q.error) : null);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState<Row | null>(null);
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => deleteTurma(id),
+    onSuccess: () => {
+      toast.success("Turma excluída");
+      qc.invalidateQueries({ queryKey: ["pedagogico", "turmas"] });
+      qc.invalidateQueries({ queryKey: ["administrativo", "turmas"] });
+      setDeleting(null);
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao excluir"),
+  });
 
   return (
     <div>
@@ -28,6 +54,17 @@ function PedagogicoIndex() {
           projetoNome
             ? `Turmas do projeto · ${projetoNome}`
             : "Selecione um projeto para visualizar as turmas."
+        }
+        actions={
+          canWrite ? (
+            <Button
+              size="sm"
+              disabled={!projetoId}
+              onClick={() => { setEditing(null); setDialogOpen(true); }}
+            >
+              <Plus className="mr-1 h-4 w-4" /> Nova turma
+            </Button>
+          ) : null
         }
       />
 
@@ -48,7 +85,7 @@ function PedagogicoIndex() {
                 <TableHead className="w-32">Turno</TableHead>
                 <TableHead className="w-40">Início</TableHead>
                 <TableHead className="w-40">Fim</TableHead>
-                <TableHead className="w-24 text-right"></TableHead>
+                <TableHead className="w-40 text-right"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -89,13 +126,27 @@ function PedagogicoIndex() {
                       <TableCell className="text-sm text-muted-foreground">{formatarData(inicio)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatarData(fim)}</TableCell>
                       <TableCell className="text-right">
-                        <Link
-                          to="/pedagogico/turmas/$id"
-                          params={{ id: r.id }}
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          Abrir <ChevronRight className="h-3 w-3" />
-                        </Link>
+                        <div className="inline-flex items-center gap-1">
+                          {canWrite ? (
+                            <>
+                              <Button size="icon" variant="ghost" title="Editar"
+                                onClick={() => { setEditing(r); setDialogOpen(true); }}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" title="Excluir"
+                                onClick={() => setDeleting(r)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : null}
+                          <Link
+                            to="/pedagogico/turmas/$id"
+                            params={{ id: r.id }}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline px-2"
+                          >
+                            Abrir <ChevronRight className="h-3 w-3" />
+                          </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -105,6 +156,36 @@ function PedagogicoIndex() {
           </Table>
         </div>
       )}
+
+      {projetoId ? (
+        <TurmaDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          projetoId={projetoId}
+          turma={editing}
+        />
+      ) : null}
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir turma?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Aulas, matrículas e frequências vinculadas podem ser afetadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={delMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); if (deleting) delMut.mutate(deleting.id); }}
+              disabled={delMut.isPending}
+            >
+              {delMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

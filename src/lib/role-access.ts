@@ -25,6 +25,7 @@ export type ModuleKey =
   | "administrativo"
   | "financeiro"
   | "captacao"
+  | "relatorios"
   | "base-conhecimento"
   | "configuracoes";
 
@@ -42,6 +43,7 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
   administrativo: ["coordenador_geral", "administrativo"],
   financeiro: ["coordenador_geral", "gestor_financeiro"],
   captacao: ["coordenador_geral", "gestor_financeiro"],
+  relatorios: ["coordenador_geral", "coordenador_pedagogico", "gestor_financeiro"],
   "base-conhecimento": ALL,
   configuracoes: ["coordenador_geral"],
 };

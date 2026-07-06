@@ -151,6 +151,60 @@ export async function upsertAula(input: {
   }
 }
 
+export type UpsertTurmaInput = {
+  id?: string;
+  projeto_id: string;
+  nome: string;
+  turno?: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  descricao?: string | null;
+};
+
+// Grava turma tentando "nome" primeiro; se a coluna não existir, refaz com "titulo".
+export async function upsertTurma(input: UpsertTurmaInput) {
+  const base: Record<string, unknown> = {
+    projeto_id: input.projeto_id,
+    turno: input.turno ?? null,
+    data_inicio: input.data_inicio || null,
+    data_fim: input.data_fim || null,
+    descricao: input.descricao ?? null,
+  };
+  // Limpa nulls opcionais sem valor para não sobrescrever colunas inexistentes.
+  const write = async (nameKey: "nome" | "titulo") => {
+    const payload = { ...base, [nameKey]: input.nome };
+    if (input.id) {
+      return supabase.from("turmas").update(payload).eq("id", input.id);
+    }
+    return supabase.from("turmas").insert(payload);
+  };
+  let res = await write("nome");
+  if (res.error && /column .*(nome).* does not exist/i.test(res.error.message)) {
+    res = await write("titulo");
+  }
+  // Se "descricao" ou "turno" faltarem, tenta sem esses campos.
+  if (res.error && /column .*(descricao|turno|data_inicio|data_fim).* does not exist/i.test(res.error.message)) {
+    const minimal: Record<string, unknown> = { projeto_id: input.projeto_id, nome: input.nome };
+    if (input.id) {
+      res = await supabase.from("turmas").update(minimal).eq("id", input.id);
+    } else {
+      res = await supabase.from("turmas").insert(minimal);
+    }
+    if (res.error && /column .*(nome).* does not exist/i.test(res.error.message)) {
+      const minimal2 = { projeto_id: input.projeto_id, titulo: input.nome };
+      res = input.id
+        ? await supabase.from("turmas").update(minimal2).eq("id", input.id)
+        : await supabase.from("turmas").insert(minimal2);
+    }
+  }
+  if (res.error) throw new Error(res.error.message);
+}
+
+export async function deleteTurma(id: string) {
+  const { error } = await supabase.from("turmas").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteAula(id: string) {
   const { error } = await supabase.from("aulas").delete().eq("id", id);
   if (error) throw new Error(error.message);
