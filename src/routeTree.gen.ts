@@ -27,8 +27,10 @@ import { Route as AuthenticatedPedagogicoIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
 import { Route as AuthenticatedAdministrativoIndexRouteImport } from './routes/_authenticated/administrativo.index'
-import { Route as AuthenticatedRelatoriosInteligenteRouteImport } from './routes/_authenticated/relatorios.inteligente'
-import { Route as AuthenticatedRelatoriosAcompanhamentoRouteImport } from './routes/_authenticated/relatorios.acompanhamento'
+import { Route as AuthenticatedRelatoriosPedagogicoRouteImport } from './routes/_authenticated/relatorios.pedagogico'
+import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './routes/_authenticated/relatorios.orcamentario'
+import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
+import { Route as AuthenticatedRelatoriosFrequenciaRouteImport } from './routes/_authenticated/relatorios.frequencia'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -140,16 +142,28 @@ const AuthenticatedAdministrativoIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
-const AuthenticatedRelatoriosInteligenteRoute =
-  AuthenticatedRelatoriosInteligenteRouteImport.update({
-    id: '/inteligente',
-    path: '/inteligente',
+const AuthenticatedRelatoriosPedagogicoRoute =
+  AuthenticatedRelatoriosPedagogicoRouteImport.update({
+    id: '/pedagogico',
+    path: '/pedagogico',
     getParentRoute: () => AuthenticatedRelatoriosRoute,
   } as any)
-const AuthenticatedRelatoriosAcompanhamentoRoute =
-  AuthenticatedRelatoriosAcompanhamentoRouteImport.update({
-    id: '/acompanhamento',
-    path: '/acompanhamento',
+const AuthenticatedRelatoriosOrcamentarioRoute =
+  AuthenticatedRelatoriosOrcamentarioRouteImport.update({
+    id: '/orcamentario',
+    path: '/orcamentario',
+    getParentRoute: () => AuthenticatedRelatoriosRoute,
+  } as any)
+const AuthenticatedRelatoriosMetasRoute =
+  AuthenticatedRelatoriosMetasRouteImport.update({
+    id: '/metas',
+    path: '/metas',
+    getParentRoute: () => AuthenticatedRelatoriosRoute,
+  } as any)
+const AuthenticatedRelatoriosFrequenciaRoute =
+  AuthenticatedRelatoriosFrequenciaRouteImport.update({
+    id: '/frequencia',
+    path: '/frequencia',
     getParentRoute: () => AuthenticatedRelatoriosRoute,
   } as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
@@ -245,8 +259,10 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
-  '/relatorios/acompanhamento': typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  '/relatorios/inteligente': typeof AuthenticatedRelatoriosInteligenteRoute
+  '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
+  '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
+  '/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
   '/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
@@ -273,8 +289,10 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
-  '/relatorios/acompanhamento': typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  '/relatorios/inteligente': typeof AuthenticatedRelatoriosInteligenteRoute
+  '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
+  '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
+  '/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
   '/administrativo': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro': typeof AuthenticatedFinanceiroIndexRoute
@@ -307,8 +325,10 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
-  '/_authenticated/relatorios/acompanhamento': typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  '/_authenticated/relatorios/inteligente': typeof AuthenticatedRelatoriosInteligenteRoute
+  '/_authenticated/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
+  '/_authenticated/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
+  '/_authenticated/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
   '/_authenticated/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
@@ -342,8 +362,10 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
-    | '/relatorios/acompanhamento'
-    | '/relatorios/inteligente'
+    | '/relatorios/frequencia'
+    | '/relatorios/metas'
+    | '/relatorios/orcamentario'
+    | '/relatorios/pedagogico'
     | '/administrativo/'
     | '/configuracoes/'
     | '/financeiro/'
@@ -370,8 +392,10 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
-    | '/relatorios/acompanhamento'
-    | '/relatorios/inteligente'
+    | '/relatorios/frequencia'
+    | '/relatorios/metas'
+    | '/relatorios/orcamentario'
+    | '/relatorios/pedagogico'
     | '/administrativo'
     | '/configuracoes'
     | '/financeiro'
@@ -403,8 +427,10 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
-    | '/_authenticated/relatorios/acompanhamento'
-    | '/_authenticated/relatorios/inteligente'
+    | '/_authenticated/relatorios/frequencia'
+    | '/_authenticated/relatorios/metas'
+    | '/_authenticated/relatorios/orcamentario'
+    | '/_authenticated/relatorios/pedagogico'
     | '/_authenticated/administrativo/'
     | '/_authenticated/configuracoes/'
     | '/_authenticated/financeiro/'
@@ -551,18 +577,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdministrativoIndexRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
     }
-    '/_authenticated/relatorios/inteligente': {
-      id: '/_authenticated/relatorios/inteligente'
-      path: '/inteligente'
-      fullPath: '/relatorios/inteligente'
-      preLoaderRoute: typeof AuthenticatedRelatoriosInteligenteRouteImport
+    '/_authenticated/relatorios/pedagogico': {
+      id: '/_authenticated/relatorios/pedagogico'
+      path: '/pedagogico'
+      fullPath: '/relatorios/pedagogico'
+      preLoaderRoute: typeof AuthenticatedRelatoriosPedagogicoRouteImport
       parentRoute: typeof AuthenticatedRelatoriosRoute
     }
-    '/_authenticated/relatorios/acompanhamento': {
-      id: '/_authenticated/relatorios/acompanhamento'
-      path: '/acompanhamento'
-      fullPath: '/relatorios/acompanhamento'
-      preLoaderRoute: typeof AuthenticatedRelatoriosAcompanhamentoRouteImport
+    '/_authenticated/relatorios/orcamentario': {
+      id: '/_authenticated/relatorios/orcamentario'
+      path: '/orcamentario'
+      fullPath: '/relatorios/orcamentario'
+      preLoaderRoute: typeof AuthenticatedRelatoriosOrcamentarioRouteImport
+      parentRoute: typeof AuthenticatedRelatoriosRoute
+    }
+    '/_authenticated/relatorios/metas': {
+      id: '/_authenticated/relatorios/metas'
+      path: '/metas'
+      fullPath: '/relatorios/metas'
+      preLoaderRoute: typeof AuthenticatedRelatoriosMetasRouteImport
+      parentRoute: typeof AuthenticatedRelatoriosRoute
+    }
+    '/_authenticated/relatorios/frequencia': {
+      id: '/_authenticated/relatorios/frequencia'
+      path: '/frequencia'
+      fullPath: '/relatorios/frequencia'
+      preLoaderRoute: typeof AuthenticatedRelatoriosFrequenciaRouteImport
       parentRoute: typeof AuthenticatedRelatoriosRoute
     }
     '/_authenticated/financeiro/orcamento': {
@@ -757,17 +797,22 @@ const AuthenticatedPedagogicoRouteWithChildren =
   )
 
 interface AuthenticatedRelatoriosRouteChildren {
-  AuthenticatedRelatoriosAcompanhamentoRoute: typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  AuthenticatedRelatoriosInteligenteRoute: typeof AuthenticatedRelatoriosInteligenteRoute
+  AuthenticatedRelatoriosFrequenciaRoute: typeof AuthenticatedRelatoriosFrequenciaRoute
+  AuthenticatedRelatoriosMetasRoute: typeof AuthenticatedRelatoriosMetasRoute
+  AuthenticatedRelatoriosOrcamentarioRoute: typeof AuthenticatedRelatoriosOrcamentarioRoute
+  AuthenticatedRelatoriosPedagogicoRoute: typeof AuthenticatedRelatoriosPedagogicoRoute
   AuthenticatedRelatoriosIndexRoute: typeof AuthenticatedRelatoriosIndexRoute
 }
 
 const AuthenticatedRelatoriosRouteChildren: AuthenticatedRelatoriosRouteChildren =
   {
-    AuthenticatedRelatoriosAcompanhamentoRoute:
-      AuthenticatedRelatoriosAcompanhamentoRoute,
-    AuthenticatedRelatoriosInteligenteRoute:
-      AuthenticatedRelatoriosInteligenteRoute,
+    AuthenticatedRelatoriosFrequenciaRoute:
+      AuthenticatedRelatoriosFrequenciaRoute,
+    AuthenticatedRelatoriosMetasRoute: AuthenticatedRelatoriosMetasRoute,
+    AuthenticatedRelatoriosOrcamentarioRoute:
+      AuthenticatedRelatoriosOrcamentarioRoute,
+    AuthenticatedRelatoriosPedagogicoRoute:
+      AuthenticatedRelatoriosPedagogicoRoute,
     AuthenticatedRelatoriosIndexRoute: AuthenticatedRelatoriosIndexRoute,
   }
 
