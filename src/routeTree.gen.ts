@@ -33,6 +33,7 @@ import { Route as AuthenticatedRelatoriosPedagogicoRouteImport } from './routes/
 import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './routes/_authenticated/relatorios.orcamentario'
 import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
 import { Route as AuthenticatedRelatoriosFrequenciaRouteImport } from './routes/_authenticated/relatorios.frequencia'
+import { Route as AuthenticatedMteTurmasRouteImport } from './routes/_authenticated/mte.turmas'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -178,6 +179,11 @@ const AuthenticatedRelatoriosFrequenciaRoute =
     path: '/frequencia',
     getParentRoute: () => AuthenticatedRelatoriosRoute,
   } as any)
+const AuthenticatedMteTurmasRoute = AuthenticatedMteTurmasRouteImport.update({
+  id: '/turmas',
+  path: '/turmas',
+  getParentRoute: () => AuthenticatedMteRoute,
+} as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -303,6 +310,7 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -341,6 +349,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/_authenticated/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/_authenticated/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
   '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/_authenticated/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -380,6 +389,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/mte/turmas'
     | '/relatorios/frequencia'
     | '/relatorios/metas'
     | '/relatorios/orcamentario'
@@ -411,6 +421,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/mte/turmas'
     | '/relatorios/frequencia'
     | '/relatorios/metas'
     | '/relatorios/orcamentario'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
+    | '/_authenticated/mte/turmas'
     | '/_authenticated/relatorios/frequencia'
     | '/_authenticated/relatorios/metas'
     | '/_authenticated/relatorios/orcamentario'
@@ -641,6 +653,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRelatoriosFrequenciaRouteImport
       parentRoute: typeof AuthenticatedRelatoriosRoute
     }
+    '/_authenticated/mte/turmas': {
+      id: '/_authenticated/mte/turmas'
+      path: '/turmas'
+      fullPath: '/mte/turmas'
+      preLoaderRoute: typeof AuthenticatedMteTurmasRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
     '/_authenticated/financeiro/orcamento': {
       id: '/_authenticated/financeiro/orcamento'
       path: '/orcamento'
@@ -792,10 +811,12 @@ const AuthenticatedFinanceiroRouteWithChildren =
   )
 
 interface AuthenticatedMteRouteChildren {
+  AuthenticatedMteTurmasRoute: typeof AuthenticatedMteTurmasRoute
   AuthenticatedMteIndexRoute: typeof AuthenticatedMteIndexRoute
 }
 
 const AuthenticatedMteRouteChildren: AuthenticatedMteRouteChildren = {
+  AuthenticatedMteTurmasRoute: AuthenticatedMteTurmasRoute,
   AuthenticatedMteIndexRoute: AuthenticatedMteIndexRoute,
 }
 
