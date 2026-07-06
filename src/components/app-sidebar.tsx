@@ -9,6 +9,7 @@ import {
   BarChart3,
   BookOpen,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 
 import {
@@ -41,6 +42,7 @@ const PRIMARY: Item[] = [
 
 const MODULOS: Item[] = [
   { key: "pedagogico", title: "Pedagógico", url: "/pedagogico", icon: GraduationCap },
+  { key: "mte", title: "Fiscalização MTE", url: "/mte", icon: ShieldCheck },
   { key: "administrativo", title: "Administrativo", url: "/administrativo", icon: ClipboardList },
   { key: "financeiro", title: "Financeiro", url: "/financeiro", icon: Wallet },
   { key: "captacao", title: "Captação", url: "/captacao", icon: Sprout },
