@@ -27,8 +27,6 @@ import { Route as AuthenticatedPedagogicoIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
 import { Route as AuthenticatedAdministrativoIndexRouteImport } from './routes/_authenticated/administrativo.index'
-import { Route as AuthenticatedRelatoriosInteligenteRouteImport } from './routes/_authenticated/relatorios.inteligente'
-import { Route as AuthenticatedRelatoriosAcompanhamentoRouteImport } from './routes/_authenticated/relatorios.acompanhamento'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -140,18 +138,6 @@ const AuthenticatedAdministrativoIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
-const AuthenticatedRelatoriosInteligenteRoute =
-  AuthenticatedRelatoriosInteligenteRouteImport.update({
-    id: '/inteligente',
-    path: '/inteligente',
-    getParentRoute: () => AuthenticatedRelatoriosRoute,
-  } as any)
-const AuthenticatedRelatoriosAcompanhamentoRoute =
-  AuthenticatedRelatoriosAcompanhamentoRouteImport.update({
-    id: '/acompanhamento',
-    path: '/acompanhamento',
-    getParentRoute: () => AuthenticatedRelatoriosRoute,
-  } as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -245,8 +231,6 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
-  '/relatorios/acompanhamento': typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  '/relatorios/inteligente': typeof AuthenticatedRelatoriosInteligenteRoute
   '/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
@@ -273,8 +257,6 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
-  '/relatorios/acompanhamento': typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  '/relatorios/inteligente': typeof AuthenticatedRelatoriosInteligenteRoute
   '/administrativo': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro': typeof AuthenticatedFinanceiroIndexRoute
@@ -307,8 +289,6 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
-  '/_authenticated/relatorios/acompanhamento': typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  '/_authenticated/relatorios/inteligente': typeof AuthenticatedRelatoriosInteligenteRoute
   '/_authenticated/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
@@ -342,8 +322,6 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
-    | '/relatorios/acompanhamento'
-    | '/relatorios/inteligente'
     | '/administrativo/'
     | '/configuracoes/'
     | '/financeiro/'
@@ -370,8 +348,6 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
-    | '/relatorios/acompanhamento'
-    | '/relatorios/inteligente'
     | '/administrativo'
     | '/configuracoes'
     | '/financeiro'
@@ -403,8 +379,6 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
-    | '/_authenticated/relatorios/acompanhamento'
-    | '/_authenticated/relatorios/inteligente'
     | '/_authenticated/administrativo/'
     | '/_authenticated/configuracoes/'
     | '/_authenticated/financeiro/'
@@ -550,20 +524,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/administrativo/'
       preLoaderRoute: typeof AuthenticatedAdministrativoIndexRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
-    }
-    '/_authenticated/relatorios/inteligente': {
-      id: '/_authenticated/relatorios/inteligente'
-      path: '/inteligente'
-      fullPath: '/relatorios/inteligente'
-      preLoaderRoute: typeof AuthenticatedRelatoriosInteligenteRouteImport
-      parentRoute: typeof AuthenticatedRelatoriosRoute
-    }
-    '/_authenticated/relatorios/acompanhamento': {
-      id: '/_authenticated/relatorios/acompanhamento'
-      path: '/acompanhamento'
-      fullPath: '/relatorios/acompanhamento'
-      preLoaderRoute: typeof AuthenticatedRelatoriosAcompanhamentoRouteImport
-      parentRoute: typeof AuthenticatedRelatoriosRoute
     }
     '/_authenticated/financeiro/orcamento': {
       id: '/_authenticated/financeiro/orcamento'
@@ -757,17 +717,11 @@ const AuthenticatedPedagogicoRouteWithChildren =
   )
 
 interface AuthenticatedRelatoriosRouteChildren {
-  AuthenticatedRelatoriosAcompanhamentoRoute: typeof AuthenticatedRelatoriosAcompanhamentoRoute
-  AuthenticatedRelatoriosInteligenteRoute: typeof AuthenticatedRelatoriosInteligenteRoute
   AuthenticatedRelatoriosIndexRoute: typeof AuthenticatedRelatoriosIndexRoute
 }
 
 const AuthenticatedRelatoriosRouteChildren: AuthenticatedRelatoriosRouteChildren =
   {
-    AuthenticatedRelatoriosAcompanhamentoRoute:
-      AuthenticatedRelatoriosAcompanhamentoRoute,
-    AuthenticatedRelatoriosInteligenteRoute:
-      AuthenticatedRelatoriosInteligenteRoute,
     AuthenticatedRelatoriosIndexRoute: AuthenticatedRelatoriosIndexRoute,
   }
 
