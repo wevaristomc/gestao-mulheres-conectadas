@@ -116,7 +116,8 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
     if (meta.mimeType === h.FOLDER_MIME) throw new Error("Selecione um arquivo, não uma pasta.");
 
     const dl = await h.downloadFileBase64(data.fileId);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = getSupabaseAdmin();
     const uid = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
     const safeName = meta.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.\-]+/g, "_");
     const path = `${data.pathPrefix ?? "gdrive"}/${uid}-${safeName}`.replace(/\/+/g, "/");
