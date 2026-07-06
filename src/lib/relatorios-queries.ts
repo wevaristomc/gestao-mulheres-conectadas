@@ -576,8 +576,12 @@ export function metasResumoOptions(projetoId: string | null) {
           .select("cursistas(*)")
           .in("turma_id", turmaIds);
         if (!mCur.error) {
-          for (const row of (mCur.data ?? []) as Array<{ cursistas: Record<string, unknown> | null }>) {
-            const m = pickStr(row.cursistas, ["municipio", "cidade"]);
+          for (const row of (mCur.data ?? []) as Array<{ cursistas: unknown }>) {
+            const c = row.cursistas;
+            const cur = Array.isArray(c)
+              ? (c[0] as Record<string, unknown> | undefined)
+              : (c as Record<string, unknown> | null | undefined);
+            const m = pickStr(cur ?? null, ["municipio", "cidade"]);
             if (m) municipios.add(m.trim());
           }
         }
