@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -317,22 +316,6 @@ function BaseConhecimentoPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={pickerOpen && !!projetoId} onOpenChange={(o) => setPickerOpen(o)}>
-        {/* Categoria selector shown by picker's parent — the picker itself handles selection */}
-      </Dialog>
-      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-        {pickerOpen ? (
-          <>
-            <Label className="text-xs">Categoria de destino:</Label>
-            <Select value={importCat} onValueChange={(v) => setImportCat(v as CategoriaKey)}>
-              <SelectTrigger className="h-7 w-[220px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CATEGORIAS.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </>
-        ) : null}
-      </div>
       <GDrivePicker
         open={pickerOpen}
         onOpenChange={setPickerOpen}
