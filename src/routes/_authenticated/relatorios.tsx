@@ -8,8 +8,10 @@ export const Route = createFileRoute("/_authenticated/relatorios")({
 });
 
 const TABS = [
-  { key: "acompanhamento", label: "Acompanhamento", to: "/relatorios/acompanhamento" as const },
-  { key: "inteligente", label: "Relatório Inteligente", to: "/relatorios/inteligente" as const },
+  { key: "frequencia", label: "Frequência", to: "/relatorios/frequencia" as const },
+  { key: "pedagogico", label: "Pedagógico", to: "/relatorios/pedagogico" as const },
+  { key: "orcamentario", label: "Orçamentário", to: "/relatorios/orcamentario" as const },
+  { key: "metas", label: "Metas do Projeto", to: "/relatorios/metas" as const },
 ];
 
 function RelatoriosLayout() {
