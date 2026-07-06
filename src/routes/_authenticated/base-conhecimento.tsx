@@ -143,6 +143,14 @@ function BaseConhecimentoPage() {
         description="Documentos do Termo de Fomento, modelos, normas e materiais de apoio do projeto."
         actions={
           <div className="flex gap-2">
+            <Select value={importCat} onValueChange={(v) => setImportCat(v as CategoriaKey)}>
+              <SelectTrigger className="h-9 w-[180px]" title="Categoria do import">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIAS.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
             <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!projetoId}>
               <HardDrive className="mr-1.5 h-4 w-4" /> Importar do Drive
             </Button>
