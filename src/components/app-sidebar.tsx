@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Wallet,
   Sprout,
+  BarChart3,
   BookOpen,
   Settings,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const MODULOS: Item[] = [
   { key: "administrativo", title: "Administrativo", url: "/administrativo", icon: ClipboardList },
   { key: "financeiro", title: "Financeiro", url: "/financeiro", icon: Wallet },
   { key: "captacao", title: "Captação", url: "/captacao", icon: Sprout },
+  { key: "relatorios", title: "Relatórios", url: "/relatorios", icon: BarChart3 },
 ];
 
 const APOIO: Item[] = [
