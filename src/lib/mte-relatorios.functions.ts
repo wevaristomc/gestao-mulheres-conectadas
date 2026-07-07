@@ -17,6 +17,6 @@ export const consultarViewMTE = createServerFn({ method: "POST" })
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
     const { data: rows, error } = await admin.from(data.view).select("*").limit(5000);
-    if (error) return { rows: [] as Record<string, unknown>[], error: error.message };
-    return { rows: (rows ?? []) as Record<string, unknown>[], error: null as string | null };
+    if (error) return { rowsJson: "[]", error: error.message as string | null };
+    return { rowsJson: JSON.stringify(rows ?? []), error: null as string | null };
   });
