@@ -444,6 +444,3 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
 
     return { importacao_id: importacaoId, resumo };
   });
-
-// Cache de grade_items compartilhado entre chamadas do handler (só existe durante a execução).
-const gradeItems: Map<number, { courseid: number | null; itemname: string | null; itemtype: string | null; grademax: number | null }> = new Map();
