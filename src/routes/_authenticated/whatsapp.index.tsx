@@ -161,6 +161,7 @@ function GrupoCard(props: {
   setZipFile: (f: File | null) => void;
   onImport: () => void;
   importing: boolean;
+  progresso: ProgressoImport | null;
 }) {
   const impQ = useQuery(importacoesGrupoOptions(props.grupoId));
   const importacoes = impQ.data?.rows ?? [];
@@ -193,7 +194,7 @@ function GrupoCard(props: {
             <DialogHeader>
               <DialogTitle>Enviar exportação do WhatsApp</DialogTitle>
               <DialogDescription>
-                No WhatsApp, abra o grupo → &quot;Exportar conversa&quot; → &quot;Incluir mídia&quot;. Envie o .zip resultante (até ~30 MB).
+                No WhatsApp, abra o grupo → &quot;Exportar conversa&quot; → &quot;Incluir mídia&quot;. Envie o .zip (até ~500 MB — o processamento acontece no seu navegador; não feche a aba).
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-1.5">
@@ -209,6 +210,11 @@ function GrupoCard(props: {
                 </p>
               ) : null}
             </div>
+            {props.importing && props.progresso ? (
+              <div className="rounded-md border bg-muted/40 p-3 text-xs">
+                <ProgressoView p={props.progresso} />
+              </div>
+            ) : null}
             <DialogFooter>
               <Button variant="ghost" onClick={() => props.setUploadOpen(false)} disabled={props.importing}>Cancelar</Button>
               <Button onClick={props.onImport} disabled={!props.zipFile || props.importing}>
