@@ -150,6 +150,34 @@ function WhatsappIndex() {
   );
 }
 
+function ProgressoView({ p }: { p: ProgressoImport }) {
+  const pct = p.midias_total > 0 ? Math.round((p.midias_feitas / p.midias_total) * 100) : 0;
+  const label = {
+    lendo: "Lendo o zip…",
+    parseando: "Interpretando mensagens…",
+    upando_midias: `Enviando mídias (${p.midias_feitas}/${p.midias_total})`,
+    upando_zip: "Guardando cópia bruta do zip…",
+    salvando: "Salvando mensagens no banco…",
+    concluido: "Concluído.",
+  }[p.fase];
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <span>{label}</span>
+      </div>
+      {p.midias_total > 0 ? (
+        <div className="h-1.5 w-full overflow-hidden rounded bg-muted">
+          <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
+      {p.midias_puladas > 0 ? (
+        <p className="text-muted-foreground">{p.midias_puladas} mídia(s) pulada(s) por tamanho (limite ~50 MB por arquivo).</p>
+      ) : null}
+    </div>
+  );
+}
+
 function GrupoCard(props: {
   grupoId: string;
   nome: string;
