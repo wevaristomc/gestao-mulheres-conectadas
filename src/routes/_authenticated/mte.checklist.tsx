@@ -32,7 +32,8 @@ function ChecklistFiscalizacao() {
     (async () => {
       try {
         const res = await fn({ data: { view: "vw_checklist_fiscalizacao" } });
-        setState({ rows: res.rows, error: res.error, loading: false });
+        const rows = JSON.parse(res.rowsJson || "[]") as Row[];
+        setState({ rows, error: res.error, loading: false });
       } catch (e) {
         setState({ rows: [], error: e instanceof Error ? e.message : String(e), loading: false });
       }
