@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -227,8 +227,12 @@ function MidiasGrid({ importacaoId }: { importacaoId: string }) {
 
 function MidiaCard({ path, tipo, nome }: { path: string; tipo: string; nome: string | null }) {
   const [url, setUrl] = useState<string | null>(null);
-  useMemo(() => {
-    supabase.storage.from("whatsapp").createSignedUrl(path, 600).then((r) => setUrl(r.data?.signedUrl ?? null));
+  useEffect(() => {
+    let cancelled = false;
+    supabase.storage.from("whatsapp").createSignedUrl(path, 600).then((r) => {
+      if (!cancelled) setUrl(r.data?.signedUrl ?? null);
+    });
+    return () => { cancelled = true; };
   }, [path]);
   return (
     <Card>
