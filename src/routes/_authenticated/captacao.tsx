@@ -107,6 +107,33 @@ function CaptacaoPage() {
         }
       />
 
+      <div className="mb-4 flex gap-1 border-b">
+        <button
+          type="button"
+          onClick={() => setTab("pipeline")}
+          className={cn(
+            "border-b-2 px-3 py-2 text-sm transition-colors",
+            tab === "pipeline" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Pipeline
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("buscador")}
+          className={cn(
+            "border-b-2 px-3 py-2 text-sm transition-colors",
+            tab === "buscador" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          🔎 Buscador de Editais
+        </button>
+      </div>
+
+      {tab === "buscador" ? (
+        <BuscadorEditais />
+      ) : (
+        <>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Editais em pipeline" value={String(rows.length)} loading={q.isLoading} erro={!!erro} />
         <Kpi label="Em andamento" value={String(emAndamento)} loading={q.isLoading} erro={!!erro} />
