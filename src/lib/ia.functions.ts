@@ -132,10 +132,11 @@ async function chamarAnthropic(params: {
   };
 }
 
-function selecionarChamador(codigo: string) {
-  const c = codigo.toLowerCase();
-  if (c.includes("gemini")) return "gemini";
-  if (c.includes("anthropic") || c.includes("claude")) return "anthropic";
+function selecionarChamador(codigo: string, baseUrl?: string | null) {
+  const c = (codigo || "").toLowerCase();
+  const b = (baseUrl || "").toLowerCase();
+  if (c.includes("gemini") || c.includes("google") || b.includes("generativelanguage") || b.includes("googleapis")) return "gemini";
+  if (c.includes("anthropic") || c.includes("claude") || b.includes("anthropic")) return "anthropic";
   return "openai_compat"; // openrouter, groq, openai, e outros
 }
 
@@ -188,7 +189,7 @@ export async function executarAiRouter(input: {
     const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "") || "";
     if (!modelo) continue;
     const codigo = String(prov.provedor);
-    const tipo = selecionarChamador(codigo);
+    const tipo = selecionarChamador(codigo, prov.base_url);
 
     try {
       let r: CallResult;
@@ -320,7 +321,7 @@ export const testarProvedor = createServerFn({ method: "POST" })
     if (!prov.api_key) throw new Error("Este provedor ainda não tem API Key configurada.");
     const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "");
     if (!modelo) throw new Error("Provedor sem modelo padrão. Defina um antes de testar.");
-    const tipo = selecionarChamador(String(prov.provedor));
+    const tipo = selecionarChamador(String(prov.provedor), prov.base_url);
     const base = { base_url: prov.base_url, api_key: prov.api_key, modelo, mensagens: [{ role: "user" as const, content: "Responda apenas: OK" }], max_tokens: 20, temperatura: 0 };
     const r = tipo === "gemini" ? await chamarGemini(base)
       : tipo === "anthropic" ? await chamarAnthropic(base)
