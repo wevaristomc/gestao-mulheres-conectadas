@@ -34,6 +34,7 @@ import { Route as AuthenticatedRelatoriosPedagogicoRouteImport } from './routes/
 import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './routes/_authenticated/relatorios.orcamentario'
 import { Route as AuthenticatedRelatoriosMteRouteImport } from './routes/_authenticated/relatorios.mte'
 import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
+import { Route as AuthenticatedRelatoriosIndicadoresRouteImport } from './routes/_authenticated/relatorios.indicadores'
 import { Route as AuthenticatedRelatoriosFrequenciaRouteImport } from './routes/_authenticated/relatorios.frequencia'
 import { Route as AuthenticatedMteTurmasRouteImport } from './routes/_authenticated/mte.turmas'
 import { Route as AuthenticatedMtePresencasRouteImport } from './routes/_authenticated/mte.presencas'
@@ -195,6 +196,12 @@ const AuthenticatedRelatoriosMetasRoute =
   AuthenticatedRelatoriosMetasRouteImport.update({
     id: '/metas',
     path: '/metas',
+    getParentRoute: () => AuthenticatedRelatoriosRoute,
+  } as any)
+const AuthenticatedRelatoriosIndicadoresRoute =
+  AuthenticatedRelatoriosIndicadoresRouteImport.update({
+    id: '/indicadores',
+    path: '/indicadores',
     getParentRoute: () => AuthenticatedRelatoriosRoute,
   } as any)
 const AuthenticatedRelatoriosFrequenciaRoute =
@@ -381,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/relatorios/indicadores': typeof AuthenticatedRelatoriosIndicadoresRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -426,6 +434,7 @@ export interface FileRoutesByTo {
   '/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/relatorios/indicadores': typeof AuthenticatedRelatoriosIndicadoresRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -478,6 +487,7 @@ export interface FileRoutesById {
   '/_authenticated/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/_authenticated/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/_authenticated/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/_authenticated/relatorios/indicadores': typeof AuthenticatedRelatoriosIndicadoresRoute
   '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/_authenticated/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/_authenticated/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -531,6 +541,7 @@ export interface FileRouteTypes {
     | '/mte/presencas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
+    | '/relatorios/indicadores'
     | '/relatorios/metas'
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
@@ -576,6 +587,7 @@ export interface FileRouteTypes {
     | '/mte/presencas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
+    | '/relatorios/indicadores'
     | '/relatorios/metas'
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
@@ -627,6 +639,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mte/presencas'
     | '/_authenticated/mte/turmas'
     | '/_authenticated/relatorios/frequencia'
+    | '/_authenticated/relatorios/indicadores'
     | '/_authenticated/relatorios/metas'
     | '/_authenticated/relatorios/mte'
     | '/_authenticated/relatorios/orcamentario'
@@ -825,6 +838,13 @@ declare module '@tanstack/react-router' {
       path: '/metas'
       fullPath: '/relatorios/metas'
       preLoaderRoute: typeof AuthenticatedRelatoriosMetasRouteImport
+      parentRoute: typeof AuthenticatedRelatoriosRoute
+    }
+    '/_authenticated/relatorios/indicadores': {
+      id: '/_authenticated/relatorios/indicadores'
+      path: '/indicadores'
+      fullPath: '/relatorios/indicadores'
+      preLoaderRoute: typeof AuthenticatedRelatoriosIndicadoresRouteImport
       parentRoute: typeof AuthenticatedRelatoriosRoute
     }
     '/_authenticated/relatorios/frequencia': {
@@ -1148,6 +1168,7 @@ const AuthenticatedPedagogicoRouteWithChildren =
 
 interface AuthenticatedRelatoriosRouteChildren {
   AuthenticatedRelatoriosFrequenciaRoute: typeof AuthenticatedRelatoriosFrequenciaRoute
+  AuthenticatedRelatoriosIndicadoresRoute: typeof AuthenticatedRelatoriosIndicadoresRoute
   AuthenticatedRelatoriosMetasRoute: typeof AuthenticatedRelatoriosMetasRoute
   AuthenticatedRelatoriosMteRoute: typeof AuthenticatedRelatoriosMteRoute
   AuthenticatedRelatoriosOrcamentarioRoute: typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -1159,6 +1180,8 @@ const AuthenticatedRelatoriosRouteChildren: AuthenticatedRelatoriosRouteChildren
   {
     AuthenticatedRelatoriosFrequenciaRoute:
       AuthenticatedRelatoriosFrequenciaRoute,
+    AuthenticatedRelatoriosIndicadoresRoute:
+      AuthenticatedRelatoriosIndicadoresRoute,
     AuthenticatedRelatoriosMetasRoute: AuthenticatedRelatoriosMetasRoute,
     AuthenticatedRelatoriosMteRoute: AuthenticatedRelatoriosMteRoute,
     AuthenticatedRelatoriosOrcamentarioRoute:
