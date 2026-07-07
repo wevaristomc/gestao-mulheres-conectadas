@@ -54,6 +54,11 @@ async function chamarOpenAICompat(params: {
         `API Key inválida ou truncada para ${params.base_url}. Verifique se você colou a chave completa (sem espaços). Resposta: ${txt.slice(0, 200)}`,
       );
     }
+    if (res.status === 429) {
+      throw new Error(
+        `Modelo "${params.modelo}" temporariamente sem cota no provedor (rate limit upstream). Tente outro modelo em "Modelo padrão" — modelos ":free" do OpenRouter compartilham cota global e frequentemente ficam indisponíveis. Detalhe: ${txt.slice(0, 200)}`,
+      );
+    }
     throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
   }
   const body = JSON.parse(txt);
