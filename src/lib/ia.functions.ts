@@ -27,7 +27,9 @@ async function chamarOpenAICompat(params: {
   max_tokens: number;
   temperatura: number;
 }): Promise<CallResult> {
-  const url = `${params.base_url.replace(/\/+$/, "")}/chat/completions`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para provedor OpenAI-compatível.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
   if (!apiKey) {
     throw new Error(
@@ -82,7 +84,9 @@ async function chamarGemini(params: {
 }): Promise<CallResult> {
   const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
   if (!apiKey) throw new Error(`API Key ausente para ${params.base_url}.`);
-  const url = `${params.base_url.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Gemini.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const contents = params.mensagens.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -129,7 +133,9 @@ async function chamarAnthropic(params: {
   max_tokens: number;
   temperatura: number;
 }): Promise<CallResult> {
-  const url = `${params.base_url.replace(/\/+$/, "")}/messages`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Anthropic/Claude.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/messages`;
   const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
   if (!apiKey) throw new Error(`API Key ausente para ${params.base_url}.`);
   const system = params.mensagens.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
