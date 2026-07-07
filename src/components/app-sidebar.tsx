@@ -28,6 +28,7 @@ import {
 import { canAccess, type ModuleKey } from "@/lib/role-access";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PMQLogo } from "@/components/pmq-logo";
 
 type Item = {
   key: ModuleKey;
@@ -103,12 +104,15 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-semibold">
-            MC
+          <div className="group-data-[collapsible=icon]:hidden">
+            <PMQLogo
+              height={36}
+              className="brightness-0 invert"
+              fallbackClassName="text-sm font-semibold tracking-tight text-sidebar-foreground"
+            />
           </div>
-          <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold tracking-tight">Mulheres Conectadas</span>
-            <span className="text-xs text-sidebar-foreground/60">Painel administrativo</span>
+          <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground font-semibold group-data-[collapsible=icon]:flex">
+            PMQ
           </div>
         </div>
       </SidebarHeader>
