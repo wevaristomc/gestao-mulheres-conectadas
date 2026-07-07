@@ -73,7 +73,10 @@ function UsuariosPage() {
   const [filtroRole, setFiltroRole] = useState<string>("todos");
 
   const usuariosFiltrados = useMemo(() => {
-    const lista = usuariosQuery.data ?? [];
+    const raw = usuariosQuery.data as unknown;
+    const lista: Usuario[] = Array.isArray(raw)
+      ? (raw as Usuario[])
+      : (Array.isArray((raw as any)?.usuarios) ? (raw as any).usuarios : []);
     const termo = busca.trim().toLowerCase();
     return lista.filter((u) => {
       if (filtroRole !== "todos" && u.role !== filtroRole) return false;
@@ -85,7 +88,11 @@ function UsuariosPage() {
     });
   }, [usuariosQuery.data, busca, filtroRole]);
 
-  const totalUsuarios = usuariosQuery.data?.length ?? 0;
+  const totalUsuarios = Array.isArray(usuariosQuery.data)
+    ? usuariosQuery.data.length
+    : Array.isArray((usuariosQuery.data as any)?.usuarios)
+      ? (usuariosQuery.data as any).usuarios.length
+      : 0;
   const temFiltro = busca.trim().length > 0 || filtroRole !== "todos";
 
   if (isLoadingRoles) {
