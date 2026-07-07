@@ -15,6 +15,7 @@ const TABS = [
   { key: "presencas", label: "Presenças", to: "/mte/presencas" as const },
   { key: "evidencias", label: "Evidências", to: "/mte/evidencias" as const },
   { key: "cronograma", label: "Cronograma", to: "/mte/cronograma" as const },
+  { key: "checklist", label: "Checklist Fiscalização", to: "/mte/checklist" as const },
 ];
 
 function MteLayout() {
