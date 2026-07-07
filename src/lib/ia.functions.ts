@@ -28,11 +28,17 @@ async function chamarOpenAICompat(params: {
   temperatura: number;
 }): Promise<CallResult> {
   const url = `${params.base_url.replace(/\/+$/, "")}/chat/completions`;
+  const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
+  if (!apiKey) {
+    throw new Error(
+      `API Key ausente para ${params.base_url}. Configure a chave em Configurações > IA.`,
+    );
+  }
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${params.api_key}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: params.modelo,
@@ -69,7 +75,9 @@ async function chamarGemini(params: {
   max_tokens: number;
   temperatura: number;
 }): Promise<CallResult> {
-  const url = `${params.base_url.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(params.api_key)}`;
+  const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
+  if (!apiKey) throw new Error(`API Key ausente para ${params.base_url}.`);
+  const url = `${params.base_url.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const contents = params.mensagens.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -107,6 +115,8 @@ async function chamarAnthropic(params: {
   temperatura: number;
 }): Promise<CallResult> {
   const url = `${params.base_url.replace(/\/+$/, "")}/messages`;
+  const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
+  if (!apiKey) throw new Error(`API Key ausente para ${params.base_url}.`);
   const system = params.mensagens.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
   const messages = params.mensagens
     .filter((m) => m.role !== "system")
@@ -115,7 +125,7 @@ async function chamarAnthropic(params: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": params.api_key,
+      "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
