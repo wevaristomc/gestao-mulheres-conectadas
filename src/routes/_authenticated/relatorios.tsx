@@ -12,6 +12,7 @@ const TABS = [
   { key: "pedagogico", label: "Pedagógico", to: "/relatorios/pedagogico" as const },
   { key: "orcamentario", label: "Orçamentário", to: "/relatorios/orcamentario" as const },
   { key: "metas", label: "Metas do Projeto", to: "/relatorios/metas" as const },
+  { key: "mte", label: "MTE (XLSX)", to: "/relatorios/mte" as const },
 ];
 
 function RelatoriosLayout() {
