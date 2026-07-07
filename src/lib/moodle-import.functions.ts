@@ -187,6 +187,14 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    // Cache local (não pode ser módulo-scope em .functions.ts — o splitter apaga)
+    const gradeItems: Map<number, {
+      courseid: number | null;
+      itemname: string | null;
+      itemtype: string | null;
+      grademax: number | null;
+    }> = new Map();
+
     // Verifica role admin
     const roleQ = await context.supabase
       .rpc("has_role", { _user_id: context.userId, _role: "admin" });
