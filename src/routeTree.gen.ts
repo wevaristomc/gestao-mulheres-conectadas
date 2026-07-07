@@ -45,6 +45,7 @@ import { Route as AuthenticatedMteCronogramaRouteImport } from './routes/_authen
 import { Route as AuthenticatedMteChecklistRouteImport } from './routes/_authenticated/mte.checklist'
 import { Route as AuthenticatedMteBeneficiariasRouteImport } from './routes/_authenticated/mte.beneficiarias'
 import { Route as AuthenticatedMteAulasRouteImport } from './routes/_authenticated/mte.aulas'
+import { Route as AuthenticatedFinanceiroRubricasRouteImport } from './routes/_authenticated/financeiro.rubricas'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -262,6 +263,12 @@ const AuthenticatedMteAulasRoute = AuthenticatedMteAulasRouteImport.update({
   path: '/aulas',
   getParentRoute: () => AuthenticatedMteRoute,
 } as any)
+const AuthenticatedFinanceiroRubricasRoute =
+  AuthenticatedFinanceiroRubricasRouteImport.update({
+    id: '/rubricas',
+    path: '/rubricas',
+    getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -378,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/mte/checklist': typeof AuthenticatedMteChecklistRoute
@@ -424,6 +432,7 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/mte/checklist': typeof AuthenticatedMteChecklistRoute
@@ -477,6 +486,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/_authenticated/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/_authenticated/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/_authenticated/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/_authenticated/mte/checklist': typeof AuthenticatedMteChecklistRoute
@@ -531,6 +541,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/financeiro/rubricas'
     | '/mte/aulas'
     | '/mte/beneficiarias'
     | '/mte/checklist'
@@ -577,6 +588,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/financeiro/rubricas'
     | '/mte/aulas'
     | '/mte/beneficiarias'
     | '/mte/checklist'
@@ -629,6 +641,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
+    | '/_authenticated/financeiro/rubricas'
     | '/_authenticated/mte/aulas'
     | '/_authenticated/mte/beneficiarias'
     | '/_authenticated/mte/checklist'
@@ -917,6 +930,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMteAulasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
     }
+    '/_authenticated/financeiro/rubricas': {
+      id: '/_authenticated/financeiro/rubricas'
+      path: '/rubricas'
+      fullPath: '/financeiro/rubricas'
+      preLoaderRoute: typeof AuthenticatedFinanceiroRubricasRouteImport
+      parentRoute: typeof AuthenticatedFinanceiroRoute
+    }
     '/_authenticated/financeiro/orcamento': {
       id: '/_authenticated/financeiro/orcamento'
       path: '/orcamento'
@@ -1078,6 +1098,7 @@ interface AuthenticatedFinanceiroRouteChildren {
   AuthenticatedFinanceiroDespesasRoute: typeof AuthenticatedFinanceiroDespesasRoute
   AuthenticatedFinanceiroFornecedoresRoute: typeof AuthenticatedFinanceiroFornecedoresRoute
   AuthenticatedFinanceiroOrcamentoRoute: typeof AuthenticatedFinanceiroOrcamentoRoute
+  AuthenticatedFinanceiroRubricasRoute: typeof AuthenticatedFinanceiroRubricasRoute
   AuthenticatedFinanceiroIndexRoute: typeof AuthenticatedFinanceiroIndexRoute
 }
 
@@ -1088,6 +1109,7 @@ const AuthenticatedFinanceiroRouteChildren: AuthenticatedFinanceiroRouteChildren
       AuthenticatedFinanceiroFornecedoresRoute,
     AuthenticatedFinanceiroOrcamentoRoute:
       AuthenticatedFinanceiroOrcamentoRoute,
+    AuthenticatedFinanceiroRubricasRoute: AuthenticatedFinanceiroRubricasRoute,
     AuthenticatedFinanceiroIndexRoute: AuthenticatedFinanceiroIndexRoute,
   }
 
