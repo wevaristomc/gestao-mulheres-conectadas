@@ -471,7 +471,9 @@ async function chamarGeminiVision(params: {
   imagens: ImagemInput[];
   max_tokens: number;
 }) {
-  const url = `${params.base_url.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(params.api_key)}`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Gemini Vision.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(params.api_key)}`;
   const parts: any[] = [{ text: params.prompt }];
   for (const img of params.imagens) {
     parts.push({ inline_data: { mime_type: img.mime, data: img.base64 } });
@@ -507,7 +509,9 @@ async function chamarAnthropicVision(params: {
   imagens: ImagemInput[];
   max_tokens: number;
 }) {
-  const url = `${params.base_url.replace(/\/+$/, "")}/messages`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Anthropic Vision.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/messages`;
   const content: any[] = [];
   for (const img of params.imagens) {
     content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.base64 } });
@@ -546,7 +550,9 @@ async function chamarOpenAICompatVision(params: {
   imagens: ImagemInput[];
   max_tokens: number;
 }) {
-  const url = `${params.base_url.replace(/\/+$/, "")}/chat/completions`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para OpenAI-compat Vision.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const content: any[] = [{ type: "text", text: params.prompt }];
   for (const img of params.imagens) {
     content.push({
