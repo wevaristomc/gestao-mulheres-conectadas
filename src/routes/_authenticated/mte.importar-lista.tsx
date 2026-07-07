@@ -46,6 +46,9 @@ function ImportarListaPage() {
   const [turmaId, setTurmaId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [uploaded, setUploaded] = useState<{ url: string; nome: string } | null>(null);
+  const [tipoDoc, setTipoDoc] = useState<
+    "lista_presenca" | "ficha_inscricao" | "entrega_beneficios" | "relacao_qualificados"
+  >("lista_presenca");
 
   const [cabecalho, setCabecalho] = useState<CabecalhoExtraido>({});
   const [linhas, setLinhas] = useState<LinhaConferencia[]>([]);
@@ -142,9 +145,31 @@ function ImportarListaPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Importar Lista de Presença (PDF)"
-        description="Digitalize a lista assinada, faça o upload e a IA extrai frequência e lanche. Você confere e grava presenças, evidência e entregas."
+        title="Importar Documento (PDF)"
+        description="Selecione o tipo de documento — a IA extrai os dados, você confere e grava."
       />
+
+      <div className="rounded-md border p-4 space-y-2">
+        <Label className="text-xs uppercase text-muted-foreground">Tipo de documento</Label>
+        <Select value={tipoDoc} onValueChange={(v) => setTipoDoc(v as typeof tipoDoc)}>
+          <SelectTrigger className="w-full md:w-96">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="lista_presenca">Lista de Presença</SelectItem>
+            <SelectItem value="ficha_inscricao">Ficha de Inscrição</SelectItem>
+            <SelectItem value="entrega_beneficios">Lista de Entrega de Benefícios</SelectItem>
+            <SelectItem value="relacao_qualificados">Relação de Qualificados preenchida</SelectItem>
+          </SelectContent>
+        </Select>
+        {tipoDoc !== "lista_presenca" ? (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-900 dark:text-amber-200">
+            <strong>Pipeline em desenvolvimento.</strong> A leitura por IA para este tipo de
+            documento está sendo preparada — em breve. Continue usando <em>Lista de Presença</em>
+            para importar frequência e lanches.
+          </div>
+        ) : null}
+      </div>
 
       <div className="rounded-md border p-4 space-y-3">
         <div className="grid gap-3 md:grid-cols-2">
