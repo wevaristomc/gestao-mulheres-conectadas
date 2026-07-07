@@ -150,6 +150,19 @@ export function MatriculaFormDialog({ open, onOpenChange, turmaId, matricula }: 
             </div>
           ) : null}
 
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <Label className="text-sm">Assinou a lista</Label>
+              <p className="text-xs text-muted-foreground">Marque se a aluna assinou a lista.</p>
+            </div>
+            <Switch checked={assinouLista} onCheckedChange={setAssinouLista} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Observação (importação)</Label>
+            <Textarea rows={2} value={observacao} onChange={(e) => setObservacao(e.target.value)} />
+          </div>
+
           <div className="grid gap-1.5">
             <Label className="text-xs">Ficha de inscrição (PDF)</Label>
             {matricula?.ficha_inscricao_url ? (
