@@ -47,6 +47,7 @@ import { Route as AuthenticatedMteEvidenciasRouteImport } from './routes/_authen
 import { Route as AuthenticatedMteCronogramaRouteImport } from './routes/_authenticated/mte.cronograma'
 import { Route as AuthenticatedMteChecklistRouteImport } from './routes/_authenticated/mte.checklist'
 import { Route as AuthenticatedMteBeneficiariasRouteImport } from './routes/_authenticated/mte.beneficiarias'
+import { Route as AuthenticatedMteAvaRouteImport } from './routes/_authenticated/mte.ava'
 import { Route as AuthenticatedMteAulasRouteImport } from './routes/_authenticated/mte.aulas'
 import { Route as AuthenticatedFinanceiroRubricasRouteImport } from './routes/_authenticated/financeiro.rubricas'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
@@ -279,6 +280,11 @@ const AuthenticatedMteBeneficiariasRoute =
     path: '/beneficiarias',
     getParentRoute: () => AuthenticatedMteRoute,
   } as any)
+const AuthenticatedMteAvaRoute = AuthenticatedMteAvaRouteImport.update({
+  id: '/ava',
+  path: '/ava',
+  getParentRoute: () => AuthenticatedMteRoute,
+} as any)
 const AuthenticatedMteAulasRoute = AuthenticatedMteAulasRouteImport.update({
   id: '/aulas',
   path: '/aulas',
@@ -415,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
+  '/mte/ava': typeof AuthenticatedMteAvaRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/mte/checklist': typeof AuthenticatedMteChecklistRoute
   '/mte/cronograma': typeof AuthenticatedMteCronogramaRoute
@@ -465,6 +472,7 @@ export interface FileRoutesByTo {
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
+  '/mte/ava': typeof AuthenticatedMteAvaRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/mte/checklist': typeof AuthenticatedMteChecklistRoute
   '/mte/cronograma': typeof AuthenticatedMteCronogramaRoute
@@ -523,6 +531,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
   '/_authenticated/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/_authenticated/mte/aulas': typeof AuthenticatedMteAulasRoute
+  '/_authenticated/mte/ava': typeof AuthenticatedMteAvaRoute
   '/_authenticated/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/_authenticated/mte/checklist': typeof AuthenticatedMteChecklistRoute
   '/_authenticated/mte/cronograma': typeof AuthenticatedMteCronogramaRoute
@@ -582,6 +591,7 @@ export interface FileRouteTypes {
     | '/financeiro/orcamento'
     | '/financeiro/rubricas'
     | '/mte/aulas'
+    | '/mte/ava'
     | '/mte/beneficiarias'
     | '/mte/checklist'
     | '/mte/cronograma'
@@ -632,6 +642,7 @@ export interface FileRouteTypes {
     | '/financeiro/orcamento'
     | '/financeiro/rubricas'
     | '/mte/aulas'
+    | '/mte/ava'
     | '/mte/beneficiarias'
     | '/mte/checklist'
     | '/mte/cronograma'
@@ -689,6 +700,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/orcamento'
     | '/_authenticated/financeiro/rubricas'
     | '/_authenticated/mte/aulas'
+    | '/_authenticated/mte/ava'
     | '/_authenticated/mte/beneficiarias'
     | '/_authenticated/mte/checklist'
     | '/_authenticated/mte/cronograma'
@@ -993,6 +1005,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMteBeneficiariasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
     }
+    '/_authenticated/mte/ava': {
+      id: '/_authenticated/mte/ava'
+      path: '/ava'
+      fullPath: '/mte/ava'
+      preLoaderRoute: typeof AuthenticatedMteAvaRouteImport
+      parentRoute: typeof AuthenticatedMteRoute
+    }
     '/_authenticated/mte/aulas': {
       id: '/_authenticated/mte/aulas'
       path: '/aulas'
@@ -1197,6 +1216,7 @@ const AuthenticatedFinanceiroRouteWithChildren =
 
 interface AuthenticatedMteRouteChildren {
   AuthenticatedMteAulasRoute: typeof AuthenticatedMteAulasRoute
+  AuthenticatedMteAvaRoute: typeof AuthenticatedMteAvaRoute
   AuthenticatedMteBeneficiariasRoute: typeof AuthenticatedMteBeneficiariasRoute
   AuthenticatedMteChecklistRoute: typeof AuthenticatedMteChecklistRoute
   AuthenticatedMteCronogramaRoute: typeof AuthenticatedMteCronogramaRoute
@@ -1210,6 +1230,7 @@ interface AuthenticatedMteRouteChildren {
 
 const AuthenticatedMteRouteChildren: AuthenticatedMteRouteChildren = {
   AuthenticatedMteAulasRoute: AuthenticatedMteAulasRoute,
+  AuthenticatedMteAvaRoute: AuthenticatedMteAvaRoute,
   AuthenticatedMteBeneficiariasRoute: AuthenticatedMteBeneficiariasRoute,
   AuthenticatedMteChecklistRoute: AuthenticatedMteChecklistRoute,
   AuthenticatedMteCronogramaRoute: AuthenticatedMteCronogramaRoute,
