@@ -45,6 +45,7 @@ import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
+import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_authenticated/configuracoes.ia'
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
 import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
 import { Route as AuthenticatedAdministrativoBeneficiosRouteImport } from './routes/_authenticated/administrativo.beneficios'
@@ -255,6 +256,12 @@ const AuthenticatedConfiguracoesUsuariosRoute =
     path: '/usuarios',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedConfiguracoesIaRoute =
+  AuthenticatedConfiguracoesIaRouteImport.update({
+    id: '/ia',
+    path: '/ia',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
 const AuthenticatedAdministrativoQualificacaoRoute =
   AuthenticatedAdministrativoQualificacaoRouteImport.update({
     id: '/qualificacao',
@@ -322,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
+  '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -361,6 +369,7 @@ export interface FileRoutesByTo {
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
+  '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -407,6 +416,7 @@ export interface FileRoutesById {
   '/_authenticated/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
   '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
+  '/_authenticated/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -454,6 +464,7 @@ export interface FileRouteTypes {
     | '/administrativo/beneficios'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
+    | '/configuracoes/ia'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
@@ -493,6 +504,7 @@ export interface FileRouteTypes {
     | '/administrativo/beneficios'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
+    | '/configuracoes/ia'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
@@ -538,6 +550,7 @@ export interface FileRouteTypes {
     | '/_authenticated/administrativo/beneficios'
     | '/_authenticated/administrativo/materiais'
     | '/_authenticated/administrativo/qualificacao'
+    | '/_authenticated/configuracoes/ia'
     | '/_authenticated/configuracoes/usuarios'
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
@@ -826,6 +839,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesUsuariosRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
+    '/_authenticated/configuracoes/ia': {
+      id: '/_authenticated/configuracoes/ia'
+      path: '/ia'
+      fullPath: '/configuracoes/ia'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesIaRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
     '/_authenticated/administrativo/qualificacao': {
       id: '/_authenticated/administrativo/qualificacao'
       path: '/qualificacao'
@@ -910,12 +930,14 @@ const AuthenticatedAdministrativoRouteWithChildren =
   )
 
 interface AuthenticatedConfiguracoesRouteChildren {
+  AuthenticatedConfiguracoesIaRoute: typeof AuthenticatedConfiguracoesIaRoute
   AuthenticatedConfiguracoesUsuariosRoute: typeof AuthenticatedConfiguracoesUsuariosRoute
   AuthenticatedConfiguracoesIndexRoute: typeof AuthenticatedConfiguracoesIndexRoute
 }
 
 const AuthenticatedConfiguracoesRouteChildren: AuthenticatedConfiguracoesRouteChildren =
   {
+    AuthenticatedConfiguracoesIaRoute: AuthenticatedConfiguracoesIaRoute,
     AuthenticatedConfiguracoesUsuariosRoute:
       AuthenticatedConfiguracoesUsuariosRoute,
     AuthenticatedConfiguracoesIndexRoute: AuthenticatedConfiguracoesIndexRoute,
