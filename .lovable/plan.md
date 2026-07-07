@@ -1,60 +1,62 @@
-## Problema
+## Objetivo
 
-O limite de 30 MB não é do Supabase Storage (que aceita arquivos grandes) — é do **worker que processa o zip no servidor**. O fluxo atual é:
+Todos os recursos de IA do sistema — resumos, análises e processamento de mídias — passarão a usar exclusivamente os provedores cadastrados em **Configurações → IA** (OpenRouter, Groq, OpenAI, Anthropic, Gemini etc.), com fallback automático conforme a política já existente. O erro `AI_APICallError: Payment Required` desaparece porque o Lovable Gateway deixa de ser chamado.
 
-1. Browser sobe o `.zip` inteiro para o bucket `whatsapp`.
-2. Server function `processarZip` **baixa o zip inteiro** para dentro do Cloudflare Worker.
-3. Faz `JSZip.loadAsync(buf)` em memória.
-4. Percorre mensagens, sobe cada mídia individualmente de volta pro Storage, insere linhas.
+## O que muda hoje
 
-O Worker tem ~128 MB de RAM por request e um teto de CPU. Um zip de 500 MB (com mídias descompactadas) estoura memória e/ou tempo. Aumentar só o texto "até ~30 MB" na UI não resolve — vai continuar quebrando no server.
+Hoje três lugares batem direto no Lovable Gateway:
 
-## Solução: mover o descompacte para o navegador
+| Local | Função | Tipo |
+|---|---|---|
+| `src/lib/relatorios.functions.ts` | `gerarAnaliseAba` (análises nas abas de relatórios) | texto |
+| `src/lib/whatsapp.functions.ts` | `gerarResumoGrupo` (relatório IA por período) | texto |
+| `src/lib/whatsapp.functions.ts` | `transcreverAudios` (Whisper) | áudio → texto |
+| `src/lib/whatsapp.functions.ts` | `analisarImagens` (visão/OCR) | imagem → texto |
 
-O browser aguenta tranquilamente zips de 500 MB+ com `JSZip` (streaming por entry, sem carregar tudo de uma vez em memória contígua). O servidor passa a receber apenas:
-- mensagens já parseadas (JSON pequeno),
-- mídias já upadas direto do browser para o Storage (com signed upload URLs ou upload autenticado normal — o cliente Supabase suporta).
+Todos serão reescritos para chamar o roteador BYOK (`executarAiRouter` em `src/lib/ia.functions.ts`), que já suporta fallback entre provedores ativos por prioridade.
 
-Isso remove o gargalo do Worker completamente. Limite prático passa a ser o do bucket (padrão 50 MB por objeto individual, ajustável — mídias do WhatsApp raramente passam disso; o zip agregando 500 MB é composto de arquivos pequenos).
+## Mudanças por etapa
 
-## Passos
+### 1. Estender o roteador BYOK para áudio e imagem
+Em `src/lib/ia.functions.ts`, adicionar duas funções ao lado das já existentes:
 
-**1. Novo módulo `src/lib/whatsapp-zip-client.ts`** (client-only)
-- Recebe o `File` do input.
-- `JSZip.loadAsync(file)` — JSZip lê `File`/`Blob` em modo streaming, não carrega tudo na RAM.
-- Localiza `_chat.txt`, chama `parseChat` (o parser já é isomórfico, pode rodar no browser).
-- Para cada mídia referenciada nas mensagens: `entry.async("blob")` e `supabase.storage.from("whatsapp").upload(...)` com `upsert: true`. Progresso reportado via callback.
-- Opcional: sobe o `.zip` original em background para `imports/{id}/original.zip` (política "armazenar cru") — sem bloquear o processamento.
-- Retorna `{ importacaoTempId, mensagensParseadas, midiasUpadas, periodo }`.
+- `executarTranscricao({ admin, processo, arquivo, contentType, nome })` — percorre provedores OpenAI-compat ativos (OpenRouter, Groq, OpenAI) e chama `${base_url}/audio/transcriptions` com `multipart/form-data`. Provedores sem suporte (Anthropic, Gemini) são pulados. Registra em `ia_logs_uso` com `sucesso/erro` igual ao fluxo atual.
+- `executarVisao({ admin, processo, prompt, imagemUrlOuBase64 })` — envia chat completion com bloco `image_url` para provedores OpenAI-compat; para Gemini, monta `contents` com `inlineData` (base64) via `generateContent`; Anthropic aceita `image` com base64 em `content`. Provedor sem visão é pulado.
 
-**2. Nova server fn `registrarImportacao`** em `src/lib/whatsapp.functions.ts`
-- Substitui a lógica pesada de `processarZip`.
-- Recebe: `grupo_id`, `arquivo_nome`, `zip_path` (o zip cru, opcional), `periodo_inicio/fim`, contadores, e o array de mensagens já com `midia_path` preenchido pelo cliente.
-- Cria linha em `wa_importacoes`, insere mensagens em chunks de 500 (lógica atual das linhas 151–160), atualiza contadores. Nada de JSZip, nada de download de zip.
-- Mantém `processarZip` antigo por retrocompatibilidade em zips pequenos? **Não** — remove, o cliente sempre processa.
+Ambas seguem o mesmo padrão de "provedor preferido → fallback por prioridade" já usado em `executarAiRouter`.
 
-**3. UI em `src/routes/_authenticated/whatsapp.index.tsx`**
-- Trocar texto "até ~30 MB" por "até ~500 MB (o processamento acontece no seu navegador)".
-- Reescrever `importMut.mutationFn`:
-  - chamar `processarZipNoBrowser(file, { onProgress })`,
-  - mostrar barra de progresso (mídias upadas / total, + estado atual: "lendo zip", "upando mídias X/Y", "salvando mensagens"),
-  - chamar `registrarImportacao` no final.
-- Aumentar `accept` no input mantido; sem limite artificial de tamanho no client (browser lida).
+### 2. Registrar processos novos em `ia_politicas`
+Migração inserindo (se não existir) linhas para os processos:
 
-**4. Ajustes menores**
-- `input type="file"` não tem limite intrínseco; só reforçar aviso visual.
-- Confirmar que o bucket `whatsapp` no Supabase não tem `file_size_limit` restritivo (padrão do projeto é 50 MB por objeto — suficiente para mídias individuais do WhatsApp; se algum vídeo exceder, avisa e pula, sem quebrar a importação).
+- `resumo_whatsapp` — texto (`max_tokens: 2000`, `temperatura: 0.4`)
+- `analise_relatorio` — texto (`max_tokens: 700`, `temperatura: 0.4`)
+- `transcricao_audio` — áudio (sem `max_tokens`/`temperatura`)
+- `analise_imagem` — visão (`max_tokens: 400`)
 
-## Riscos / notas
+Isso torna cada processo configurável em **Configurações → IA → Política de Cadência** (provedor preferido, fallback etc.).
 
-- **Zip original de 500 MB**: subir o `.zip` cru como um único objeto pode bater no `file_size_limit` do bucket. Duas opções: (a) subir o cru só se ≤50 MB; (b) desabilitar upload do cru para zips grandes e avisar o usuário — o dado "cru" fica preservado nas mídias individuais + `_chat.txt` (que a gente pode salvar como objeto separado). Vou por **(b)** para não exigir mudança de política do bucket.
-- **Aba fechada durante o upload**: já era problema antes com uploads grandes. Aviso "não feche a aba" na UI.
-- **Progresso**: o `supabase.storage.upload` não expõe progresso por byte, mas por-arquivo já é suficiente ("312 / 940 mídias").
+### 3. Reescrever os quatro pontos
+- `gerarAnaliseAba` → `executarAiRouter({ processo: "analise_relatorio", mensagens: [{role:"user", content: prompt}] })`.
+- `gerarResumoGrupo` → `executarAiRouter({ processo: "resumo_whatsapp", ... })`. Campo `autor_ia` da tabela `wa_resumos` passa a receber `${provedor}/${modelo}` retornado pelo roteador.
+- `transcreverAudios` → `executarTranscricao({ processo: "transcricao_audio", ... })` para cada áudio, mantendo o loop e persistência em `wa_midias_analise` iguais.
+- `analisarImagens` → `executarVisao({ processo: "analise_imagem", prompt, imagemUrl: signedUrl })`. Persistência em `wa_midias_analise` mantém a estrutura atual.
 
-## Arquivos tocados
+### 4. Remover dependência do Lovable Gateway
+- Excluir os `import` de `@/lib/ai-gateway.server` e `process.env.LOVABLE_API_KEY` nesses arquivos.
+- `src/lib/ai-gateway.server.ts` fica no projeto por enquanto (não estorva); pode ser removido depois se ninguém mais importar.
+- Pacote `ai` continua instalado (não é mais usado nesses fluxos, mas removê-lo pode quebrar outros pontos — decisão em outra iteração).
 
-- criar `src/lib/whatsapp-zip-client.ts`
-- editar `src/lib/whatsapp.functions.ts` (adicionar `registrarImportacao`, remover/limpar `processarZip`)
-- editar `src/routes/_authenticated/whatsapp.index.tsx` (novo fluxo + progresso + texto)
+### 5. UX de erro
+Se todos os provedores falharem (ex.: nenhuma chave cadastrada, cota esgotada em todos), o roteador já lança `"Todos os provedores falharam. Primeiro erro: …"`. Os toasts em `whatsapp.$importacaoId.tsx` e nas telas de relatórios exibirão essa mensagem, orientando a ir em Configurações → IA.
 
-1 build ao final. Sem SQL novo.
+## Detalhes técnicos
+
+- Transcrição: assume que pelo menos um provedor OpenAI-compat com Whisper esteja ativo (OpenAI/OpenRouter/Groq). Se todos os provedores ativos forem só Gemini/Anthropic, retorna erro claro: "Nenhum provedor com suporte a transcrição ativo".
+- Visão: mesmo tratamento; OpenAI/Anthropic/Gemini suportam nativamente, Groq (Llama Vision) via OpenAI-compat.
+- Não há mudança de schema em `wa_*`. A migração toca só `ia_politicas`.
+- Sem alterações de UI além dos textos de erro.
+
+## Fora de escopo
+
+- Não vamos remover `LOVABLE_API_KEY` dos secrets (útil como fallback futuro e ainda usado por conectores).
+- Não vamos adicionar suporte a novos provedores (Ollama, self-hosted etc.) neste passo.
