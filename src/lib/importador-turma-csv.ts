@@ -27,8 +27,16 @@ export type ResultadoImportacaoCsv = {
   erros: string[];
 };
 
-// CSV parser — aceita separador , e ;
+// CSV parser — detecta separador (, ou ;) por linha
+function detectSep(text: string): "," | ";" {
+  const head = text.slice(0, 2000);
+  const c = (head.match(/,/g) ?? []).length;
+  const s = (head.match(/;/g) ?? []).length;
+  return s > c ? ";" : ",";
+}
+
 function parseCsv(text: string): string[][] {
+  const sep = detectSep(text);
   const rows: string[][] = [];
   let row: string[] = [];
   let cur = "";
@@ -41,7 +49,7 @@ function parseCsv(text: string): string[][] {
       else cur += c;
     } else {
       if (c === '"') inQuotes = true;
-      else if (c === "," || c === ";") { row.push(cur); cur = ""; }
+      else if (c === sep) { row.push(cur); cur = ""; }
       else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
       else if (c === "\r") { /* skip */ }
       else cur += c;
