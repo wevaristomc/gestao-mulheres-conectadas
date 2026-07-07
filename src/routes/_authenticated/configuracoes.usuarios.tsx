@@ -52,7 +52,7 @@ function gerarSenha(): string {
 }
 
 function UsuariosPage() {
-  const { projetoId, user, role } = useActiveContext();
+  const { projetoId, user, role, isLoadingRoles, projetosDisponiveis } = useActiveContext();
   const qc = useQueryClient();
   const listarFn = useServerFn(listarUsuariosProjeto);
 
@@ -62,6 +62,7 @@ function UsuariosPage() {
     queryKey: ["usuarios", projetoId],
     queryFn: () => listarFn({ data: { projetoId: projetoId! } }) as Promise<Usuario[]>,
     enabled: !!projetoId && isCoord,
+    retry: 1,
   });
 
   const [criarOpen, setCriarOpen] = useState(false);
@@ -84,25 +85,68 @@ function UsuariosPage() {
   const totalUsuarios = usuariosQuery.data?.length ?? 0;
   const temFiltro = busca.trim().length > 0 || filtroRole !== "todos";
 
+  // Fase 0 — Diagnóstico: painel sempre visível com o estado real, para
+  // explicar por que a lista de usuários pode ficar em "Carregando…".
+  const DiagnosticoBox = (
+    <Card className="border-amber-300 bg-amber-50">
+      <CardContent className="space-y-1 p-4 text-xs text-amber-900">
+        <div className="mb-1 font-semibold">Diagnóstico (Fase 0 · RBAC)</div>
+        <div><strong>user.id:</strong> {user?.id ?? <em>nenhum (sessão não hidratada)</em>}</div>
+        <div><strong>user.email:</strong> {user?.email ?? "—"}</div>
+        <div><strong>isLoadingRoles:</strong> {String(isLoadingRoles)}</div>
+        <div><strong>role detectado:</strong> {role ?? <em>null (sem row em user_roles p/ este projeto)</em>}</div>
+        <div><strong>projetoId ativo:</strong> {projetoId ?? <em>null</em>}</div>
+        <div><strong>projetos disponíveis:</strong> {projetosDisponiveis.length}</div>
+        <div><strong>isCoord (=coordenador_geral):</strong> {String(isCoord)}</div>
+        <div><strong>query enabled:</strong> {String(!!projetoId && isCoord)}</div>
+        <div><strong>query status:</strong> {usuariosQuery.status} · fetch: {usuariosQuery.fetchStatus}</div>
+        {usuariosQuery.error ? (
+          <div className="text-destructive"><strong>query.error:</strong> {(usuariosQuery.error as Error).message}</div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+
+  if (isLoadingRoles) {
+    return (
+      <div className="space-y-4">
+        {DiagnosticoBox}
+        <Card>
+          <CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Carregando papéis do usuário…
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!isCoord) {
     return (
-      <Card>
-        <CardContent className="flex items-start gap-2 p-4 text-sm text-muted-foreground">
-          <AlertCircle className="mt-0.5 h-4 w-4" />
-          Apenas usuários com papel <strong className="mx-1">Coordenação Geral</strong> podem gerenciar acessos.
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        {DiagnosticoBox}
+        <Card>
+          <CardContent className="flex items-start gap-2 p-4 text-sm text-muted-foreground">
+            <AlertCircle className="mt-0.5 h-4 w-4" />
+            Apenas usuários com papel <strong className="mx-1">Coordenação Geral</strong> podem gerenciar acessos.
+            {role ? <> (papel atual: <code className="ml-1">{role}</code>)</> : null}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (!projetoId) {
     return (
-      <Card><CardContent className="p-4 text-sm text-muted-foreground">Selecione um projeto ativo.</CardContent></Card>
+      <div className="space-y-4">
+        {DiagnosticoBox}
+        <Card><CardContent className="p-4 text-sm text-muted-foreground">Selecione um projeto ativo (nenhum projeto carregado).</CardContent></Card>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {DiagnosticoBox}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Gerencie quem tem acesso ao projeto e seus respectivos papéis.
