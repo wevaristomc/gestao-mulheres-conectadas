@@ -725,3 +725,186 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
     }
     throw new Error(`Nenhum provedor conseguiu processar as imagens. Primeiro erro: ${primeiroErro ?? "sem provedores com api_key"}`);
   });
+
+// -----------------------------------------------------------------------------
+// Roteador de VISÃO reutilizável (mesmo padrão de executarAiRouter, para imagens).
+// -----------------------------------------------------------------------------
+
+export async function executarVisaoRouter(input: {
+  admin: any;
+  processo: string;
+  prompt: string;
+  imagens: ImagemInput[];
+  defaults?: { max_tokens?: number };
+}): Promise<{ content: string; provedor: string; modelo: string; tokens_entrada: number; tokens_saida: number; fallback_de?: string }> {
+  const { admin, processo, prompt, imagens } = input;
+  const defs = input.defaults ?? {};
+
+  const { data: politica } = await admin
+    .from("ia_politicas")
+    .select("*")
+    .eq("processo", processo)
+    .maybeSingle();
+  const provedorPreferido = (politica?.provedor_preferido as string | null) ?? null;
+  const maxTokens = (politica?.max_tokens as number | null) ?? defs.max_tokens ?? 1024;
+  const usarFallback = politica?.usar_fallback !== false;
+
+  const { data: provedores } = await admin
+    .from("ia_provedores")
+    .select("*")
+    .eq("ativo", true)
+    .order("prioridade", { ascending: true });
+  const lista = (provedores ?? []) as any[];
+  if (!lista.length) throw new Error("Nenhum provedor de IA ativo. Configure em Configurações > IA.");
+  const ordenados = [
+    ...lista.filter((p) => p.provedor === provedorPreferido),
+    ...lista.filter((p) => p.provedor !== provedorPreferido),
+  ];
+
+  let primeiroErro: string | null = null;
+  let fallbackDe: string | undefined;
+  for (const prov of ordenados) {
+    if (!prov.api_key || !String(prov.api_key).trim()) continue;
+    const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "") || "";
+    if (!modelo) continue;
+    const codigo = String(prov.provedor);
+    const tipo = selecionarChamador(codigo, prov.base_url);
+    const base = { base_url: prov.base_url, api_key: prov.api_key, modelo, prompt, imagens, max_tokens: maxTokens };
+    try {
+      const r =
+        tipo === "gemini" ? await chamarGeminiVision(base)
+        : tipo === "anthropic" ? await chamarAnthropicVision(base)
+        : await chamarOpenAICompatVision(base);
+      await admin.from("ia_logs_uso").insert({
+        processo, provedor: codigo, modelo,
+        tokens_entrada: r.tokens_entrada, tokens_saida: r.tokens_saida,
+        sucesso: true, erro: null,
+      });
+      return {
+        content: r.content,
+        provedor: codigo,
+        modelo,
+        tokens_entrada: r.tokens_entrada,
+        tokens_saida: r.tokens_saida,
+        ...(fallbackDe ? { fallback_de: fallbackDe } : {}),
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await admin.from("ia_logs_uso").insert({
+        processo, provedor: codigo, modelo,
+        tokens_entrada: 0, tokens_saida: 0,
+        sucesso: false, erro: msg.slice(0, 500),
+      });
+      if (!primeiroErro) primeiroErro = `${codigo}: ${msg}`;
+      if (!usarFallback) break;
+      if (!fallbackDe) fallbackDe = codigo;
+    }
+  }
+  throw new Error(`Nenhum provedor de visão conseguiu processar. Primeiro erro: ${primeiroErro ?? "sem provedores com api_key"}`);
+}
+
+// -----------------------------------------------------------------------------
+// Roteador de TRANSCRIÇÃO (Whisper via OpenAI-compat). Percorre provedores
+// OpenAI-compatíveis ativos (OpenAI, Groq, OpenRouter etc.); pula Gemini/Anthropic.
+// -----------------------------------------------------------------------------
+
+function modeloTranscricaoFor(codigo: string, baseUrl?: string | null, modelosDisponiveis?: unknown): string {
+  // 1) tenta encontrar um modelo whisper/transcribe na lista do provedor.
+  const lista = Array.isArray(modelosDisponiveis) ? (modelosDisponiveis as string[]) : [];
+  const achado = lista.find((m) => /whisper|transcribe/i.test(m));
+  if (achado) return achado;
+  // 2) mapa por provedor.
+  const c = (codigo || "").toLowerCase();
+  const b = (baseUrl || "").toLowerCase();
+  if (c.includes("groq") || b.includes("groq")) return "whisper-large-v3-turbo";
+  if (c.includes("openai") || b.includes("api.openai.com")) return "gpt-4o-mini-transcribe";
+  // 3) fallback genérico OpenAI-compat.
+  return "whisper-1";
+}
+
+export async function executarTranscricaoRouter(input: {
+  admin: any;
+  processo: string;
+  file: Blob | File;
+  filename: string;
+  contentType: string;
+}): Promise<{ text: string; provedor: string; modelo: string }> {
+  const { admin, processo, file, filename, contentType } = input;
+
+  const { data: politica } = await admin
+    .from("ia_politicas")
+    .select("*")
+    .eq("processo", processo)
+    .maybeSingle();
+  const provedorPreferido = (politica?.provedor_preferido as string | null) ?? null;
+  const usarFallback = politica?.usar_fallback !== false;
+
+  const { data: provedores } = await admin
+    .from("ia_provedores")
+    .select("*")
+    .eq("ativo", true)
+    .order("prioridade", { ascending: true });
+  const lista = (provedores ?? []) as any[];
+  if (!lista.length) throw new Error("Nenhum provedor de IA ativo. Configure em Configurações > IA.");
+
+  // Só provedores OpenAI-compat suportam Whisper.
+  const compat = lista.filter((p) => selecionarChamador(String(p.provedor), p.base_url) === "openai_compat");
+  if (!compat.length) {
+    throw new Error(
+      "Nenhum provedor com suporte a transcrição (Whisper) está ativo. " +
+      "Ative um provedor OpenAI-compat (OpenAI, Groq, OpenRouter) em Configurações > IA.",
+    );
+  }
+  const ordenados = [
+    ...compat.filter((p) => p.provedor === provedorPreferido),
+    ...compat.filter((p) => p.provedor !== provedorPreferido),
+  ];
+
+  let primeiroErro: string | null = null;
+  for (const prov of ordenados) {
+    const apiKey = String(prov.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
+    if (!apiKey) continue;
+    const baseUrl = String(prov.base_url ?? "").trim();
+    if (!baseUrl) continue;
+    const modelo = modeloTranscricaoFor(String(prov.provedor), baseUrl, prov.modelos_disponiveis);
+    const codigo = String(prov.provedor);
+
+    try {
+      const url = `${baseUrl.replace(/\/+$/, "")}/audio/transcriptions`;
+      const fd = new FormData();
+      fd.append("model", modelo);
+      // Envolve em File novo garantindo o content-type correto.
+      const asFile = file instanceof File
+        ? file
+        : new File([file], filename, { type: contentType });
+      fd.append("file", asFile, filename);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: fd,
+      });
+      const txt = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+      let body: any;
+      try { body = JSON.parse(txt); } catch { body = { text: txt }; }
+      const text = String(body?.text ?? "").trim();
+      await admin.from("ia_logs_uso").insert({
+        processo, provedor: codigo, modelo,
+        tokens_entrada: body?.usage?.input_tokens ?? 0,
+        tokens_saida: body?.usage?.output_tokens ?? 0,
+        sucesso: true, erro: null,
+      });
+      return { text, provedor: codigo, modelo };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await admin.from("ia_logs_uso").insert({
+        processo, provedor: codigo, modelo,
+        tokens_entrada: 0, tokens_saida: 0,
+        sucesso: false, erro: msg.slice(0, 500),
+      });
+      if (!primeiroErro) primeiroErro = `${codigo}: ${msg}`;
+      if (!usarFallback) break;
+    }
+  }
+  throw new Error(`Nenhum provedor de transcrição funcionou. Primeiro erro: ${primeiroErro ?? "sem provedores utilizáveis"}`);
+}
