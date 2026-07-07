@@ -196,8 +196,10 @@ export async function executarAiRouter(input: {
   admin: any;
   processo: string;
   mensagens: Mensagem[];
+  defaults?: { max_tokens?: number; temperatura?: number };
 }): Promise<CallResult & { fallback_de?: string }> {
   const { admin, processo, mensagens } = input;
+  const defs = input.defaults ?? {};
 
   // Política — se não houver, usa defaults sensatos.
   const { data: politicaRow } = await admin
@@ -207,8 +209,8 @@ export async function executarAiRouter(input: {
     .maybeSingle();
 
   const provedorPreferido = (politicaRow?.provedor_preferido as string | null) ?? null;
-  const maxTokens = (politicaRow?.max_tokens as number | null) ?? 1024;
-  const temperatura = (politicaRow?.temperatura as number | null) ?? 0.4;
+  const maxTokens = (politicaRow?.max_tokens as number | null) ?? defs.max_tokens ?? 1024;
+  const temperatura = (politicaRow?.temperatura as number | null) ?? defs.temperatura ?? 0.4;
   const usarFallback = politicaRow?.usar_fallback !== false;
 
   // Provedores ativos ordenados por prioridade crescente (gratuitos primeiro).
