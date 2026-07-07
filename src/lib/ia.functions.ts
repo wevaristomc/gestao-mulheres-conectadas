@@ -99,7 +99,17 @@ async function chamarGemini(params: {
     }),
   });
   const txt = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error(
+        `Cota do Gemini esgotada para "${params.modelo}" (free tier tem limite diário por chave). Aguarde o reset ou troque para uma chave paga. Detalhe: ${txt.slice(0, 200)}`,
+      );
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`API Key do Gemini inválida ou sem permissão. Detalhe: ${txt.slice(0, 200)}`);
+    }
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
+  }
   const body = JSON.parse(txt);
   const content = body?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
   return {
@@ -142,7 +152,15 @@ async function chamarAnthropic(params: {
     }),
   });
   const txt = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error(`Cota do Anthropic esgotada para "${params.modelo}". Detalhe: ${txt.slice(0, 200)}`);
+    }
+    if (res.status === 401) {
+      throw new Error(`API Key do Anthropic inválida. Detalhe: ${txt.slice(0, 200)}`);
+    }
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
+  }
   const body = JSON.parse(txt);
   const content = body?.content?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
   return {
