@@ -196,6 +196,9 @@ export async function upsertBeneficiaria(input: Partial<Beneficiaria> & { id?: s
     qual_programa_social: input.beneficiaria_programa_social
       ? (input.qual_programa_social ?? null)
       : null,
+    banco: input.banco ?? null,
+    agencia: input.agencia ?? null,
+    conta: input.conta ?? null,
   };
   if (input.id) {
     const { error } = await supabase.from("beneficiarias").update(payload).eq("id", input.id);
