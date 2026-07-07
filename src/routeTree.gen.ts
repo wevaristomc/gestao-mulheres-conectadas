@@ -32,6 +32,7 @@ import { Route as AuthenticatedMteIndexRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFinanceiroIndexRouteImport } from './routes/_authenticated/financeiro.index'
 import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_authenticated/configuracoes.index'
 import { Route as AuthenticatedAdministrativoIndexRouteImport } from './routes/_authenticated/administrativo.index'
+import { Route as AuthenticatedWhatsappImportacaoIdRouteImport } from './routes/_authenticated/whatsapp.$importacaoId'
 import { Route as AuthenticatedRelatoriosPedagogicoRouteImport } from './routes/_authenticated/relatorios.pedagogico'
 import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './routes/_authenticated/relatorios.orcamentario'
 import { Route as AuthenticatedRelatoriosMteRouteImport } from './routes/_authenticated/relatorios.mte'
@@ -188,6 +189,12 @@ const AuthenticatedAdministrativoIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
+const AuthenticatedWhatsappImportacaoIdRoute =
+  AuthenticatedWhatsappImportacaoIdRouteImport.update({
+    id: '/$importacaoId',
+    path: '/$importacaoId',
+    getParentRoute: () => AuthenticatedWhatsappRoute,
   } as any)
 const AuthenticatedRelatoriosPedagogicoRoute =
   AuthenticatedRelatoriosPedagogicoRouteImport.update({
@@ -422,6 +429,7 @@ export interface FileRoutesByFullPath {
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
   '/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
+  '/whatsapp/$importacaoId': typeof AuthenticatedWhatsappImportacaoIdRoute
   '/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
@@ -471,6 +479,7 @@ export interface FileRoutesByTo {
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
   '/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
+  '/whatsapp/$importacaoId': typeof AuthenticatedWhatsappImportacaoIdRoute
   '/administrativo': typeof AuthenticatedAdministrativoIndexRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesIndexRoute
   '/financeiro': typeof AuthenticatedFinanceiroIndexRoute
@@ -528,6 +537,7 @@ export interface FileRoutesById {
   '/_authenticated/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/_authenticated/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
   '/_authenticated/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
+  '/_authenticated/whatsapp/$importacaoId': typeof AuthenticatedWhatsappImportacaoIdRoute
   '/_authenticated/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
   '/_authenticated/configuracoes/': typeof AuthenticatedConfiguracoesIndexRoute
   '/_authenticated/financeiro/': typeof AuthenticatedFinanceiroIndexRoute
@@ -586,6 +596,7 @@ export interface FileRouteTypes {
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
     | '/relatorios/pedagogico'
+    | '/whatsapp/$importacaoId'
     | '/administrativo/'
     | '/configuracoes/'
     | '/financeiro/'
@@ -635,6 +646,7 @@ export interface FileRouteTypes {
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
     | '/relatorios/pedagogico'
+    | '/whatsapp/$importacaoId'
     | '/administrativo'
     | '/configuracoes'
     | '/financeiro'
@@ -691,6 +703,7 @@ export interface FileRouteTypes {
     | '/_authenticated/relatorios/mte'
     | '/_authenticated/relatorios/orcamentario'
     | '/_authenticated/relatorios/pedagogico'
+    | '/_authenticated/whatsapp/$importacaoId'
     | '/_authenticated/administrativo/'
     | '/_authenticated/configuracoes/'
     | '/_authenticated/financeiro/'
@@ -874,6 +887,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/administrativo/'
       preLoaderRoute: typeof AuthenticatedAdministrativoIndexRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
+    '/_authenticated/whatsapp/$importacaoId': {
+      id: '/_authenticated/whatsapp/$importacaoId'
+      path: '/$importacaoId'
+      fullPath: '/whatsapp/$importacaoId'
+      preLoaderRoute: typeof AuthenticatedWhatsappImportacaoIdRouteImport
+      parentRoute: typeof AuthenticatedWhatsappRoute
     }
     '/_authenticated/relatorios/pedagogico': {
       id: '/_authenticated/relatorios/pedagogico'
@@ -1279,10 +1299,13 @@ const AuthenticatedRelatoriosRouteWithChildren =
   )
 
 interface AuthenticatedWhatsappRouteChildren {
+  AuthenticatedWhatsappImportacaoIdRoute: typeof AuthenticatedWhatsappImportacaoIdRoute
   AuthenticatedWhatsappIndexRoute: typeof AuthenticatedWhatsappIndexRoute
 }
 
 const AuthenticatedWhatsappRouteChildren: AuthenticatedWhatsappRouteChildren = {
+  AuthenticatedWhatsappImportacaoIdRoute:
+    AuthenticatedWhatsappImportacaoIdRoute,
   AuthenticatedWhatsappIndexRoute: AuthenticatedWhatsappIndexRoute,
 }
 
