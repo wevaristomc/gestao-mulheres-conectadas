@@ -6,18 +6,30 @@ import * as XLSX from "xlsx";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { consultarViewMTE } from "@/lib/mte-relatorios.functions";
+import { consultarViewMTE, consultarExecucaoFisicoFinanceira } from "@/lib/mte-relatorios.functions";
 
 type RelatorioDef = {
   view:
     | "vw_cronograma_execucao"
     | "vw_cursos_executados"
     | "vw_beneficiarias"
-    | "vw_consolidacao_turma";
+    | "vw_consolidacao_turma"
+    | "vw_relacao_qualificados"
+    | "execucao_fisico_financeira";
   titulo: string;
   descricao: string;
   arquivo: string;
   cabecalhoDuplo?: boolean;
+  variant?: "relacao_qualificados" | "execucao_ff";
+};
+
+const INSTRUMENTO = {
+  modalidade: "Termo de Fomento — MROSC",
+  executora: "QUINTA ARTE",
+  cnpj: "",
+  transferegov: "01025/2025",
+  nup_sei: "19968.200342/2025-94",
+  vigencia: "",
 };
 
 const RELATORIOS: RelatorioDef[] = [
@@ -46,42 +58,96 @@ const RELATORIOS: RelatorioDef[] = [
     descricao: "Indicadores consolidados por turma: matrículas, frequência, evasão.",
     arquivo: "consolidacao-turma.xlsx",
   },
+  {
+    view: "vw_relacao_qualificados",
+    titulo: "Relação de Qualificados (oficial)",
+    descricao:
+      "Layout oficial MTE com bloco de identificação do instrumento e frequência em decimal 0–1.",
+    arquivo: "relacao-qualificados.xlsx",
+    variant: "relacao_qualificados",
+  },
+  {
+    view: "execucao_fisico_financeira",
+    titulo: "Execução Físico-Financeira por Rubrica",
+    descricao: "Previsto, executado, saldo e % por rubrica TransfereGov.",
+    arquivo: "execucao-fisico-financeira.xlsx",
+    variant: "execucao_ff",
+  },
 ];
 
 export const Route = createFileRoute("/_authenticated/relatorios/mte")({
   component: RelatoriosMte,
 });
 
-function exportarXLSX(rows: Record<string, unknown>[], nome: string, sheetName: string, cabecalhoDuplo?: boolean) {
+function exportarXLSX(
+  rows: Record<string, unknown>[],
+  nome: string,
+  sheetName: string,
+  opts: { cabecalhoDuplo?: boolean; variant?: RelatorioDef["variant"] } = {},
+) {
   if (!rows.length) {
     toast.warning("Nenhum dado retornado pela view.");
     return;
   }
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(rows);
 
-  if (cabecalhoDuplo) {
+  if (opts.variant === "relacao_qualificados") {
+    const cols = Object.keys(rows[0] ?? {});
+    const cabecalho = [
+      ["RELAÇÃO DE QUALIFICADOS", ...Array(Math.max(0, cols.length - 1)).fill("")],
+      [`Modalidade: ${INSTRUMENTO.modalidade}`],
+      [`Entidade Executora: ${INSTRUMENTO.executora}`],
+      [`Nº TransfereGov: ${INSTRUMENTO.transferegov}`],
+      [`NUP/SEI: ${INSTRUMENTO.nup_sei}`],
+      [""],
+      cols,
+      ...rows.map((r) =>
+        cols.map((c) => {
+          const v = r[c];
+          // frequência esperada como decimal 0-1
+          if (/frequen/i.test(c) && typeof v === "number") return v <= 1 ? v : v / 100;
+          return v ?? "";
+        }),
+      ),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(cabecalho);
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, cols.length - 1) } }];
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  } else if (opts.variant === "execucao_ff") {
+    const cols = ["codigo", "descricao", "valor_previsto", "valor_executado", "saldo", "pct_execucao"];
+    const header = ["Código", "Descrição", "Previsto (R$)", "Executado (R$)", "Saldo (R$)", "% Execução"];
+    const totalPrev = rows.reduce((s, r) => s + Number(r.valor_previsto ?? 0), 0);
+    const totalExec = rows.reduce((s, r) => s + Number(r.valor_executado ?? 0), 0);
+    const aoa = [
+      ["EXECUÇÃO FÍSICO-FINANCEIRA POR RUBRICA", ...Array(cols.length - 1).fill("")],
+      [`Executora: ${INSTRUMENTO.executora} — TransfereGov ${INSTRUMENTO.transferegov}`],
+      [""],
+      header,
+      ...rows.map((r) => cols.map((c) => r[c] ?? "")),
+      [
+        "TOTAL",
+        "",
+        totalPrev,
+        totalExec,
+        totalPrev - totalExec,
+        totalPrev > 0 ? Math.round((totalExec / totalPrev) * 10000) / 100 : 0,
+      ],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cols.length - 1 } }];
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  } else if (opts.cabecalhoDuplo) {
     // Insere linha superior mesclada como cabeçalho de 1º nível
     const cols = Object.keys(rows[0] ?? {});
-    const range = XLSX.utils.decode_range(ws["!ref"] ?? "A1");
-    // shift 1 linha para baixo
-    const newRows: Record<string, unknown>[] = [];
-    for (let r = range.s.r; r <= range.e.r; r++) {
-      const rowArr: Record<string, unknown> = {};
-      cols.forEach((c) => {
-        const cell = ws[XLSX.utils.encode_cell({ r, c: cols.indexOf(c) })];
-        rowArr[c] = cell ? cell.v : "";
-      });
-      newRows.push(rowArr);
-    }
     const ws2 = XLSX.utils.aoa_to_sheet([
       ["Cronograma Físico-Financeiro de Execução (MTE)", ...Array(cols.length - 1).fill("")],
       cols,
-      ...newRows.slice(1).map((r) => cols.map((c) => r[c])),
+      ...rows.map((r) => cols.map((c) => r[c])),
     ]);
     ws2["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, cols.length - 1) } }];
     XLSX.utils.book_append_sheet(wb, ws2, sheetName.slice(0, 31));
   } else {
+    const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   }
 
@@ -96,14 +162,20 @@ function RelatoriosMte() {
     setLoading(def.view);
     setErro((e) => ({ ...e, [def.view]: "" }));
     try {
-      const res = await consultarViewMTE({ data: { view: def.view } });
+      const res =
+        def.variant === "execucao_ff"
+          ? await consultarExecucaoFisicoFinanceira()
+          : await consultarViewMTE({ data: { view: def.view as never } });
       if (res.error) {
         setErro((e) => ({ ...e, [def.view]: res.error! }));
         toast.error(`View ${def.view} indisponível: ${res.error}`);
         return;
       }
       const rows = JSON.parse(res.rowsJson || "[]") as Record<string, unknown>[];
-      exportarXLSX(rows, def.arquivo, def.titulo, def.cabecalhoDuplo);
+      exportarXLSX(rows, def.arquivo, def.titulo, {
+        cabecalhoDuplo: def.cabecalhoDuplo,
+        variant: def.variant,
+      });
       toast.success(`Relatório "${def.titulo}" exportado.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

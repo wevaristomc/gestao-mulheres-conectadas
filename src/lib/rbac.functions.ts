@@ -82,9 +82,8 @@ export const listarTurmasDoProjeto = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("turmas")
-      .select("id, nome, codigo")
-      .eq("projeto_id", data.projetoId)
-      .order("nome");
+      .select("*")
+      .eq("projeto_id", data.projetoId);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
@@ -98,7 +97,7 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
     const admin = getSupabaseAdmin();
     const { data: vinc, error } = await admin
       .from("instrutor_turmas")
-      .select("id, user_id, turma_id, projeto_id, created_at")
+      .select("*")
       .eq("projeto_id", data.projetoId);
     if (error) throw new Error(error.message);
     return vinc ?? [];

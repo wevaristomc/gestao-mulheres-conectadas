@@ -17,6 +17,7 @@ const TABS = [
   { key: "aulas", label: "Aulas", to: "/pedagogico/turmas/$id/aulas" as const },
   { key: "frequencia", label: "Frequência", to: "/pedagogico/turmas/$id/frequencia" as const },
   { key: "cursistas", label: "Cursistas", to: "/pedagogico/turmas/$id/cursistas" as const },
+  { key: "certificados", label: "Certificados", to: "/pedagogico/turmas/$id/certificados" as const },
 ];
 
 function TurmaLayout() {

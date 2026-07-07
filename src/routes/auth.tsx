@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { PMQLogo } from "@/components/pmq-logo";
 
 const PROJETO_ID = "d91d2e5a-3d0b-4539-915c-5db6c95dd302";
 
@@ -48,8 +49,8 @@ function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <Card className="w-full max-w-sm border-border/60 shadow-sm">
         <CardHeader className="space-y-1">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground font-semibold">
-            MC
+          <div className="mb-3 flex items-center justify-center">
+            <PMQLogo height={44} fallbackClassName="text-base font-semibold text-primary" />
           </div>
           <CardTitle className="text-xl">Painel Mulheres Conectadas</CardTitle>
           <p className="text-sm text-muted-foreground">

@@ -34,6 +34,7 @@ import { Route as AuthenticatedRelatoriosPedagogicoRouteImport } from './routes/
 import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './routes/_authenticated/relatorios.orcamentario'
 import { Route as AuthenticatedRelatoriosMteRouteImport } from './routes/_authenticated/relatorios.mte'
 import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
+import { Route as AuthenticatedRelatoriosIndicadoresRouteImport } from './routes/_authenticated/relatorios.indicadores'
 import { Route as AuthenticatedRelatoriosFrequenciaRouteImport } from './routes/_authenticated/relatorios.frequencia'
 import { Route as AuthenticatedMteTurmasRouteImport } from './routes/_authenticated/mte.turmas'
 import { Route as AuthenticatedMtePresencasRouteImport } from './routes/_authenticated/mte.presencas'
@@ -44,6 +45,7 @@ import { Route as AuthenticatedMteCronogramaRouteImport } from './routes/_authen
 import { Route as AuthenticatedMteChecklistRouteImport } from './routes/_authenticated/mte.checklist'
 import { Route as AuthenticatedMteBeneficiariasRouteImport } from './routes/_authenticated/mte.beneficiarias'
 import { Route as AuthenticatedMteAulasRouteImport } from './routes/_authenticated/mte.aulas'
+import { Route as AuthenticatedFinanceiroRubricasRouteImport } from './routes/_authenticated/financeiro.rubricas'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -58,6 +60,7 @@ import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_a
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
 import { Route as AuthenticatedPedagogicoTurmasIdFrequenciaRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.frequencia'
 import { Route as AuthenticatedPedagogicoTurmasIdCursistasRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.cursistas'
+import { Route as AuthenticatedPedagogicoTurmasIdCertificadosRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.certificados'
 import { Route as AuthenticatedPedagogicoTurmasIdAulasRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.aulas'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -197,6 +200,12 @@ const AuthenticatedRelatoriosMetasRoute =
     path: '/metas',
     getParentRoute: () => AuthenticatedRelatoriosRoute,
   } as any)
+const AuthenticatedRelatoriosIndicadoresRoute =
+  AuthenticatedRelatoriosIndicadoresRouteImport.update({
+    id: '/indicadores',
+    path: '/indicadores',
+    getParentRoute: () => AuthenticatedRelatoriosRoute,
+  } as any)
 const AuthenticatedRelatoriosFrequenciaRoute =
   AuthenticatedRelatoriosFrequenciaRouteImport.update({
     id: '/frequencia',
@@ -255,6 +264,12 @@ const AuthenticatedMteAulasRoute = AuthenticatedMteAulasRouteImport.update({
   path: '/aulas',
   getParentRoute: () => AuthenticatedMteRoute,
 } as any)
+const AuthenticatedFinanceiroRubricasRoute =
+  AuthenticatedFinanceiroRubricasRouteImport.update({
+    id: '/rubricas',
+    path: '/rubricas',
+    getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -339,6 +354,12 @@ const AuthenticatedPedagogicoTurmasIdCursistasRoute =
     path: '/cursistas',
     getParentRoute: () => AuthenticatedPedagogicoTurmasIdRoute,
   } as any)
+const AuthenticatedPedagogicoTurmasIdCertificadosRoute =
+  AuthenticatedPedagogicoTurmasIdCertificadosRouteImport.update({
+    id: '/certificados',
+    path: '/certificados',
+    getParentRoute: () => AuthenticatedPedagogicoTurmasIdRoute,
+  } as any)
 const AuthenticatedPedagogicoTurmasIdAulasRoute =
   AuthenticatedPedagogicoTurmasIdAulasRouteImport.update({
     id: '/aulas',
@@ -371,6 +392,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/mte/checklist': typeof AuthenticatedMteChecklistRoute
@@ -381,6 +403,7 @@ export interface FileRoutesByFullPath {
   '/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/relatorios/indicadores': typeof AuthenticatedRelatoriosIndicadoresRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -393,6 +416,7 @@ export interface FileRoutesByFullPath {
   '/relatorios/': typeof AuthenticatedRelatoriosIndexRoute
   '/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdRouteWithChildren
   '/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  '/pedagogico/turmas/$id/certificados': typeof AuthenticatedPedagogicoTurmasIdCertificadosRoute
   '/pedagogico/turmas/$id/cursistas': typeof AuthenticatedPedagogicoTurmasIdCursistasRoute
   '/pedagogico/turmas/$id/frequencia': typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   '/pedagogico/turmas/$id/': typeof AuthenticatedPedagogicoTurmasIdIndexRoute
@@ -416,6 +440,7 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/mte/checklist': typeof AuthenticatedMteChecklistRoute
@@ -426,6 +451,7 @@ export interface FileRoutesByTo {
   '/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/relatorios/indicadores': typeof AuthenticatedRelatoriosIndicadoresRoute
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -437,6 +463,7 @@ export interface FileRoutesByTo {
   '/pedagogico': typeof AuthenticatedPedagogicoIndexRoute
   '/relatorios': typeof AuthenticatedRelatoriosIndexRoute
   '/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  '/pedagogico/turmas/$id/certificados': typeof AuthenticatedPedagogicoTurmasIdCertificadosRoute
   '/pedagogico/turmas/$id/cursistas': typeof AuthenticatedPedagogicoTurmasIdCursistasRoute
   '/pedagogico/turmas/$id/frequencia': typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   '/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdIndexRoute
@@ -468,6 +495,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/_authenticated/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/_authenticated/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/_authenticated/mte/beneficiarias': typeof AuthenticatedMteBeneficiariasRoute
   '/_authenticated/mte/checklist': typeof AuthenticatedMteChecklistRoute
@@ -478,6 +506,7 @@ export interface FileRoutesById {
   '/_authenticated/mte/presencas': typeof AuthenticatedMtePresencasRoute
   '/_authenticated/mte/turmas': typeof AuthenticatedMteTurmasRoute
   '/_authenticated/relatorios/frequencia': typeof AuthenticatedRelatoriosFrequenciaRoute
+  '/_authenticated/relatorios/indicadores': typeof AuthenticatedRelatoriosIndicadoresRoute
   '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/_authenticated/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/_authenticated/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -490,6 +519,7 @@ export interface FileRoutesById {
   '/_authenticated/relatorios/': typeof AuthenticatedRelatoriosIndexRoute
   '/_authenticated/pedagogico/turmas/$id': typeof AuthenticatedPedagogicoTurmasIdRouteWithChildren
   '/_authenticated/pedagogico/turmas/$id/aulas': typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  '/_authenticated/pedagogico/turmas/$id/certificados': typeof AuthenticatedPedagogicoTurmasIdCertificadosRoute
   '/_authenticated/pedagogico/turmas/$id/cursistas': typeof AuthenticatedPedagogicoTurmasIdCursistasRoute
   '/_authenticated/pedagogico/turmas/$id/frequencia': typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   '/_authenticated/pedagogico/turmas/$id/': typeof AuthenticatedPedagogicoTurmasIdIndexRoute
@@ -521,6 +551,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/financeiro/rubricas'
     | '/mte/aulas'
     | '/mte/beneficiarias'
     | '/mte/checklist'
@@ -531,6 +562,7 @@ export interface FileRouteTypes {
     | '/mte/presencas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
+    | '/relatorios/indicadores'
     | '/relatorios/metas'
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
@@ -543,6 +575,7 @@ export interface FileRouteTypes {
     | '/relatorios/'
     | '/pedagogico/turmas/$id'
     | '/pedagogico/turmas/$id/aulas'
+    | '/pedagogico/turmas/$id/certificados'
     | '/pedagogico/turmas/$id/cursistas'
     | '/pedagogico/turmas/$id/frequencia'
     | '/pedagogico/turmas/$id/'
@@ -566,6 +599,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/financeiro/rubricas'
     | '/mte/aulas'
     | '/mte/beneficiarias'
     | '/mte/checklist'
@@ -576,6 +610,7 @@ export interface FileRouteTypes {
     | '/mte/presencas'
     | '/mte/turmas'
     | '/relatorios/frequencia'
+    | '/relatorios/indicadores'
     | '/relatorios/metas'
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
@@ -587,6 +622,7 @@ export interface FileRouteTypes {
     | '/pedagogico'
     | '/relatorios'
     | '/pedagogico/turmas/$id/aulas'
+    | '/pedagogico/turmas/$id/certificados'
     | '/pedagogico/turmas/$id/cursistas'
     | '/pedagogico/turmas/$id/frequencia'
     | '/pedagogico/turmas/$id'
@@ -617,6 +653,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
+    | '/_authenticated/financeiro/rubricas'
     | '/_authenticated/mte/aulas'
     | '/_authenticated/mte/beneficiarias'
     | '/_authenticated/mte/checklist'
@@ -627,6 +664,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mte/presencas'
     | '/_authenticated/mte/turmas'
     | '/_authenticated/relatorios/frequencia'
+    | '/_authenticated/relatorios/indicadores'
     | '/_authenticated/relatorios/metas'
     | '/_authenticated/relatorios/mte'
     | '/_authenticated/relatorios/orcamentario'
@@ -639,6 +677,7 @@ export interface FileRouteTypes {
     | '/_authenticated/relatorios/'
     | '/_authenticated/pedagogico/turmas/$id'
     | '/_authenticated/pedagogico/turmas/$id/aulas'
+    | '/_authenticated/pedagogico/turmas/$id/certificados'
     | '/_authenticated/pedagogico/turmas/$id/cursistas'
     | '/_authenticated/pedagogico/turmas/$id/frequencia'
     | '/_authenticated/pedagogico/turmas/$id/'
@@ -827,6 +866,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRelatoriosMetasRouteImport
       parentRoute: typeof AuthenticatedRelatoriosRoute
     }
+    '/_authenticated/relatorios/indicadores': {
+      id: '/_authenticated/relatorios/indicadores'
+      path: '/indicadores'
+      fullPath: '/relatorios/indicadores'
+      preLoaderRoute: typeof AuthenticatedRelatoriosIndicadoresRouteImport
+      parentRoute: typeof AuthenticatedRelatoriosRoute
+    }
     '/_authenticated/relatorios/frequencia': {
       id: '/_authenticated/relatorios/frequencia'
       path: '/frequencia'
@@ -896,6 +942,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/mte/aulas'
       preLoaderRoute: typeof AuthenticatedMteAulasRouteImport
       parentRoute: typeof AuthenticatedMteRoute
+    }
+    '/_authenticated/financeiro/rubricas': {
+      id: '/_authenticated/financeiro/rubricas'
+      path: '/rubricas'
+      fullPath: '/financeiro/rubricas'
+      preLoaderRoute: typeof AuthenticatedFinanceiroRubricasRouteImport
+      parentRoute: typeof AuthenticatedFinanceiroRoute
     }
     '/_authenticated/financeiro/orcamento': {
       id: '/_authenticated/financeiro/orcamento'
@@ -995,6 +1048,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPedagogicoTurmasIdCursistasRouteImport
       parentRoute: typeof AuthenticatedPedagogicoTurmasIdRoute
     }
+    '/_authenticated/pedagogico/turmas/$id/certificados': {
+      id: '/_authenticated/pedagogico/turmas/$id/certificados'
+      path: '/certificados'
+      fullPath: '/pedagogico/turmas/$id/certificados'
+      preLoaderRoute: typeof AuthenticatedPedagogicoTurmasIdCertificadosRouteImport
+      parentRoute: typeof AuthenticatedPedagogicoTurmasIdRoute
+    }
     '/_authenticated/pedagogico/turmas/$id/aulas': {
       id: '/_authenticated/pedagogico/turmas/$id/aulas'
       path: '/aulas'
@@ -1058,6 +1118,7 @@ interface AuthenticatedFinanceiroRouteChildren {
   AuthenticatedFinanceiroDespesasRoute: typeof AuthenticatedFinanceiroDespesasRoute
   AuthenticatedFinanceiroFornecedoresRoute: typeof AuthenticatedFinanceiroFornecedoresRoute
   AuthenticatedFinanceiroOrcamentoRoute: typeof AuthenticatedFinanceiroOrcamentoRoute
+  AuthenticatedFinanceiroRubricasRoute: typeof AuthenticatedFinanceiroRubricasRoute
   AuthenticatedFinanceiroIndexRoute: typeof AuthenticatedFinanceiroIndexRoute
 }
 
@@ -1068,6 +1129,7 @@ const AuthenticatedFinanceiroRouteChildren: AuthenticatedFinanceiroRouteChildren
       AuthenticatedFinanceiroFornecedoresRoute,
     AuthenticatedFinanceiroOrcamentoRoute:
       AuthenticatedFinanceiroOrcamentoRoute,
+    AuthenticatedFinanceiroRubricasRoute: AuthenticatedFinanceiroRubricasRoute,
     AuthenticatedFinanceiroIndexRoute: AuthenticatedFinanceiroIndexRoute,
   }
 
@@ -1107,6 +1169,7 @@ const AuthenticatedMteRouteWithChildren =
 
 interface AuthenticatedPedagogicoTurmasIdRouteChildren {
   AuthenticatedPedagogicoTurmasIdAulasRoute: typeof AuthenticatedPedagogicoTurmasIdAulasRoute
+  AuthenticatedPedagogicoTurmasIdCertificadosRoute: typeof AuthenticatedPedagogicoTurmasIdCertificadosRoute
   AuthenticatedPedagogicoTurmasIdCursistasRoute: typeof AuthenticatedPedagogicoTurmasIdCursistasRoute
   AuthenticatedPedagogicoTurmasIdFrequenciaRoute: typeof AuthenticatedPedagogicoTurmasIdFrequenciaRoute
   AuthenticatedPedagogicoTurmasIdIndexRoute: typeof AuthenticatedPedagogicoTurmasIdIndexRoute
@@ -1116,6 +1179,8 @@ const AuthenticatedPedagogicoTurmasIdRouteChildren: AuthenticatedPedagogicoTurma
   {
     AuthenticatedPedagogicoTurmasIdAulasRoute:
       AuthenticatedPedagogicoTurmasIdAulasRoute,
+    AuthenticatedPedagogicoTurmasIdCertificadosRoute:
+      AuthenticatedPedagogicoTurmasIdCertificadosRoute,
     AuthenticatedPedagogicoTurmasIdCursistasRoute:
       AuthenticatedPedagogicoTurmasIdCursistasRoute,
     AuthenticatedPedagogicoTurmasIdFrequenciaRoute:
@@ -1148,6 +1213,7 @@ const AuthenticatedPedagogicoRouteWithChildren =
 
 interface AuthenticatedRelatoriosRouteChildren {
   AuthenticatedRelatoriosFrequenciaRoute: typeof AuthenticatedRelatoriosFrequenciaRoute
+  AuthenticatedRelatoriosIndicadoresRoute: typeof AuthenticatedRelatoriosIndicadoresRoute
   AuthenticatedRelatoriosMetasRoute: typeof AuthenticatedRelatoriosMetasRoute
   AuthenticatedRelatoriosMteRoute: typeof AuthenticatedRelatoriosMteRoute
   AuthenticatedRelatoriosOrcamentarioRoute: typeof AuthenticatedRelatoriosOrcamentarioRoute
@@ -1159,6 +1225,8 @@ const AuthenticatedRelatoriosRouteChildren: AuthenticatedRelatoriosRouteChildren
   {
     AuthenticatedRelatoriosFrequenciaRoute:
       AuthenticatedRelatoriosFrequenciaRoute,
+    AuthenticatedRelatoriosIndicadoresRoute:
+      AuthenticatedRelatoriosIndicadoresRoute,
     AuthenticatedRelatoriosMetasRoute: AuthenticatedRelatoriosMetasRoute,
     AuthenticatedRelatoriosMteRoute: AuthenticatedRelatoriosMteRoute,
     AuthenticatedRelatoriosOrcamentarioRoute:

@@ -42,6 +42,7 @@ function FinanceiroLayout() {
     { to: "/financeiro/orcamento", label: "Orçamento" },
     { to: "/financeiro/despesas", label: "Despesas" },
     { to: "/financeiro/fornecedores", label: "Fornecedores" },
+    { to: "/financeiro/rubricas", label: "Rubricas" },
   ];
 
   return (
