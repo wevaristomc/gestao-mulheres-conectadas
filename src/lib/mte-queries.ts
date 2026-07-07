@@ -53,6 +53,9 @@ export type Beneficiaria = {
   nis: string | null;
   beneficiaria_programa_social: boolean | null;
   qual_programa_social: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
   created_at?: string;
 };
 
@@ -66,6 +69,8 @@ export type Matricula = {
   motivo_evasao: string | null;
   ficha_inscricao_url: string | null;
   frequencia_percentual: number | null;
+  assinou_lista?: boolean | null;
+  observacao_importacao?: string | null;
   created_at?: string;
 };
 
