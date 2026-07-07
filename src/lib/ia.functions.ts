@@ -28,11 +28,17 @@ async function chamarOpenAICompat(params: {
   temperatura: number;
 }): Promise<CallResult> {
   const url = `${params.base_url.replace(/\/+$/, "")}/chat/completions`;
+  const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
+  if (!apiKey) {
+    throw new Error(
+      `API Key ausente para ${params.base_url}. Configure a chave em Configurações > IA.`,
+    );
+  }
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${params.api_key}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: params.modelo,
