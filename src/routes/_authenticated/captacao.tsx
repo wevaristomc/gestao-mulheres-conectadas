@@ -200,6 +200,8 @@ function CaptacaoPage() {
           />
         ) : null}
       </Dialog>
+        </>
+      )}
     </div>
   );
 }
