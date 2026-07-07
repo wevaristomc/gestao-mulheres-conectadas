@@ -102,7 +102,8 @@ function RelatoriosMte() {
         toast.error(`View ${def.view} indisponível: ${res.error}`);
         return;
       }
-      exportarXLSX(res.rows, def.arquivo, def.titulo, def.cabecalhoDuplo);
+      const rows = JSON.parse(res.rowsJson || "[]") as Record<string, unknown>[];
+      exportarXLSX(rows, def.arquivo, def.titulo, def.cabecalhoDuplo);
       toast.success(`Relatório "${def.titulo}" exportado.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
