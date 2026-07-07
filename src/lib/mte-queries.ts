@@ -261,6 +261,8 @@ export async function upsertMatricula(input: Partial<Matricula> & { id?: string 
         ? (input.motivo_evasao ?? null)
         : null,
     ficha_inscricao_url: input.ficha_inscricao_url ?? null,
+    assinou_lista: input.assinou_lista ?? false,
+    observacao_importacao: input.observacao_importacao ?? null,
   };
   if (input.id) {
     const { error } = await supabase.from("matriculas").update(payload).eq("id", input.id);
