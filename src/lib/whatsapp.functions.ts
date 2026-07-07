@@ -76,7 +76,7 @@ export const registrarImportacao = createServerFn({ method: "POST" })
       .from("wa_importacoes")
       .insert({
         grupo_id: data.grupo_id,
-        arquivo_zip_path: data.arquivo_zip_path,
+        arquivo_zip_path: data.arquivo_zip_path ?? "",
         arquivo_zip_nome: data.arquivo_nome,
         periodo_inicio: data.periodo_inicio,
         periodo_fim: data.periodo_fim,
