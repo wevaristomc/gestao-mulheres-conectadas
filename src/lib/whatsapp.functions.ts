@@ -297,9 +297,9 @@ export const transcreverAudios = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => TranscreverInput.parse(v))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("LOVABLE_API_KEY não configurada");
     const sb = context.supabase;
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
 
     const { data: msgs, error } = await sb
       .from("wa_mensagens")
@@ -329,27 +329,23 @@ export const transcreverAudios = createServerFn({ method: "POST" })
         const contentType = guessContentType(nome);
         const file = new File([bytes], nome, { type: contentType });
 
-        const fd = new FormData();
-        fd.append("model", "openai/gpt-4o-mini-transcribe");
-        fd.append("file", file, nome);
-
-        const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${key}` },
-          body: fd,
+        const r = await executarTranscricaoRouter({
+          admin,
+          processo: "transcricao_audio",
+          file,
+          filename: nome,
+          contentType,
         });
-        if (!res.ok) throw new Error(`gateway ${res.status}: ${(await res.text()).slice(0, 200)}`);
-        const json = (await res.json()) as { text?: string; usage?: { input_tokens?: number; output_tokens?: number } };
-        const texto = (json.text ?? "").trim();
+        const texto = r.text;
 
         await sb.from("wa_midias_analise").upsert(
           {
             mensagem_id: m.id,
             tipo_analise: "transcricao",
             transcricao: texto || null,
-            modelo: "openai/gpt-4o-mini-transcribe",
-            tokens_in: json.usage?.input_tokens ?? null,
-            tokens_out: json.usage?.output_tokens ?? null,
+            modelo: `${r.provedor}/${r.modelo}`,
+            tokens_in: null,
+            tokens_out: null,
             erro: null,
           },
           { onConflict: "mensagem_id,tipo_analise" },
