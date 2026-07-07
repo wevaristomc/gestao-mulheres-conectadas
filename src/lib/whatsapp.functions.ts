@@ -35,6 +35,99 @@ export const criarGrupo = createServerFn({ method: "POST" })
     return { grupo: row };
   });
 
+// ---------- Registro de importação já processada no browser ----------
+
+const MensagemPreparadaSchema = z.object({
+  timestamp: z.string(),
+  remetente_nome: z.string().nullable(),
+  remetente_fone_e164: z.string().nullable(),
+  tipo: z.enum(["texto", "audio", "imagem", "video", "doc", "sistema"]),
+  conteudo_texto: z.string().nullable(),
+  midia_nome: z.string().nullable(),
+  midia_path: z.string().nullable(),
+});
+
+const RegistrarImportacaoInput = z.object({
+  grupo_id: z.string().uuid(),
+  arquivo_nome: z.string().min(1),
+  arquivo_zip_path: z.string().nullable(),
+  periodo_inicio: z.string().nullable(),
+  periodo_fim: z.string().nullable(),
+  total_audios: z.number().int().nonnegative(),
+  total_imagens: z.number().int().nonnegative(),
+  total_videos: z.number().int().nonnegative(),
+  total_remetentes: z.number().int().nonnegative(),
+  midias_puladas: z.number().int().nonnegative(),
+  mensagens: z.array(MensagemPreparadaSchema).max(200000),
+});
+
+/**
+ * Registra uma importação já descompactada e com mídias upadas pelo
+ * navegador (ver `src/lib/whatsapp-zip-client.ts`). O servidor só faz
+ * inserts em lote — sem JSZip, sem download do zip, sem gargalo de RAM.
+ */
+export const registrarImportacao = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v: unknown) => RegistrarImportacaoInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const sb = context.supabase;
+
+    const { data: imp, error: impErr } = await sb
+      .from("wa_importacoes")
+      .insert({
+        grupo_id: data.grupo_id,
+        arquivo_zip_path: data.arquivo_zip_path,
+        arquivo_zip_nome: data.arquivo_nome,
+        periodo_inicio: data.periodo_inicio,
+        periodo_fim: data.periodo_fim,
+        status: "processando",
+        created_by: context.userId,
+      })
+      .select("*")
+      .single();
+    if (impErr || !imp) throw new Error(`Falha ao criar importação: ${impErr?.message ?? "?"}`);
+    const importacaoId = imp.id as string;
+
+    for (let i = 0; i < data.mensagens.length; i += 500) {
+      const chunk = data.mensagens.slice(i, i + 500).map((r) => ({
+        timestamp: r.timestamp,
+        remetente_nome: r.remetente_nome,
+        remetente_fone_e164: r.remetente_fone_e164,
+        tipo: r.tipo,
+        conteudo_texto: r.conteudo_texto,
+        midia_nome: r.midia_nome,
+        midia_path: r.midia_path,
+        importacao_id: importacaoId,
+        grupo_id: data.grupo_id,
+      }));
+      const { error } = await sb.from("wa_mensagens").insert(chunk);
+      if (error) throw new Error(`Falha ao inserir mensagens: ${error.message}`);
+    }
+
+    await sb
+      .from("wa_importacoes")
+      .update({
+        status: "concluido",
+        total_mensagens: data.mensagens.length,
+        total_audios: data.total_audios,
+        total_imagens: data.total_imagens,
+        total_videos: data.total_videos,
+        total_remetentes: data.total_remetentes,
+      })
+      .eq("id", importacaoId);
+
+    return {
+      importacao_id: importacaoId,
+      total_mensagens: data.mensagens.length,
+      total_audios: data.total_audios,
+      total_imagens: data.total_imagens,
+      total_videos: data.total_videos,
+      total_remetentes: data.total_remetentes,
+      midias_puladas: data.midias_puladas,
+      arquivo_zip_path: data.arquivo_zip_path,
+    };
+  });
+
 // ---------- Importação: processa o zip já upado no bucket ----------
 
 const ProcessarZipInput = z.object({
