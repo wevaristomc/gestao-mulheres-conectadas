@@ -363,9 +363,24 @@ export const testarProvedor = createServerFn({ method: "POST" })
     if (!modelo) throw new Error("Provedor sem modelo padrão. Defina um antes de testar.");
     const tipo = selecionarChamador(String(prov.provedor), prov.base_url);
     const base = { base_url: prov.base_url, api_key: prov.api_key, modelo, mensagens: [{ role: "user" as const, content: "Responda apenas: OK" }], max_tokens: 20, temperatura: 0 };
-    const r = tipo === "gemini" ? await chamarGemini(base)
-      : tipo === "anthropic" ? await chamarAnthropic(base)
-      : await chamarOpenAICompat(base);
+    let r: CallResult;
+    try {
+      r = tipo === "gemini" ? await chamarGemini(base)
+        : tipo === "anthropic" ? await chamarAnthropic(base)
+        : await chamarOpenAICompat(base);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await admin.from("ia_logs_uso").insert({
+        processo: "teste_conexao",
+        provedor: prov.provedor,
+        modelo,
+        tokens_entrada: 0,
+        tokens_saida: 0,
+        sucesso: false,
+        erro: msg.slice(0, 500),
+      });
+      return { ok: false, erro: msg, modelo, tokens: 0 };
+    }
     await admin.from("ia_logs_uso").insert({
       processo: "teste_conexao",
       provedor: prov.provedor,
