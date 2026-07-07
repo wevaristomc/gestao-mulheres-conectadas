@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BuscadorEditais } from "@/components/captacao/buscador-editais";
+import { cn } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -59,6 +61,7 @@ function CaptacaoPage() {
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"pipeline" | "buscador">("pipeline");
 
   const porEtapa = useMemo(() => {
     const map = new Map<string, Row[]>();
