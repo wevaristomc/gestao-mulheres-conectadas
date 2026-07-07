@@ -1,19 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL =
-  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
-  "https://yqvocpnvunaprpmhlswn.supabase.co";
+// Hardcoded no projeto real. O Lovable Cloud regrava o .env para o projeto
+// gerenciado a cada build, então ignoramos import.meta.env para URL/chave.
+const SUPABASE_URL = "https://yqvocpnvunaprpmhlswn.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ??
-  "";
-
-if (!SUPABASE_PUBLISHABLE_KEY) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    "[supabase] VITE_SUPABASE_ANON_KEY/PUBLISHABLE_KEY ausente — chamadas ao backend falharão até a chave ser preenchida no .env.",
-  );
-}
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdm9jcG52dW5hcHJwbWhsc3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NDk4MDIsImV4cCI6MjA5ODIyNTgwMn0.L8FQRfI2M7RAGdTPsyNvHWXEWqmywtfHKP-65eyljwE";
 
 export const supabase = createClient(
   SUPABASE_URL,
