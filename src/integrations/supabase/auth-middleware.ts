@@ -23,9 +23,13 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     }
     const token = authHeader.slice("Bearer ".length);
 
-    const url = process.env.SUPABASE_URL ?? "https://yqvocpnvunaprpmhlswn.supabase.co";
+    // Projeto correto hardcoded: o secret gerenciado SUPABASE_URL aponta para
+    // o projeto Lovable Cloud padrão, não para o projeto real. Priorizamos os
+    // valores fixos abaixo. A anon key é pública (JWT role: anon), sem risco
+    // de vazamento.
+    const url = "https://yqvocpnvunaprpmhlswn.supabase.co";
     const key =
-      process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdm9jcG52dW5hcHJwbWhsc3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NDk4MDIsImV4cCI6MjA5ODIyNTgwMn0.L8FQRfI2M7RAGdTPsyNvHWXEWqmywtfHKP-65eyljwE";
 
     const supabase = createClient(url, key, {
       global: { headers: { Authorization: `Bearer ${token}` } },
