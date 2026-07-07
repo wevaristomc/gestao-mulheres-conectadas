@@ -132,10 +132,11 @@ async function chamarAnthropic(params: {
   };
 }
 
-function selecionarChamador(codigo: string) {
-  const c = codigo.toLowerCase();
-  if (c.includes("gemini")) return "gemini";
-  if (c.includes("anthropic") || c.includes("claude")) return "anthropic";
+function selecionarChamador(codigo: string, baseUrl?: string | null) {
+  const c = (codigo || "").toLowerCase();
+  const b = (baseUrl || "").toLowerCase();
+  if (c.includes("gemini") || c.includes("google") || b.includes("generativelanguage") || b.includes("googleapis")) return "gemini";
+  if (c.includes("anthropic") || c.includes("claude") || b.includes("anthropic")) return "anthropic";
   return "openai_compat"; // openrouter, groq, openai, e outros
 }
 
