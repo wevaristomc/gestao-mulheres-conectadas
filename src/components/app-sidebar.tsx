@@ -11,6 +11,7 @@ import {
   HardDrive,
   Settings,
   ShieldCheck,
+  MessageCircle,
 } from "lucide-react";
 
 import {
@@ -49,6 +50,7 @@ const MODULOS: Item[] = [
   { key: "financeiro", title: "Financeiro", url: "/financeiro", icon: Wallet },
   { key: "captacao", title: "Captação", url: "/captacao", icon: Sprout },
   { key: "relatorios", title: "Relatórios", url: "/relatorios", icon: BarChart3 },
+  { key: "whatsapp", title: "WhatsApp", url: "/whatsapp", icon: MessageCircle },
 ];
 
 const APOIO: Item[] = [
