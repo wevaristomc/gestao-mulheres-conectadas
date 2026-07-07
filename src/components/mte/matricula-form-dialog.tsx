@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -35,6 +36,8 @@ export function MatriculaFormDialog({ open, onOpenChange, turmaId, matricula }: 
   const [motivoEvasao, setMotivoEvasao] = useState<string>("");
   const [busca, setBusca] = useState<string>("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [assinouLista, setAssinouLista] = useState<boolean>(false);
+  const [observacao, setObservacao] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +48,8 @@ export function MatriculaFormDialog({ open, onOpenChange, turmaId, matricula }: 
     setMotivoEvasao(matricula?.motivo_evasao ?? "");
     setBusca("");
     setPendingFile(null);
+    setAssinouLista(!!matricula?.assinou_lista);
+    setObservacao(matricula?.observacao_importacao ?? "");
   }, [open, matricula]);
 
   const bq = useQuery(beneficiariasListOptions(busca));
@@ -61,6 +66,8 @@ export function MatriculaFormDialog({ open, onOpenChange, turmaId, matricula }: 
         data_conclusao: status === "concluinte" ? dataConclusao || null : null,
         motivo_evasao:
           status === "evadida" || status === "desistente" ? motivoEvasao || null : null,
+        assinou_lista: assinouLista,
+        observacao_importacao: observacao.trim() || null,
       });
       if (pendingFile) await uploadFichaInscricao(id, pendingFile);
       return id;
@@ -142,6 +149,19 @@ export function MatriculaFormDialog({ open, onOpenChange, turmaId, matricula }: 
               <Textarea rows={2} value={motivoEvasao} onChange={(e) => setMotivoEvasao(e.target.value)} />
             </div>
           ) : null}
+
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div>
+              <Label className="text-sm">Assinou a lista</Label>
+              <p className="text-xs text-muted-foreground">Marque se a aluna assinou a lista.</p>
+            </div>
+            <Switch checked={assinouLista} onCheckedChange={setAssinouLista} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Observação (importação)</Label>
+            <Textarea rows={2} value={observacao} onChange={(e) => setObservacao(e.target.value)} />
+          </div>
 
           <div className="grid gap-1.5">
             <Label className="text-xs">Ficha de inscrição (PDF)</Label>

@@ -53,6 +53,9 @@ export type Beneficiaria = {
   nis: string | null;
   beneficiaria_programa_social: boolean | null;
   qual_programa_social: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
   created_at?: string;
 };
 
@@ -66,6 +69,8 @@ export type Matricula = {
   motivo_evasao: string | null;
   ficha_inscricao_url: string | null;
   frequencia_percentual: number | null;
+  assinou_lista?: boolean | null;
+  observacao_importacao?: string | null;
   created_at?: string;
 };
 
@@ -191,6 +196,9 @@ export async function upsertBeneficiaria(input: Partial<Beneficiaria> & { id?: s
     qual_programa_social: input.beneficiaria_programa_social
       ? (input.qual_programa_social ?? null)
       : null,
+    banco: input.banco ?? null,
+    agencia: input.agencia ?? null,
+    conta: input.conta ?? null,
   };
   if (input.id) {
     const { error } = await supabase.from("beneficiarias").update(payload).eq("id", input.id);
@@ -253,6 +261,8 @@ export async function upsertMatricula(input: Partial<Matricula> & { id?: string 
         ? (input.motivo_evasao ?? null)
         : null,
     ficha_inscricao_url: input.ficha_inscricao_url ?? null,
+    assinou_lista: input.assinou_lista ?? false,
+    observacao_importacao: input.observacao_importacao ?? null,
   };
   if (input.id) {
     const { error } = await supabase.from("matriculas").update(payload).eq("id", input.id);
@@ -477,4 +487,81 @@ export async function uploadEvidencia(input: {
 export async function deleteEvidencia(id: string) {
   const { error } = await supabase.from("evidencias").delete().eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// ============ Importador em lote (CSV Turma + Alunas) ============
+
+/** Retorna o id da turma existente por código (uppercase, sem espaços) ou null. */
+export async function findTurmaPorCodigo(codigo: string): Promise<string | null> {
+  const cod = codigo.toUpperCase().trim();
+  const { data, error } = await supabase
+    .from("turmas")
+    .select("id, codigo_turma")
+    .ilike("codigo_turma", cod)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data?.[0] as { id: string } | undefined)?.id ?? null;
+}
+
+/** Cria (ou reaproveita) turma mínima por código; devolve o id. */
+export async function ensureTurmaMinima(input: {
+  codigo_turma: string;
+  turno: string | null;
+  municipio: string | null;
+}): Promise<string> {
+  const existente = await findTurmaPorCodigo(input.codigo_turma);
+  if (existente) return existente;
+  const { data, error } = await supabase
+    .from("turmas")
+    .insert({
+      codigo_turma: input.codigo_turma.toUpperCase().trim(),
+      turno: input.turno,
+      municipio: input.municipio,
+      executora: "QUINTA ARTE",
+      vagas: 50,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+/** Upsert em lote de matrículas por (turma_id, beneficiaria_id). */
+export async function upsertMatriculasBulk(
+  rows: {
+    turma_id: string;
+    beneficiaria_id: string;
+    status?: string;
+    assinou_lista?: boolean;
+    observacao_importacao?: string | null;
+  }[],
+): Promise<{ upserted: number }> {
+  if (!rows.length) return { upserted: 0 };
+  const payload = rows.map((r) => ({
+    turma_id: r.turma_id,
+    beneficiaria_id: r.beneficiaria_id,
+    status: r.status ?? "inscrita",
+    data_inscricao: new Date().toISOString().slice(0, 10),
+    assinou_lista: r.assinou_lista ?? false,
+    observacao_importacao: r.observacao_importacao ?? null,
+  }));
+  const { data, error } = await supabase
+    .from("matriculas")
+    .upsert(payload, { onConflict: "turma_id,beneficiaria_id", ignoreDuplicates: false })
+    .select("id");
+  if (error) throw new Error(error.message);
+  return { upserted: (data ?? []).length };
+}
+
+/** Busca beneficiárias por lote de CPFs. */
+export async function beneficiariasByCpfs(cpfs: string[]): Promise<Record<string, string>> {
+  if (!cpfs.length) return {};
+  const { data, error } = await supabase
+    .from("beneficiarias")
+    .select("id, cpf")
+    .in("cpf", cpfs);
+  if (error) throw new Error(error.message);
+  const map: Record<string, string> = {};
+  for (const r of (data ?? []) as { id: string; cpf: string }[]) map[r.cpf] = r.id;
+  return map;
 }

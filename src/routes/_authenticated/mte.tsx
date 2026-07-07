@@ -16,6 +16,7 @@ const TABS = [
   { key: "importar-lista", label: "Importar Lista (PDF)", to: "/mte/importar-lista" as const },
   { key: "evidencias", label: "Evidências", to: "/mte/evidencias" as const },
   { key: "cronograma", label: "Cronograma", to: "/mte/cronograma" as const },
+  { key: "ava", label: "AVA (Moodle)", to: "/mte/ava" as const },
   { key: "checklist", label: "Checklist Fiscalização", to: "/mte/checklist" as const },
 ];
 

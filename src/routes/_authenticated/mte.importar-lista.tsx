@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/table";
 import { turmasMteListOptions } from "@/lib/mte-queries";
 import { lerListaPresenca } from "@/lib/ia.functions";
+import { ImportarTurmaCsvCard } from "@/components/mte/importar-turma-csv-card";
+import { ImportarMoodleCard } from "@/components/mte/importar-moodle-card";
 import {
   arquivoParaImagensBase64,
   carregarMatriculasDaTurma,
@@ -148,6 +150,9 @@ function ImportarListaPage() {
         title="Importar Documento (PDF)"
         description="Selecione o tipo de documento — a IA extrai os dados, você confere e grava."
       />
+
+      <ImportarTurmaCsvCard />
+      <ImportarMoodleCard />
 
       <div className="rounded-md border p-4 space-y-2">
         <Label className="text-xs uppercase text-muted-foreground">Tipo de documento</Label>

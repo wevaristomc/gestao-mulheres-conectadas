@@ -31,6 +31,7 @@ const empty: Partial<Beneficiaria> = {
   pcd: false, tipo_deficiencia: "", telefone: "", email: "", endereco: "",
   municipio: "", nis: "",
   beneficiaria_programa_social: false, qual_programa_social: "",
+  banco: "", agencia: "", conta: "",
 };
 
 export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Props) {
@@ -128,6 +129,15 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
             </Field>
             <Field label="NIS">
               <Input value={form.nis ?? ""} onChange={(e) => set("nis", e.target.value)} />
+            </Field>
+            <Field label="Banco">
+              <Input value={form.banco ?? ""} onChange={(e) => set("banco", e.target.value)} placeholder="Ex.: Caixa, Nu, Itaú" />
+            </Field>
+            <Field label="Agência">
+              <Input value={form.agencia ?? ""} onChange={(e) => set("agencia", e.target.value)} />
+            </Field>
+            <Field label="Conta">
+              <Input value={form.conta ?? ""} onChange={(e) => set("conta", e.target.value)} />
             </Field>
           </div>
           <Field label="Endereço" full>
