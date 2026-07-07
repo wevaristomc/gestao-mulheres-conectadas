@@ -199,13 +199,13 @@ function UsuariosPage() {
               <TableBody>
                 {totalUsuarios === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                       Nenhum usuário cadastrado neste projeto.
                     </TableCell>
                   </TableRow>
                 ) : usuariosFiltrados.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                       Nenhum usuário encontrado com os filtros aplicados.
                     </TableCell>
                   </TableRow>
@@ -487,5 +487,70 @@ function SenhaProvisoriaBox({ senha }: { senha: string }) {
         {copied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </Button>
     </div>
+  );
+}
+
+function ConviteUsuarioDialog({ projetoId }: { projetoId: string }) {
+  const qc = useQueryClient();
+  const convidarFn = useServerFn(convidarUsuario);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [nome, setNome] = useState("");
+  const [roleSel, setRoleSel] = useState<AppRole>("administrativo");
+
+  const convidar = useMutation({
+    mutationFn: () =>
+      convidarFn({ data: { projetoId, email: email.trim(), nome: nome.trim(), role: roleSel } }),
+    onSuccess: () => {
+      toast.success("Convite enviado por e-mail.");
+      qc.invalidateQueries({ queryKey: ["usuarios", projetoId] });
+      setOpen(false);
+      setEmail(""); setNome("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const valido = /.+@.+\..+/.test(email) && nome.trim().length >= 2;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline"><Mail className="mr-1.5 h-4 w-4" /> Convidar</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Convidar por e-mail</DialogTitle>
+          <DialogDescription>
+            O usuário receberá um e-mail com link para definir a própria senha.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="c-nome">Nome completo</Label>
+            <Input id="c-nome" value={nome} onChange={(e) => setNome(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="c-email">E-mail</Label>
+            <Input id="c-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Papel no projeto</Label>
+            <Select value={roleSel} onValueChange={(v) => setRoleSel(v as AppRole)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {APP_ROLES.map((r) => (<SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button onClick={() => convidar.mutate()} disabled={!valido || convidar.isPending}>
+            {convidar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Enviar convite
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
