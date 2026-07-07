@@ -53,9 +53,9 @@ function BackendNotice() {
     <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span>
-        <strong className="font-semibold">Backend não conectado.</strong> Conecte a
-        integração Supabase para ativar login, leitura de papéis e dados do
-        projeto. Enquanto isso, o painel renderiza em modo de demonstração.
+        <strong className="font-semibold">Sessão não iniciada.</strong> Faça{" "}
+        <a href="/auth" className="underline font-semibold">login</a> para
+        carregar seus papéis e os dados do projeto.
       </span>
     </div>
   );
