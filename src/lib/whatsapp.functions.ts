@@ -1,10 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText } from "ai";
 import JSZip from "jszip";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseChat, tail8 } from "@/lib/whatsapp-parser";
+import { executarAiRouter, executarTranscricaoRouter, executarVisaoRouter } from "@/lib/ia.functions";
 
 const BUCKET = "whatsapp";
 
