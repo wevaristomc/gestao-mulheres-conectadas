@@ -34,7 +34,7 @@ export const listarUsuariosProjeto = createServerFn({ method: "POST" })
 
     const { data: roles, error: rolesErr } = await admin
       .from("user_roles")
-      .select("user_id, role, projeto_id")
+      .select("user_id, role, projeto_id, ativo")
       .eq("projeto_id", data.projetoId);
     if (rolesErr) throw new Error(rolesErr.message);
 
@@ -65,6 +65,7 @@ export const listarUsuariosProjeto = createServerFn({ method: "POST" })
     return (roles ?? []).map((r: any) => ({
       id: r.user_id,
       role: r.role,
+      ativo: r.ativo !== false,
       email: matched[r.user_id]?.email ?? "(usuário removido)",
       nome: matched[r.user_id]?.nome ?? null,
       last_sign_in_at: matched[r.user_id]?.last_sign_in_at ?? null,
@@ -178,4 +179,66 @@ export const resetarSenha = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/* ============ ALTERAR STATUS ATIVO/INATIVO ============ */
+export const alterarStatusUsuario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      projetoId: ProjetoIdSchema,
+      userId: z.string().uuid(),
+      ativo: z.boolean(),
+    }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
+    if (data.userId === context.userId && !data.ativo) {
+      throw new Error("Você não pode desativar seu próprio acesso.");
+    }
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const { error } = await admin
+      .from("user_roles")
+      .update({ ativo: data.ativo })
+      .eq("user_id", data.userId)
+      .eq("projeto_id", data.projetoId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/* ============ CONVIDAR POR E-MAIL ============ */
+export const convidarUsuario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      projetoId: ProjetoIdSchema,
+      email: z.string().email(),
+      nome: z.string().min(2),
+      role: RoleEnum,
+    }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+
+    const { data: invited, error: inviteErr } =
+      await admin.auth.admin.inviteUserByEmail(data.email, {
+        data: { nome: data.nome },
+      });
+    if (inviteErr || !invited.user) {
+      throw new Error(inviteErr?.message ?? "Falha ao enviar convite");
+    }
+    const { error: roleErr } = await admin.from("user_roles").upsert(
+      {
+        user_id: invited.user.id,
+        projeto_id: data.projetoId,
+        role: data.role,
+        ativo: true,
+      },
+      { onConflict: "user_id,projeto_id,role" },
+    );
+    if (roleErr) throw new Error(roleErr.message);
+    return { id: invited.user.id, email: data.email };
   });

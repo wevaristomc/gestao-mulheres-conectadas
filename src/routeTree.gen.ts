@@ -48,6 +48,8 @@ import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
+import { Route as AuthenticatedConfiguracoesPermissoesRouteImport } from './routes/_authenticated/configuracoes.permissoes'
+import { Route as AuthenticatedConfiguracoesInstrutorTurmasRouteImport } from './routes/_authenticated/configuracoes.instrutor-turmas'
 import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_authenticated/configuracoes.ia'
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
 import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
@@ -277,6 +279,18 @@ const AuthenticatedConfiguracoesUsuariosRoute =
     path: '/usuarios',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedConfiguracoesPermissoesRoute =
+  AuthenticatedConfiguracoesPermissoesRouteImport.update({
+    id: '/permissoes',
+    path: '/permissoes',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
+const AuthenticatedConfiguracoesInstrutorTurmasRoute =
+  AuthenticatedConfiguracoesInstrutorTurmasRouteImport.update({
+    id: '/instrutor-turmas',
+    path: '/instrutor-turmas',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
 const AuthenticatedConfiguracoesIaRoute =
   AuthenticatedConfiguracoesIaRouteImport.update({
     id: '/ia',
@@ -351,6 +365,8 @@ export interface FileRoutesByFullPath {
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
+  '/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  '/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -394,6 +410,8 @@ export interface FileRoutesByTo {
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
+  '/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  '/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -444,6 +462,8 @@ export interface FileRoutesById {
   '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
+  '/_authenticated/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  '/_authenticated/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
@@ -495,6 +515,8 @@ export interface FileRouteTypes {
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
+    | '/configuracoes/instrutor-turmas'
+    | '/configuracoes/permissoes'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
@@ -538,6 +560,8 @@ export interface FileRouteTypes {
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
+    | '/configuracoes/instrutor-turmas'
+    | '/configuracoes/permissoes'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
@@ -587,6 +611,8 @@ export interface FileRouteTypes {
     | '/_authenticated/administrativo/materiais'
     | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/ia'
+    | '/_authenticated/configuracoes/instrutor-turmas'
+    | '/_authenticated/configuracoes/permissoes'
     | '/_authenticated/configuracoes/usuarios'
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
@@ -899,6 +925,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesUsuariosRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
+    '/_authenticated/configuracoes/permissoes': {
+      id: '/_authenticated/configuracoes/permissoes'
+      path: '/permissoes'
+      fullPath: '/configuracoes/permissoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesPermissoesRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
+    '/_authenticated/configuracoes/instrutor-turmas': {
+      id: '/_authenticated/configuracoes/instrutor-turmas'
+      path: '/instrutor-turmas'
+      fullPath: '/configuracoes/instrutor-turmas'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesInstrutorTurmasRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
     '/_authenticated/configuracoes/ia': {
       id: '/_authenticated/configuracoes/ia'
       path: '/ia'
@@ -991,6 +1031,8 @@ const AuthenticatedAdministrativoRouteWithChildren =
 
 interface AuthenticatedConfiguracoesRouteChildren {
   AuthenticatedConfiguracoesIaRoute: typeof AuthenticatedConfiguracoesIaRoute
+  AuthenticatedConfiguracoesInstrutorTurmasRoute: typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  AuthenticatedConfiguracoesPermissoesRoute: typeof AuthenticatedConfiguracoesPermissoesRoute
   AuthenticatedConfiguracoesUsuariosRoute: typeof AuthenticatedConfiguracoesUsuariosRoute
   AuthenticatedConfiguracoesIndexRoute: typeof AuthenticatedConfiguracoesIndexRoute
 }
@@ -998,6 +1040,10 @@ interface AuthenticatedConfiguracoesRouteChildren {
 const AuthenticatedConfiguracoesRouteChildren: AuthenticatedConfiguracoesRouteChildren =
   {
     AuthenticatedConfiguracoesIaRoute: AuthenticatedConfiguracoesIaRoute,
+    AuthenticatedConfiguracoesInstrutorTurmasRoute:
+      AuthenticatedConfiguracoesInstrutorTurmasRoute,
+    AuthenticatedConfiguracoesPermissoesRoute:
+      AuthenticatedConfiguracoesPermissoesRoute,
     AuthenticatedConfiguracoesUsuariosRoute:
       AuthenticatedConfiguracoesUsuariosRoute,
     AuthenticatedConfiguracoesIndexRoute: AuthenticatedConfiguracoesIndexRoute,

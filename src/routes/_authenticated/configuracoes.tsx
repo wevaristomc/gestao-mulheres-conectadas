@@ -14,6 +14,8 @@ function ConfiguracoesLayout() {
   const tabs = [
     { to: "/configuracoes", label: "Geral", exact: true },
     { to: "/configuracoes/usuarios", label: "Usuários" },
+    { to: "/configuracoes/permissoes", label: "Permissões" },
+    { to: "/configuracoes/instrutor-turmas", label: "Instrutores ↔ Turmas" },
     { to: "/configuracoes/ia", label: "Inteligência Artificial" },
   ];
   return (
