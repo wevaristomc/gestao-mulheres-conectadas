@@ -27,7 +27,9 @@ async function chamarOpenAICompat(params: {
   max_tokens: number;
   temperatura: number;
 }): Promise<CallResult> {
-  const url = `${params.base_url.replace(/\/+$/, "")}/chat/completions`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para provedor OpenAI-compatível.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
   if (!apiKey) {
     throw new Error(
@@ -82,7 +84,9 @@ async function chamarGemini(params: {
 }): Promise<CallResult> {
   const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
   if (!apiKey) throw new Error(`API Key ausente para ${params.base_url}.`);
-  const url = `${params.base_url.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Gemini.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const contents = params.mensagens.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -129,7 +133,9 @@ async function chamarAnthropic(params: {
   max_tokens: number;
   temperatura: number;
 }): Promise<CallResult> {
-  const url = `${params.base_url.replace(/\/+$/, "")}/messages`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Anthropic/Claude.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/messages`;
   const apiKey = String(params.api_key ?? "").replace(/[\r\n\t]/g, "").trim();
   if (!apiKey) throw new Error(`API Key ausente para ${params.base_url}.`);
   const system = params.mensagens.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
@@ -361,6 +367,9 @@ export const testarProvedor = createServerFn({ method: "POST" })
     if (!prov.api_key) throw new Error("Este provedor ainda não tem API Key configurada.");
     const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "");
     if (!modelo) throw new Error("Provedor sem modelo padrão. Defina um antes de testar.");
+    if (!prov.base_url || typeof prov.base_url !== "string" || !prov.base_url.trim()) {
+      throw new Error(`Provedor "${prov.provedor}" está sem base_url configurada. Preencha a URL do endpoint antes de testar.`);
+    }
     const tipo = selecionarChamador(String(prov.provedor), prov.base_url);
     const base = { base_url: prov.base_url, api_key: prov.api_key, modelo, mensagens: [{ role: "user" as const, content: "Responda apenas: OK" }], max_tokens: 20, temperatura: 0 };
     let r: CallResult;
@@ -462,7 +471,9 @@ async function chamarGeminiVision(params: {
   imagens: ImagemInput[];
   max_tokens: number;
 }) {
-  const url = `${params.base_url.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(params.api_key)}`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Gemini Vision.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/models/${params.modelo}:generateContent?key=${encodeURIComponent(params.api_key)}`;
   const parts: any[] = [{ text: params.prompt }];
   for (const img of params.imagens) {
     parts.push({ inline_data: { mime_type: img.mime, data: img.base64 } });
@@ -498,7 +509,9 @@ async function chamarAnthropicVision(params: {
   imagens: ImagemInput[];
   max_tokens: number;
 }) {
-  const url = `${params.base_url.replace(/\/+$/, "")}/messages`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para Anthropic Vision.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/messages`;
   const content: any[] = [];
   for (const img of params.imagens) {
     content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.base64 } });
@@ -537,7 +550,9 @@ async function chamarOpenAICompatVision(params: {
   imagens: ImagemInput[];
   max_tokens: number;
 }) {
-  const url = `${params.base_url.replace(/\/+$/, "")}/chat/completions`;
+  const baseUrl = String(params.base_url ?? "").trim();
+  if (!baseUrl) throw new Error("base_url ausente para OpenAI-compat Vision.");
+  const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const content: any[] = [{ type: "text", text: params.prompt }];
   for (const img of params.imagens) {
     content.push({
