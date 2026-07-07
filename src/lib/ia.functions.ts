@@ -361,6 +361,9 @@ export const testarProvedor = createServerFn({ method: "POST" })
     if (!prov.api_key) throw new Error("Este provedor ainda não tem API Key configurada.");
     const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "");
     if (!modelo) throw new Error("Provedor sem modelo padrão. Defina um antes de testar.");
+    if (!prov.base_url || typeof prov.base_url !== "string" || !prov.base_url.trim()) {
+      throw new Error(`Provedor "${prov.provedor}" está sem base_url configurada. Preencha a URL do endpoint antes de testar.`);
+    }
     const tipo = selecionarChamador(String(prov.provedor), prov.base_url);
     const base = { base_url: prov.base_url, api_key: prov.api_key, modelo, mensagens: [{ role: "user" as const, content: "Responda apenas: OK" }], max_tokens: 20, temperatura: 0 };
     let r: CallResult;
