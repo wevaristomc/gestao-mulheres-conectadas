@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BuscadorEditais } from "@/components/captacao/buscador-editais";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -59,6 +60,7 @@ function CaptacaoPage() {
 
   const [novoOpen, setNovoOpen] = useState(false);
   const [detalheId, setDetalheId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"pipeline" | "buscador">("pipeline");
 
   const porEtapa = useMemo(() => {
     const map = new Map<string, Row[]>();
@@ -105,6 +107,33 @@ function CaptacaoPage() {
         }
       />
 
+      <div className="mb-4 flex gap-1 border-b">
+        <button
+          type="button"
+          onClick={() => setTab("pipeline")}
+          className={cn(
+            "border-b-2 px-3 py-2 text-sm transition-colors",
+            tab === "pipeline" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Pipeline
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("buscador")}
+          className={cn(
+            "border-b-2 px-3 py-2 text-sm transition-colors",
+            tab === "buscador" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          🔎 Buscador de Editais
+        </button>
+      </div>
+
+      {tab === "buscador" ? (
+        <BuscadorEditais />
+      ) : (
+        <>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Editais em pipeline" value={String(rows.length)} loading={q.isLoading} erro={!!erro} />
         <Kpi label="Em andamento" value={String(emAndamento)} loading={q.isLoading} erro={!!erro} />
@@ -171,6 +200,8 @@ function CaptacaoPage() {
           />
         ) : null}
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

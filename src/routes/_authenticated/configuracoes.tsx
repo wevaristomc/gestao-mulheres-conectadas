@@ -14,6 +14,7 @@ function ConfiguracoesLayout() {
   const tabs = [
     { to: "/configuracoes", label: "Geral", exact: true },
     { to: "/configuracoes/usuarios", label: "Usuários" },
+    { to: "/configuracoes/ia", label: "Inteligência Artificial" },
   ];
   return (
     <div>
