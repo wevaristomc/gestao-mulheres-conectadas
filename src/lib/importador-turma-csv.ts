@@ -140,14 +140,15 @@ export function parseCsvTurma(filename: string, text: string): ResultadoImportac
     return { arquivo: filename, turma: extrairTurmaDeTexto(nomeSemExt), alunas: [], erros: ["CSV vazio"] };
   }
 
-  // Turma: tenta na 1ª linha, senão no nome do arquivo
+  // Turma: prioriza o nome do arquivo (autoritativo), depois a 1ª linha
   const primeiraLinha = (table[0] ?? []).join(" ");
   const turmaPrimeira = extrairTurmaDeTexto(primeiraLinha);
   const turmaNome = extrairTurmaDeTexto(nomeSemExt);
+  const codigo = turmaNome.codigo_turma ?? turmaPrimeira.codigo_turma;
   const turma: TurmaExtraida = {
-    codigo_turma: turmaPrimeira.codigo_turma ?? turmaNome.codigo_turma,
-    turno: turmaPrimeira.turno ?? turmaNome.turno,
-    municipio: municipioPorPrefixo(turmaPrimeira.codigo_turma ?? turmaNome.codigo_turma),
+    codigo_turma: codigo,
+    turno: turmaNome.turno ?? turmaPrimeira.turno,
+    municipio: municipioPorPrefixo(codigo),
   };
   if (!turma.codigo_turma) erros.push("Código da turma não identificado no CSV nem no nome do arquivo.");
 
