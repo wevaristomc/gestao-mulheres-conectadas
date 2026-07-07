@@ -378,8 +378,6 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
 
     // Cruzamento pós-import
     // ava_users.beneficiaria_id ← beneficiarias.cpf
-    const linkUsers = await admin.rpc("__x__", {}).then(() => null).catch(() => null);
-    void linkUsers;
     const { data: benef } = await admin.from("beneficiarias").select("id, cpf").not("cpf", "is", null);
     if (benef) {
       const mapa = new Map<string, string>();
