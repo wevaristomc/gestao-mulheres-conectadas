@@ -66,6 +66,13 @@ export function setCachedRole(role: AppRole | null) {
 export function requireModuleAccess(module: ModuleKey) {
   requireSession();
   const role = getCachedRole();
+  // Fail-open when the role isn't cached yet: the guard runs synchronously in
+  // `beforeLoad`, but the role is hydrated asynchronously by
+  // `ActiveContextProvider` after the session resolves. Redirecting here would
+  // cause a race where a valid user is bounced to "/" on hard refresh / direct
+  // navigation. The authoritative check remains server-side (RLS + server fns);
+  // the page itself renders a "sem permissão" state once the role is known.
+  if (role === null) return;
   if (!canAccess(module, role)) {
     throw redirect({ to: "/" });
   }
