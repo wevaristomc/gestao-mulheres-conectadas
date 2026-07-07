@@ -246,6 +246,7 @@ function UsuarioLinha({
   const atualizarFn = useServerFn(atualizarPapel);
   const removerFn = useServerFn(removerAcesso);
   const resetarFn = useServerFn(resetarSenha);
+  const statusFn = useServerFn(alterarStatusUsuario);
 
   const [confirmRemover, setConfirmRemover] = useState(false);
   const [novaSenhaOpen, setNovaSenhaOpen] = useState<string | null>(null);
@@ -271,6 +272,13 @@ function UsuarioLinha({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const alterarStatus = useMutation({
+    mutationFn: (ativo: boolean) =>
+      statusFn({ data: { projetoId, userId: usuario.id, ativo } }),
+    onSuccess: () => { toast.success("Status atualizado."); onChanged(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const isSelf = currentUserId === usuario.id;
 
   return (
@@ -284,7 +292,7 @@ function UsuarioLinha({
         <Select
           value={usuario.role}
           onValueChange={(v) => atualizar.mutate(v as AppRole)}
-          disabled={atualizar.isPending || isSelf}
+          disabled={atualizar.isPending || isSelf || !usuario.ativo}
         >
           <SelectTrigger className="h-8 w-[220px]"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -293,6 +301,16 @@ function UsuarioLinha({
             ))}
           </SelectContent>
         </Select>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={usuario.ativo}
+            disabled={isSelf || alterarStatus.isPending}
+            onCheckedChange={(v) => alterarStatus.mutate(v)}
+          />
+          {!usuario.ativo ? <Badge variant="outline" className="text-[10px]">inativo</Badge> : null}
+        </div>
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">
         {usuario.last_sign_in_at
