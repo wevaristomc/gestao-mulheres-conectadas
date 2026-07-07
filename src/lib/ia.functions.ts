@@ -42,7 +42,14 @@ async function chamarOpenAICompat(params: {
     }),
   });
   const txt = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(
+        `API Key inválida ou truncada para ${params.base_url}. Verifique se você colou a chave completa (sem espaços). Resposta: ${txt.slice(0, 200)}`,
+      );
+    }
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 400)}`);
+  }
   const body = JSON.parse(txt);
   const content = body?.choices?.[0]?.message?.content ?? "";
   return {
@@ -299,7 +306,7 @@ export const salvarProvedor = createServerFn({ method: "POST" })
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
     const payload: Record<string, unknown> = {};
-    if (data.api_key !== undefined && data.api_key !== "") payload.api_key = data.api_key;
+    if (data.api_key !== undefined && data.api_key.trim() !== "") payload.api_key = data.api_key.trim();
     if (data.modelo_padrao !== undefined) payload.modelo_padrao = data.modelo_padrao;
     if (data.ativo !== undefined) payload.ativo = data.ativo;
     if (data.prioridade !== undefined) payload.prioridade = data.prioridade;
