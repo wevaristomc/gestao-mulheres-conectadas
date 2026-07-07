@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { criarGrupo, processarZip } from "@/lib/whatsapp.functions";
+import { criarGrupo, registrarImportacao } from "@/lib/whatsapp.functions";
+import { processarZipNoBrowser, type ProgressoImport } from "@/lib/whatsapp-zip-client";
 import { gruposOptions, importacoesGrupoOptions } from "@/lib/whatsapp-queries";
 
 export const Route = createFileRoute("/_authenticated/whatsapp/")({
@@ -46,32 +46,38 @@ function WhatsappIndex() {
 
   const [uploadGrupoId, setUploadGrupoId] = useState<string | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
-  const processarFn = useServerFn(processarZip);
+  const [progresso, setProgresso] = useState<ProgressoImport | null>(null);
+  const registrarFn = useServerFn(registrarImportacao);
   const importMut = useMutation({
     mutationFn: async () => {
       if (!uploadGrupoId || !zipFile) throw new Error("Selecione um grupo e um arquivo .zip");
-      const tempId = crypto.randomUUID();
-      const storage_path = `imports/${tempId}/original.zip`;
-      const up = await supabase.storage.from("whatsapp").upload(storage_path, zipFile, {
-        upsert: true, contentType: "application/zip",
-      });
-      if (up.error) throw new Error(up.error.message);
-      const res = await processarFn({
+      const preparado = await processarZipNoBrowser(zipFile, setProgresso);
+      const res = await registrarFn({
         data: {
           grupo_id: uploadGrupoId,
-          storage_path,
           arquivo_nome: zipFile.name,
+          arquivo_zip_path: preparado.arquivo_zip_path,
+          periodo_inicio: preparado.periodo_inicio,
+          periodo_fim: preparado.periodo_fim,
+          total_audios: preparado.total_audios,
+          total_imagens: preparado.total_imagens,
+          total_videos: preparado.total_videos,
+          total_remetentes: preparado.total_remetentes,
+          midias_puladas: preparado.midias_puladas,
+          mensagens: preparado.mensagens,
         },
       });
+      setProgresso({ fase: "concluido", midias_feitas: 0, midias_total: 0, midias_puladas: preparado.midias_puladas });
       return res;
     },
     onSuccess: (res) => {
-      toast.success(`Importação criada: ${res.total_mensagens} mensagens (${res.total_audios} áudios, ${res.total_imagens} imagens).`);
-      setUploadGrupoId(null); setZipFile(null);
+      const extra = res.midias_puladas ? ` · ${res.midias_puladas} mídia(s) pulada(s) por tamanho` : "";
+      toast.success(`Importação criada: ${res.total_mensagens} mensagens (${res.total_audios} áudios, ${res.total_imagens} imagens)${extra}.`);
+      setUploadGrupoId(null); setZipFile(null); setProgresso(null);
       qc.invalidateQueries({ queryKey: ["wa"] });
       navigate({ to: "/whatsapp/$importacaoId", params: { importacaoId: res.importacao_id } });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => { toast.error(e.message); setProgresso(null); },
   });
 
   return (
@@ -135,10 +141,39 @@ function WhatsappIndex() {
               setZipFile={setZipFile}
               onImport={() => importMut.mutate()}
               importing={importMut.isPending}
+              progresso={progresso}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ProgressoView({ p }: { p: ProgressoImport }) {
+  const pct = p.midias_total > 0 ? Math.round((p.midias_feitas / p.midias_total) * 100) : 0;
+  const label = {
+    lendo: "Lendo o zip…",
+    parseando: "Interpretando mensagens…",
+    upando_midias: `Enviando mídias (${p.midias_feitas}/${p.midias_total})`,
+    upando_zip: "Guardando cópia bruta do zip…",
+    salvando: "Salvando mensagens no banco…",
+    concluido: "Concluído.",
+  }[p.fase];
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <span>{label}</span>
+      </div>
+      {p.midias_total > 0 ? (
+        <div className="h-1.5 w-full overflow-hidden rounded bg-muted">
+          <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
+      {p.midias_puladas > 0 ? (
+        <p className="text-muted-foreground">{p.midias_puladas} mídia(s) pulada(s) por tamanho (limite ~50 MB por arquivo).</p>
+      ) : null}
     </div>
   );
 }
@@ -154,6 +189,7 @@ function GrupoCard(props: {
   setZipFile: (f: File | null) => void;
   onImport: () => void;
   importing: boolean;
+  progresso: ProgressoImport | null;
 }) {
   const impQ = useQuery(importacoesGrupoOptions(props.grupoId));
   const importacoes = impQ.data?.rows ?? [];
@@ -186,7 +222,7 @@ function GrupoCard(props: {
             <DialogHeader>
               <DialogTitle>Enviar exportação do WhatsApp</DialogTitle>
               <DialogDescription>
-                No WhatsApp, abra o grupo → &quot;Exportar conversa&quot; → &quot;Incluir mídia&quot;. Envie o .zip resultante (até ~30 MB).
+                No WhatsApp, abra o grupo → &quot;Exportar conversa&quot; → &quot;Incluir mídia&quot;. Envie o .zip (até ~500 MB — o processamento acontece no seu navegador; não feche a aba).
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-1.5">
@@ -202,6 +238,11 @@ function GrupoCard(props: {
                 </p>
               ) : null}
             </div>
+            {props.importing && props.progresso ? (
+              <div className="rounded-md border bg-muted/40 p-3 text-xs">
+                <ProgressoView p={props.progresso} />
+              </div>
+            ) : null}
             <DialogFooter>
               <Button variant="ghost" onClick={() => props.setUploadOpen(false)} disabled={props.importing}>Cancelar</Button>
               <Button onClick={props.onImport} disabled={!props.zipFile || props.importing}>
