@@ -377,9 +377,9 @@ export const analisarImagens = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => AnalisarImgInput.parse(v))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("LOVABLE_API_KEY não configurada");
     const sb = context.supabase;
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
 
     const { data: msgs, error } = await sb
       .from("wa_mensagens")
@@ -400,41 +400,35 @@ export const analisarImagens = createServerFn({ method: "POST" })
       if (existente && (existente.ocr_texto || existente.erro)) { ok++; continue; }
 
       try {
-        const signed = await sb.storage.from(BUCKET).createSignedUrl(m.midia_path as string, 300);
-        if (signed.error || !signed.data?.signedUrl) throw new Error(`signed_url: ${signed.error?.message ?? "?"}`);
+        // Baixa a imagem e converte para base64 (o roteador BYOK aceita todos os
+        // provedores nesse formato: Gemini inline_data, Anthropic base64, OpenAI-compat data URL).
+        const dl = await sb.storage.from(BUCKET).download(m.midia_path as string);
+        if (dl.error || !dl.data) throw new Error(`storage: ${dl.error?.message ?? "?"}`);
+        const bytes = new Uint8Array(await dl.data.arrayBuffer());
+        let b64 = "";
+        // btoa aceita string; converte via chunks para evitar estouro de stack.
+        const CHUNK = 0x8000;
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          b64 += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)) as any);
+        }
+        b64 = btoa(b64);
+        const mime = (dl.data as Blob).type || "image/jpeg";
 
-        const body = {
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text:
-                    "Analise esta imagem enviada em um grupo de WhatsApp de um projeto social no Brasil. Responda em JSON válido com as chaves: \n" +
-                    "  \"ocr_texto\": todo texto legível na imagem, transcrito literalmente (ou vazio);\n" +
-                    "  \"descricao\": 1-2 frases descrevendo objetivamente o que está na imagem;\n" +
-                    "  \"tipo_provavel\": um destes → \"lista_presenca\" | \"cartaz\" | \"comprovante\" | \"foto_aula\" | \"documento\" | \"outro\".\n" +
-                    "Não invente. Sem markdown, sem comentários — apenas o JSON.",
-                },
-                { type: "image_url", image_url: { url: signed.data.signedUrl } },
-              ],
-            },
-          ],
-        };
+        const prompt =
+          "Analise esta imagem enviada em um grupo de WhatsApp de um projeto social no Brasil. Responda em JSON válido com as chaves:\n" +
+          "  \"ocr_texto\": todo texto legível na imagem, transcrito literalmente (ou vazio);\n" +
+          "  \"descricao\": 1-2 frases descrevendo objetivamente o que está na imagem;\n" +
+          "  \"tipo_provavel\": um destes → \"lista_presenca\" | \"cartaz\" | \"comprovante\" | \"foto_aula\" | \"documento\" | \"outro\".\n" +
+          "Não invente. Sem markdown, sem comentários — apenas o JSON.";
 
-        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+        const r = await executarVisaoRouter({
+          admin,
+          processo: "analise_imagem",
+          prompt,
+          imagens: [{ mime, base64: b64 }],
+          defaults: { max_tokens: 800 },
         });
-        if (!res.ok) throw new Error(`gateway ${res.status}: ${(await res.text()).slice(0, 200)}`);
-        const json = (await res.json()) as {
-          choices?: Array<{ message?: { content?: string } }>;
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
-        };
-        const raw = json.choices?.[0]?.message?.content ?? "";
+        const raw = r.content;
         const parsed = safeJson(raw);
 
         await sb.from("wa_midias_analise").upsert(
@@ -444,9 +438,9 @@ export const analisarImagens = createServerFn({ method: "POST" })
             ocr_texto: parsed?.ocr_texto ?? null,
             descricao_ia: parsed?.descricao ?? raw.slice(0, 2000),
             tipo_provavel: parsed?.tipo_provavel ?? null,
-            modelo: "google/gemini-3-flash-preview",
-            tokens_in: json.usage?.prompt_tokens ?? null,
-            tokens_out: json.usage?.completion_tokens ?? null,
+            modelo: `${r.provedor}/${r.modelo}`,
+            tokens_in: r.tokens_entrada ?? null,
+            tokens_out: r.tokens_saida ?? null,
             erro: null,
           },
           { onConflict: "mensagem_id,tipo_analise" },
