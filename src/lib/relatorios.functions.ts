@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText } from "ai";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { executarAiRouter } from "@/lib/ia.functions";
 
 const Input = z.object({
   aba: z.enum(["frequencia", "pedagogico", "orcamentario", "metas"]),
@@ -21,12 +21,8 @@ export const gerarAnaliseAba = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => Input.parse(v))
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("LOVABLE_API_KEY não configurada");
-
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3-flash-preview");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
 
     const titulo = TITULOS[data.aba] ?? "Relatório";
     const projeto = data.projetoNome ?? "não informado";
@@ -45,8 +41,13 @@ Escreva em português, em **1 parágrafo** de até ~140 palavras, com:
 Não use listas numeradas nem títulos; entregue um parágrafo corrido, em Markdown.`;
 
     try {
-      const { text } = await generateText({ model, prompt });
-      return { text };
+      const r = await executarAiRouter({
+        admin,
+        processo: "analise_relatorio",
+        mensagens: [{ role: "user", content: prompt }],
+        defaults: { max_tokens: 700, temperatura: 0.4 },
+      });
+      return { text: r.content, provedor: r.provedor, modelo: r.modelo };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`Falha ao gerar análise: ${msg}`);
