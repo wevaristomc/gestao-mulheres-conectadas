@@ -27,6 +27,7 @@ export type ModuleKey =
   | "financeiro"
   | "captacao"
   | "relatorios"
+  | "whatsapp"
   | "base-conhecimento"
   | "drive"
   | "configuracoes";
@@ -52,6 +53,7 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
   financeiro: ["coordenador_geral", "gestor_financeiro"],
   captacao: ["coordenador_geral", "gestor_financeiro"],
   relatorios: ["coordenador_geral", "coordenador_pedagogico", "gestor_financeiro"],
+  whatsapp: ["coordenador_geral", "coordenador_pedagogico", "administrativo"],
   "base-conhecimento": ALL,
   drive: ALL,
   configuracoes: ["coordenador_geral"],

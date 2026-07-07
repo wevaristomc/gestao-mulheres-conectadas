@@ -1,107 +1,112 @@
 
-# Plano — Evolução em 4 Frentes
+# WhatsApp Insights — ingestão de exports do projeto
 
-Migration P0 já aplicada no banco (metas seed, rubricas, certificados_lotes+seq, municipios_ibge, rubrica_id em despesas/orcamento_itens, views vw_relacao_qualificados e vw_indicadores_ciclo). Confio no schema existente e não recrio nada.
+Objetivo: coordenação exporta um chat de grupo do WhatsApp (.zip com `_chat.txt` + mídias), sobe no app, e o sistema:
+1) processa mensagens, áudios (transcrição) e imagens (OCR/descrição),
+2) casa números com beneficiárias cadastradas (preenchendo o WhatsApp da aluna),
+3) gera relatório prévio do período (temas, presença mencionada, dúvidas, alertas).
 
-Entrego em fases pequenas (1 build por fase). Cada fase termina em algo utilizável.
-
----
-
-## FRENTE A — Prestação de Contas (P0)
-
-### Fase A1 — Metas & Indicadores
-- Nova rota `/relatorios/metas-indicadores` (ou aba em Visão Geral) lendo `vw_indicadores_ciclo`.
-- Cards agregados (vagas previstas, matriculadas, concluintes, certificadas, % vs meta, freq. média).
-- Tabela detalhada com filtro por ciclo e semáforo verde ≥90% / amarelo 60–89% / vermelho <60%.
-- CRUD leve em `metas` (dialog editar `vagas_previstas`, `meta_conclusao_pct`, `meta_frequencia_pct`).
-- **Riscos:** RLS de `metas` — precisará conferir policies (SELECT autenticado; UPDATE admin/coordenação). Se view não estiver acessível, cair para query direta com joins.
-
-### Fase A2 — Rubricas no Financeiro
-- Nova rota `/financeiro/rubricas` com listagem + edição inline de `valor_previsto` e painel previsto × executado (soma de `despesas.valor` agrupada por `rubrica_id`).
-- Adicionar select "Rubrica" em `financeiro.orcamento.tsx` (form de item) e `financeiro.despesas.tsx` (form de despesa). Persistir `rubrica_id`.
-- Atualizar `financeiro-queries.ts` para incluir `rubrica_id` nos upserts.
-- **Riscos:** colunas `rubrica_id` só existem se as tabelas existirem; queries usam `pickFirst` tolerante, mas o select precisa degradar se rubricas não vierem.
-
-### Fase A3 — Exports de Prestação de Contas
-- Em `/relatorios/mte`, adicionar 2 cards:
-  - **Relação de Qualificados (XLSX)** — lê `vw_relacao_qualificados`. Sheet com cabeçalho de identificação do instrumento (Modalidade: Termo de Fomento MROSC; CNPJ/Nome: QUINTA ARTE; TransfereGov 01025/2025; NUP/SEI 19968.200342/2025-94; vigência) + tabela oficial. Frequência formatada como decimal 0–1.
-  - **Execução Físico-Financeira por Rubrica (XLSX)** — join rubricas + despesas + orcamento_itens: código, descrição, previsto, executado, saldo, % execução, totais.
-- Reutilizar `xlsx` (`XLSX.utils.aoa_to_sheet` + merges) igual ao cronograma atual.
-- **Riscos:** dados do instrumento hoje não estão no banco — vão como constantes no export (documentar).
-
-### Fase A4 — Certificados em Lote
-- Botão "Gerar Certificados do Lote" na página da turma (`pedagogico.turmas.$id.cursistas.tsx` ou nova aba "Certificados").
-- Elegibilidade: `frequencia_percentual >= 75` AND status concluinte.
-- Server function `gerarLoteCertificados` (middleware auth):
-  1. Cria linha em `certificados_lotes`.
-  2. Para cada elegível: `nextval('seq_certificado')` → grava `certificado_numero`, `certificado_data`, `certificado_emitido=true` na matrícula.
-  3. Retorna lista com números atribuídos.
-- Cliente: gera PDFs com `jsPDF` (paisagem A4) reaproveitando `certificado-pdf.ts` estendido com layout oficial PMQ (logos do bucket `evidencias/marca/`, curso, CH 150h, período, município, texto padrão PMQ, número sequencial). Baixa ZIP via `jszip` + XLSX "Lista de Entrega".
-- **Riscos:** logos ainda não estão no bucket — layout deve tolerar ausência (fallback: só texto). Confirmar que `seq_certificado` foi criada como sequence (usar RPC `nextval` via server fn com admin ou função SECURITY DEFINER). Precisará adicionar deps: `jszip`.
+Feito em **6 fases pequenas**, 1 build por fase.
 
 ---
 
-## FRENTE B — Leitor de PDFs Universal
+## Fase W0 — Esquema + storage (SQL + bucket)
 
-### Fase B1 — Seletor de tipo + arquitetura
-- Em `/mte/importar-lista` (renomear rota UI para "Importar Documento") adicionar select "Tipo de documento": Lista de Presença | Ficha de Inscrição | Lista de Entrega de Benefícios | Relação de Qualificados Preenchida.
-- Refatorar `leitor-lista.ts` em um dispatcher por tipo. Cada tipo → prompt de visão IA específico + schema Zod de saída → tela de conferência ✅⚠️❌ → confirmação → gravação.
-- **Riscos:** custo/latência de IA visão; garantir uso do gateway Lovable AI existente.
+Tabelas novas em `public`:
+- `wa_grupos` — cadastro dos grupos (nome, `projeto_id`, `turma_id?`, observações).
+- `wa_importacoes` — 1 linha por .zip enviado (grupo, arquivo, período detectado, status, contadores).
+- `wa_mensagens` — 1 linha por mensagem do `_chat.txt` (timestamp, remetente_nome, remetente_fone_e164, tipo=texto|audio|imagem|video|doc|sistema, conteudo_texto, midia_path).
+- `wa_midias_analise` — resultado por mídia (transcricao, ocr_texto, descricao_ia, modelo, custo/token, erro).
+- `wa_resumos` — resumos gerados por período (grupo, data_inicio, data_fim, markdown, autor_ia).
 
-### Fase B2 — Ficha de Inscrição
-- Prompt extrai: nome, CPF, RG, data nasc, endereço, telefone, escolaridade, renda, dependentes, curso pretendido, município.
-- Match por CPF em `beneficiarias`; se não existir, cria em status "conferência". Cria/atualiza matrícula em conferência.
+Todas com `GRANT` para `authenticated` + `service_role`, `RLS on`, políticas via `has_role`/pertinência ao projeto (padrão do app). Índices em `(grupo_id, timestamp)` e `remetente_fone_e164`.
 
-### Fase B3 — Lista de Entrega de Benefícios
-- Prompt extrai linhas (nome/CPF/tipo/assinatura presente?). Grava em `entregas_beneficios` em lote, marcando divergências.
+Bucket **privado** `whatsapp` no Storage:
+- `imports/{importacao_id}/original.zip`
+- `imports/{importacao_id}/media/<arquivo>`  
+Políticas: leitura/escrita apenas para `authenticated` com papel adequado (coordenador/admin).
 
-### Fase B4 — Relação de Qualificados Preenchida
-- Prompt extrai linhas do modelo oficial e faz reconciliação com `vw_relacao_qualificados`: aponta divergências (nome, CPF, frequência, status) em tela.
-
----
-
-## FRENTE C — Super Apuração
-
-### Fase C1 — Varredura & Correções
-- Rodar `tsgo` typecheck completo.
-- Percorrer todas as rotas em `src/routes/_authenticated/**` verificando: console/runtime errors, botões sem handler, telas em branco, loading preso, RLS quebrado após migration P0 (foco em `metas`, `rubricas`, `certificados_lotes`, `municipios_ibge`, `despesas`, `orcamento_itens`).
-- Playwright em rota-chave (`/mte`, `/financeiro`, `/relatorios/*`, `/pedagogico/turmas`) para captura de console + screenshot mobile (375×812) e desktop.
-- Corrigir e listar tudo.
-- **Riscos:** apuração pode revelar issues fora do escopo — vou triar e reportar sem expandir escopo.
+**Riscos:** conflito com RLS existente se `projetos`/`turmas` mudarem nomes de colunas — mitigado usando `select("*")` como fizemos em `rbac.functions.ts`.
 
 ---
 
-## FRENTE D — Identidade Visual PMQ
+## Fase W1 — Upload + parser do `_chat.txt`
 
-### Fase D1 — Tokens & tipografia
-- Atualizar `src/styles.css`:
-  - `--primary: oklch(...)` equivalente a `#1a2b52` (azul-marinho)
-  - `--secondary`/`--accent-action` para `#d4552b` (terracota)
-  - `--accent`/highlight para `#f5a833` (âmbar)
-  - `--font-sans: "Rawline", system-ui, ...`
-- Carregar TTFs Rawline via `<link>`/`@font-face` a partir de `evidencias/marca/` (URL pública do bucket). Fallback system-ui garantido.
-- Conferir contraste AA (título/texto sobre primária, botões terracota sobre fundo claro).
+- Rota `/_authenticated/whatsapp` (submenu novo na sidebar, gated por papéis coordenador/admin).
+- Tela lista grupos + botão “Nova importação”: escolhe grupo (ou cria), faz upload do `.zip`.
+- Server function `importarZipWhatsapp`:
+  - salva zip no bucket, descompacta em memória (JSZip),
+  - parseia `_chat.txt` (formatos iOS/Android, PT-BR; regex tolerante a `[dd/mm/aa hh:mm:ss]` e `dd/mm/aaaa hh:mm -`),
+  - normaliza telefones para E.164 (`libphonenumber-js`, default BR),
+  - insere `wa_mensagens` em lote e sobe cada mídia para `imports/{id}/media/`.
+- Retorna contadores (msgs, áudios, imagens, remetentes únicos). Sem IA ainda.
 
-### Fase D2 — Aplicação
-- Logo PMQ no topo da `AppSidebar` e na tela `/auth`.
-- Header/cabeçalhos com azul-marinho, ações primárias em terracota, badges/destaques em âmbar.
-- Rever contraste de estados hover/active e componentes shadcn afetados (Button variants, Sidebar).
-- **Riscos:** arquivos de fonte e logo dependem de upload do usuário; fase entra parcial até estarem no bucket (fallback preserva app usável).
+**Riscos:** zips grandes (>50MB) podem estourar limite do Worker — fase W1 processa síncrono até ~30MB; acima disso mostra erro e recomenda dividir. (Chunking fica para melhoria futura.)
 
 ---
 
-## Ordem sugerida de execução
-1. D1 (tokens/fonte) — base visual barata, desbloqueia identidade.
-2. A1 → A2 → A3 → A4 (prestação de contas do mais leve ao mais pesado).
-3. B1 → B2 → B3 → B4.
-4. D2 (logo/aplicação) quando os assets chegarem.
-5. C1 varredura final antes de encerrar.
+## Fase W2 — Transcrição de áudios
 
-## SQLs adicionais que posso pedir depois
-- Se `seq_certificado` não estiver como `SEQUENCE` acessível, precisarei de uma função `public.proximo_certificado()` SECURITY DEFINER para chamar do server. Envio o SQL no momento.
-- Se `metas`/`rubricas`/`certificados_lotes` não tiverem policies para `authenticated`, envio o bloco de GRANT+POLICY.
+- Server function `transcreverAudiosImportacao(importacaoId)` — dispara em background após o upload (com botão “Reprocessar” manual).
+- Para cada mídia `.opus/.ogg/.m4a/.mp3`:
+  - baixa do bucket, envia a `POST https://ai.gateway.lovable.dev/v1/audio/transcriptions` com `openai/gpt-4o-mini-transcribe`, sem `language` (auto-detect),
+  - guarda `transcricao` + `usage` em `wa_midias_analise`, atualiza `wa_mensagens.conteudo_texto` com a transcrição prefixada por `[áudio] `.
+- UI mostra progresso (`n/total`) e permite reexecutar somente as com erro.
 
-## O que NÃO farei
-- Não recrio nada da migration P0.
-- Não toco em `.env`, `client.ts`, `types.ts`, schemas do Supabase Auth/Storage.
-- Não expando escopo além do listado.
+**Riscos:** OGG/Opus é aceito pelo `gpt-4o-mini-transcribe`; se algum vier em formato exótico, marcamos `erro` e seguimos.
+
+---
+
+## Fase W3 — OCR/descrição de imagens
+
+- Server function `analisarImagensImportacao(importacaoId)`:
+  - para cada `.jpg/.png/.webp`, gera signed URL curta e chama `google/gemini-3-flash-preview` via `/v1/chat/completions` multimodal,
+  - prompt fixo pedindo: (a) texto legível na imagem (OCR), (b) descrição objetiva do conteúdo, (c) se parece lista de presença/cartaz/comprovante — classificação em `tipo_provavel`.
+- Grava em `wa_midias_analise`. UI mostra thumbnail + texto extraído; botão “usar como evidência da turma X” cria linha em `evidencias` reaproveitando o arquivo do bucket.
+
+**Riscos:** custo por imagem — mostrar contador e permitir “analisar só selecionadas”.
+
+---
+
+## Fase W4 — Vínculo telefone → beneficiária
+
+- Página “Vincular remetentes”: lista `remetente_fone_e164` da importação com contagem de mensagens e nome exibido no WhatsApp.
+- Para cada telefone:
+  - busca automática em `beneficiarias` por telefone/WhatsApp já cadastrado (match exato E.164 e por 8 últimos dígitos),
+  - se sem match, mostra combobox para escolher aluna manualmente (busca por nome/CPF),
+  - ação “Confirmar vínculo” grava `beneficiaria_id` em `wa_mensagens` (batch pelo telefone) **e** atualiza `beneficiarias.whatsapp` se estiver vazio.
+- Guardamos também um dicionário `wa_contatos (fone_e164, beneficiaria_id, projeto_id)` para reaproveitar em importações futuras.
+
+**Riscos/LGPD:** telefones de participantes não vinculados ficam armazenados (o usuário optou por “armazenar tudo cru”). Deixamos aviso na tela e uma ação “Purgar importação” que apaga zip, mídias e linhas.
+
+---
+
+## Fase W5 — Relatório prévio por IA
+
+- Aba “Relatório do período” dentro do grupo: seletor de data_inicio/data_fim.
+- Server function `gerarResumoGrupo({grupoId, inicio, fim})`:
+  - agrega mensagens do período (texto + transcrições + OCRs),
+  - envia contexto limitado a ~12k caracteres para `google/gemini-3-flash-preview` com prompt estruturado:
+    - **Temas recorrentes**, **Menções de presença/faltas**, **Dúvidas mais frequentes**, **Alertas (evasão, conflito, questões sensíveis)**, **Sugestões para a coordenação** — mesmo padrão do `gerarAnaliseAba`.
+  - salva em `wa_resumos` (markdown) e exibe. Botão para exportar como .md/.pdf.
+
+**Riscos:** contexto pode exceder — cortamos por período/turma; grupos muito ativos exigem janelas menores.
+
+---
+
+## Fora do escopo (para depois)
+- Ingestão em tempo real (Cloud API/Evolution) — usuário escolheu export manual.
+- Vídeos: guardamos o arquivo mas não analisamos automaticamente na V1.
+- Anonimização/mascaramento — o usuário pediu “armazenar tudo cru”; deixamos a purga como saída de emergência.
+
+---
+
+## Detalhes técnicos resumidos
+
+- **Stack:** rotas em `src/routes/_authenticated/whatsapp.*.tsx`, server fns em `src/lib/whatsapp.functions.ts`, helpers de parse/telefone em `src/lib/whatsapp-parser.ts`, storage helpers em `src/lib/whatsapp-storage.server.ts`.
+- **Deps novas:** `jszip` (já pode estar), `libphonenumber-js`.
+- **Modelos IA:** `openai/gpt-4o-mini-transcribe` (áudio), `google/gemini-3-flash-preview` (visão + resumo). Ambos via `LOVABLE_API_KEY`, server-side.
+- **Permissões:** todas as rotas exigem papel `admin`/`coordenador` via `requireModuleAccess`.
+- **SQL de apoio:** entrego bloco no chat para você aplicar no banco antes da W0 se preferir, ou deixo migration na Fase W0 pelo próprio app.
+
+Ao final das 6 fases: publicação.
