@@ -1,28 +1,35 @@
-## Problema
+## Objetivo
 
-Ao clicar em "Testar" em qualquer provedor de IA, o spinner aparece e some, mas nenhum toast (sucesso ou erro) é exibido. Os logs mostram que o servidor está respondendo corretamente (Groq: OK; Gemini: 429; OpenRouter: 401) — o problema é o toast do sonner não aparecendo nesta tela.
+Reconectar o frontend ao projeto Supabase onde os dados reais existem (`yqvocpnvunaprpmhlswn`) para eliminar o banner "Backend não conectado" e permitir login + queries funcionais.
 
-## Solução
+## Contexto
 
-Adicionar feedback **inline persistente** dentro de cada `ProvedorCard`, logo abaixo dos botões, mostrando o resultado do último teste/save. Assim o usuário sempre vê o que aconteceu, independente do toast.
+- `.env` atual aponta para `ahgcdtnpdfkcrjkxclhb` (projeto gerenciado, schema vazio).
+- Dados reais (turmas, aulas, matriculas, beneficiarias, ia_politicas, has_role, buckets etc.) já vivem em `yqvocpnvunaprpmhlswn`.
+- Banner surge de `isBackendConnected = !!user` — sem sessão válida no projeto certo, ele nunca some.
+- `src/integrations/supabase/client.ts` e `auth-middleware.ts` já usam `yqvocpnvunaprpmhlswn` como fallback hard-coded; falta alinhar `.env` e `config.toml`.
 
-## Mudanças (1 arquivo)
+## Mudanças
 
-**`src/routes/_authenticated/configuracoes.ia.tsx`** — função `ProvedorCard`:
+1. **`.env`** — atualizar as 8 variáveis para `yqvocpnvunaprpmhlswn`:
+   - `SUPABASE_URL` / `VITE_SUPABASE_URL` → `https://yqvocpnvunaprpmhlswn.supabase.co`
+   - `SUPABASE_PROJECT_ID` / `VITE_SUPABASE_PROJECT_ID` → `yqvocpnvunaprpmhlswn`
+   - `SUPABASE_ANON_KEY` / `SUPABASE_PUBLISHABLE_KEY` / `VITE_*` → a **anon/publishable key do projeto yqvocpnvunaprpmhlswn** (preciso que você cole nesta thread — não tenho acesso a ela; a key atual `sb_publishable_Nm8_1na...` é do projeto errado).
 
-1. Renderizar uma linha de status abaixo da fila de botões usando o estado das mutations (`testarMut.data`, `testarMut.error`, `salvarMut.error`, `salvarMut.isSuccess`).
+2. **`supabase/config.toml`** — trocar `project_id` para `yqvocpnvunaprpmhlswn`.
 
-2. Estilo:
-   - **Sucesso do teste**: caixa verde suave com `CheckCircle2` + `"OK — {modelo} · {tokens} tokens"` + trecho da resposta (`resposta.slice(0, 120)`).
-   - **Erro (teste ou save)**: caixa vermelha suave com `AlertCircle` + mensagem completa (até 300 chars, com `whitespace-pre-wrap` e `break-words` para caber mensagens longas tipo o 429 do Gemini).
-   - **Sucesso do save**: caixa verde discreta com "Salvo".
+3. **Secrets de servidor** — verificar/atualizar `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` e `ADMIN_SERVICE_ROLE_KEY` para apontarem ao projeto correto (necessário para `createServerFn` que usa `requireSupabaseAuth` e para o cliente admin do OCR/relatórios). Você precisa confirmar se a `ADMIN_SERVICE_ROLE_KEY` já cadastrada é do `yqvocpnvunaprpmhlswn`; se não, me passa a nova.
 
-3. A caixa some quando `isPending` volta a `true` (nova tentativa) ou permanece até nova ação.
+4. **Melhoria de UX (opcional, incluída)** — trocar o texto do banner em `_authenticated/route.tsx` de "Backend não conectado" para "Sessão expirada — faça login" com CTA para `/auth`, já que o gate real do backend é o login.
 
-4. Manter os `toast.*` existentes (redundância barata).
+5. **Reiniciar preview** após alterar `.env` para o Vite recarregar as variáveis.
+
+## O que preciso de você antes de implementar
+
+- **VITE_SUPABASE_PUBLISHABLE_KEY** do projeto `yqvocpnvunaprpmhlswn` (formato `sb_publishable_...` ou anon JWT `eyJ...`). Sem ela o cliente não autentica.
+- Confirmação de que `ADMIN_SERVICE_ROLE_KEY` já configurada como secret é do mesmo projeto; se não, me envie via campo seguro.
 
 ## Fora de escopo
 
-- Nada de mudança em server functions, schema ou lógica de roteamento de IA.
-- Nada de mudança nos outros cards/seções (Políticas, Consumo).
-- Não investigar por que o Toaster do sonner não aparece nesta rota — o feedback inline resolve o sintoma reportado pelo usuário e é mais robusto de qualquer forma.
+- Não vou tocar em `src/integrations/supabase/client.ts` nem em `types.ts` (auto-gerados).
+- Não vou rodar migrations — o SQL do OCR já está em `docs/migrations/leitor-lista-presenca.sql` para você rodar no SQL Editor do `yqvocpnvunaprpmhlswn`.
