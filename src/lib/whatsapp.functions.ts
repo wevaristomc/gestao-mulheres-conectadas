@@ -574,9 +574,9 @@ export const gerarResumoGrupo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => ResumoInput.parse(v))
   .handler(async ({ data, context }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("LOVABLE_API_KEY não configurada");
     const sb = context.supabase;
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
 
     const { data: msgs, error } = await sb
       .from("wa_mensagens")
@@ -604,10 +604,6 @@ export const gerarResumoGrupo = createServerFn({ method: "POST" })
     let contexto = linhas.join("\n");
     if (contexto.length > 12_000) contexto = contexto.slice(-12_000);
 
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3-flash-preview");
-
     const prompt = `Você é um analista sênior de projetos sociais no Brasil. Vou te enviar mensagens de um grupo de WhatsApp de coordenação/turma do projeto.
 
 Período: ${data.inicio} até ${data.fim}
@@ -626,7 +622,13 @@ Escreva em português, em Markdown, uma **prévia de relatório para a coordena�
 
 Nunca invente números. Se um dado não estiver claro, registre a lacuna.`;
 
-    const { text } = await generateText({ model, prompt });
+    const r = await executarAiRouter({
+      admin,
+      processo: "resumo_whatsapp",
+      mensagens: [{ role: "user", content: prompt }],
+      defaults: { max_tokens: 2000, temperatura: 0.4 },
+    });
+    const text = r.content;
 
     const { data: saved, error: sErr } = await sb
       .from("wa_resumos")
@@ -635,7 +637,7 @@ Nunca invente números. Se um dado não estiver claro, registre a lacuna.`;
         data_inicio: data.inicio,
         data_fim: data.fim,
         markdown: text,
-        autor_ia: "google/gemini-3-flash-preview",
+        autor_ia: `${r.provedor}/${r.modelo}`,
         created_by: context.userId,
       })
       .select("*")
