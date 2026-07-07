@@ -200,6 +200,52 @@ function ProvedorCard({ p }: { p: Provedor }) {
           </Button>
         </div>
       </div>
+
+      {(() => {
+        if (testarMut.isPending || salvarMut.isPending) return null;
+        if (testarMut.isError) {
+          const msg = (testarMut.error as Error)?.message ?? String(testarMut.error);
+          return (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="whitespace-pre-wrap break-words">
+                <span className="font-medium">Falha no teste: </span>{msg.slice(0, 300)}
+              </div>
+            </div>
+          );
+        }
+        if (testarMut.isSuccess && testarMut.data) {
+          const r = testarMut.data as { resposta?: string; modelo?: string; tokens?: number };
+          return (
+            <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="whitespace-pre-wrap break-words">
+                <span className="font-medium">OK</span> — {r.modelo} · {r.tokens ?? 0} tokens
+                {r.resposta ? <span className="text-muted-foreground"> · “{r.resposta.slice(0, 120)}”</span> : null}
+              </div>
+            </div>
+          );
+        }
+        if (salvarMut.isError) {
+          const msg = (salvarMut.error as Error)?.message ?? String(salvarMut.error);
+          return (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="whitespace-pre-wrap break-words">
+                <span className="font-medium">Falha ao salvar: </span>{msg.slice(0, 300)}
+              </div>
+            </div>
+          );
+        }
+        if (salvarMut.isSuccess) {
+          return (
+            <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Salvo
+            </div>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
