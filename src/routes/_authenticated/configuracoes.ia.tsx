@@ -128,7 +128,13 @@ function ProvedorCard({ p }: { p: Provedor }) {
 
   const testarMut = useMutation({
     mutationFn: async () => await testarProvedor({ data: { id: p.id } }),
-    onSuccess: (r: any) => toast.success(`OK — resposta: "${r.resposta?.slice(0, 60) ?? ""}"`),
+    onSuccess: (r: any) => {
+      if (r?.ok === false) {
+        toast.warning(`Teste falhou: ${String(r.erro ?? "verifique o provedor").slice(0, 120)}`);
+        return;
+      }
+      toast.success(`OK — resposta: "${r.resposta?.slice(0, 60) ?? ""}"`);
+    },
     onError: (e: Error) => toast.error(`Falhou: ${e.message}`),
   });
 
@@ -215,7 +221,17 @@ function ProvedorCard({ p }: { p: Provedor }) {
           );
         }
         if (testarMut.isSuccess && testarMut.data) {
-          const r = testarMut.data as { resposta?: string; modelo?: string; tokens?: number };
+          const r = testarMut.data as { ok?: boolean; resposta?: string; modelo?: string; tokens?: number; erro?: string };
+          if (r.ok === false) {
+            return (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="whitespace-pre-wrap break-words">
+                  <span className="font-medium">Falha no teste: </span>{String(r.erro ?? "Provedor indisponível").slice(0, 300)}
+                </div>
+              </div>
+            );
+          }
           return (
             <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
               <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
