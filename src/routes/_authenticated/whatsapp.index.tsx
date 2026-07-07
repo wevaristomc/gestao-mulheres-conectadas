@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { criarGrupo, processarZip } from "@/lib/whatsapp.functions";
+import { criarGrupo, registrarImportacao } from "@/lib/whatsapp.functions";
+import { processarZipNoBrowser, type ProgressoImport } from "@/lib/whatsapp-zip-client";
 import { gruposOptions, importacoesGrupoOptions } from "@/lib/whatsapp-queries";
 
 export const Route = createFileRoute("/_authenticated/whatsapp/")({
@@ -46,32 +46,38 @@ function WhatsappIndex() {
 
   const [uploadGrupoId, setUploadGrupoId] = useState<string | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
-  const processarFn = useServerFn(processarZip);
+  const [progresso, setProgresso] = useState<ProgressoImport | null>(null);
+  const registrarFn = useServerFn(registrarImportacao);
   const importMut = useMutation({
     mutationFn: async () => {
       if (!uploadGrupoId || !zipFile) throw new Error("Selecione um grupo e um arquivo .zip");
-      const tempId = crypto.randomUUID();
-      const storage_path = `imports/${tempId}/original.zip`;
-      const up = await supabase.storage.from("whatsapp").upload(storage_path, zipFile, {
-        upsert: true, contentType: "application/zip",
-      });
-      if (up.error) throw new Error(up.error.message);
-      const res = await processarFn({
+      const preparado = await processarZipNoBrowser(zipFile, setProgresso);
+      const res = await registrarFn({
         data: {
           grupo_id: uploadGrupoId,
-          storage_path,
           arquivo_nome: zipFile.name,
+          arquivo_zip_path: preparado.arquivo_zip_path,
+          periodo_inicio: preparado.periodo_inicio,
+          periodo_fim: preparado.periodo_fim,
+          total_audios: preparado.total_audios,
+          total_imagens: preparado.total_imagens,
+          total_videos: preparado.total_videos,
+          total_remetentes: preparado.total_remetentes,
+          midias_puladas: preparado.midias_puladas,
+          mensagens: preparado.mensagens,
         },
       });
+      setProgresso({ fase: "concluido", midias_feitas: 0, midias_total: 0, midias_puladas: preparado.midias_puladas });
       return res;
     },
     onSuccess: (res) => {
-      toast.success(`Importação criada: ${res.total_mensagens} mensagens (${res.total_audios} áudios, ${res.total_imagens} imagens).`);
-      setUploadGrupoId(null); setZipFile(null);
+      const extra = res.midias_puladas ? ` · ${res.midias_puladas} mídia(s) pulada(s) por tamanho` : "";
+      toast.success(`Importação criada: ${res.total_mensagens} mensagens (${res.total_audios} áudios, ${res.total_imagens} imagens)${extra}.`);
+      setUploadGrupoId(null); setZipFile(null); setProgresso(null);
       qc.invalidateQueries({ queryKey: ["wa"] });
       navigate({ to: "/whatsapp/$importacaoId", params: { importacaoId: res.importacao_id } });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => { toast.error(e.message); setProgresso(null); },
   });
 
   return (
@@ -135,6 +141,7 @@ function WhatsappIndex() {
               setZipFile={setZipFile}
               onImport={() => importMut.mutate()}
               importing={importMut.isPending}
+              progresso={progresso}
             />
           ))}
         </div>
