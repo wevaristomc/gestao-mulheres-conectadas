@@ -141,11 +141,14 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
         titulo: meta.name.replace(/\.[^.]+$/, "") || meta.name,
         descricao: "Importado do Google Drive",
         categoria: data.categoria ?? "outros",
+        tipo: data.categoria ?? "outros",
         storage_path: path,
         nome_arquivo: meta.name,
         mime_type: dl.contentType,
         tamanho_bytes: dl.size,
         created_by: context.userId,
+        autor_id: context.userId,
+        drive_url: meta.webViewLink ?? null,
       };
 
       const payload = { ...basePayload };

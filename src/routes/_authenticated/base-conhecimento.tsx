@@ -31,7 +31,7 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
   CATEGORIAS, categoriaLabel, deleteDocumento, documentosListOptions,
-  formatBytes, formatarData, getSignedUrl, uploadDocumento,
+  formatBytes, formatarData, getSignedUrl, pickFirst, uploadDocumento,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
@@ -113,9 +113,14 @@ function BaseConhecimentoPage() {
   const filtered = useMemo(() => {
     const s = busca.trim().toLowerCase();
     return rows.filter((r) => {
-      if (categoria !== "todas" && String(r.categoria ?? "") !== categoria) return false;
+      const rowCategoria = String(pickFirst(r, ["categoria", "tipo"]) ?? "");
+      if (categoria !== "todas" && rowCategoria !== categoria) return false;
       if (!s) return true;
-      const hay = [r.titulo, r.descricao, r.nome_arquivo, r.categoria]
+      const hay = [
+        pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"]),
+        pickFirst(r, ["descricao", "observacao"]),
+        rowCategoria,
+      ]
         .map((v) => String(v ?? "").toLowerCase())
         .join(" ");
       return hay.includes(s);
@@ -125,7 +130,7 @@ function BaseConhecimentoPage() {
   const porCategoria = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) {
-      const k = String(r.categoria ?? "outros");
+      const k = String(pickFirst(r, ["categoria", "tipo"]) ?? "outros");
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
@@ -287,23 +292,27 @@ function BaseConhecimentoPage() {
                     <div className="flex items-start gap-2">
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
-                        <div className="truncate font-medium">{String(r.titulo ?? r.nome_arquivo ?? "—")}</div>
-                        {r.descricao ? (
-                          <div className="truncate text-xs text-muted-foreground">{String(r.descricao)}</div>
-                        ) : r.nome_arquivo && r.titulo ? (
-                          <div className="truncate text-xs text-muted-foreground">{String(r.nome_arquivo)}</div>
+                        <div className="truncate font-medium">
+                          {String(pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"]) ?? "—")}
+                        </div>
+                        {pickFirst(r, ["descricao", "observacao", "drive_url"]) ? (
+                          <div className="truncate text-xs text-muted-foreground">
+                            {String(pickFirst(r, ["descricao", "observacao", "drive_url"]))}
+                          </div>
+                        ) : pickFirst(r, ["nome_arquivo"]) && pickFirst(r, ["titulo"]) ? (
+                          <div className="truncate text-xs text-muted-foreground">{String(pickFirst(r, ["nome_arquivo"]))}</div>
                         ) : null}
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{categoriaLabel(String(r.categoria ?? ""))}</Badge>
+                    <Badge variant="secondary">{categoriaLabel(String(pickFirst(r, ["categoria", "tipo"]) ?? ""))}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatBytes(Number(r.tamanho_bytes ?? 0))}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatarData(r.created_at)}
+                    {formatarData(pickFirst(r, ["created_at", "criado_em"]))}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
