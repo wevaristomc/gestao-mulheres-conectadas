@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { CalendarPlus, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,10 @@ import {
 } from "@/components/ui/table";
 import { cronogramaGeralOptions, turmasMteListOptions } from "@/lib/mte-queries";
 import { downloadCSV, toCSV } from "@/lib/csv";
+import {
+  criarTurmasCiclo2Previstas,
+  type ResumoCiclo2,
+} from "@/lib/ciclo2-previsto.functions";
 
 export const Route = createFileRoute("/_authenticated/mte/cronograma")({
   component: CronogramaIndex,
@@ -25,6 +31,18 @@ export const Route = createFileRoute("/_authenticated/mte/cronograma")({
 function CronogramaIndex() {
   const turmasQ = useQuery(turmasMteListOptions());
   const q = useQuery(cronogramaGeralOptions());
+  const qc = useQueryClient();
+  const criarCiclo2 = useServerFn(criarTurmasCiclo2Previstas);
+  const ciclo2Mut = useMutation({
+    mutationFn: async () => (await criarCiclo2()) as ResumoCiclo2,
+    onSuccess: (r) => {
+      toast.success(
+        `Ciclo 2 previsto · ${r.turmas_criadas} nova(s), ${r.turmas_existentes} já existia(m) · ${r.aulas_placeholder_criadas} placeholder(s)`,
+      );
+      qc.invalidateQueries({ queryKey: ["mte"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao criar Ciclo 2"),
+  });
 
   const [turmaFiltro, setTurmaFiltro] = useState<string>("__all__");
   const [de, setDe] = useState<string>("");
@@ -90,6 +108,40 @@ function CronogramaIndex() {
           </Button>
         }
       />
+
+      <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm flex flex-wrap items-center gap-3">
+        <CalendarPlus className="h-4 w-4 text-primary shrink-0" />
+        <div className="flex-1 min-w-64">
+          <div className="font-medium">Ciclo 2 — 6 turmas previstas (C2-01 a C2-06)</div>
+          <div className="text-xs text-muted-foreground">
+            Cria turmas previstas (50 vagas · 150h · Betim e Juatuba) condicionadas
+            à liberação da 2ª parcela, para que o cronograma contemple as 12 turmas
+            exigidas pelo Ofício 49148/2026. Idempotente.
+          </div>
+        </div>
+        <Button
+          size="sm"
+          onClick={() => ciclo2Mut.mutate()}
+          disabled={ciclo2Mut.isPending}
+        >
+          {ciclo2Mut.isPending ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+          ) : (
+            <CalendarPlus className="mr-1 h-4 w-4" />
+          )}
+          Adicionar Ciclo 2 previsto
+        </Button>
+      </div>
+      {ciclo2Mut.data ? (
+        <div className="mb-4 rounded-md border bg-background p-3 text-xs">
+          Ciclo 2 · <strong>{ciclo2Mut.data.turmas_criadas}</strong> criada(s), <strong>{ciclo2Mut.data.turmas_existentes}</strong> já existia(m). Placeholders de aula: <strong>{ciclo2Mut.data.aulas_placeholder_criadas}</strong>.
+          {ciclo2Mut.data.inconsistencias.length > 0 ? (
+            <ul className="mt-1 list-disc pl-4 text-amber-800">
+              {ciclo2Mut.data.inconsistencias.map((s, i) => <li key={i}>{s}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="grid gap-1.5">
