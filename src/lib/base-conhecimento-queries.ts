@@ -23,26 +23,6 @@ export function categoriaLabel(k: string | null | undefined): string {
   return CATEGORIAS.find((c) => c.key === k)?.label ?? String(k ?? "—");
 }
 
-function isMissingColumn(message: string, key: string): boolean {
-  return message.includes(`Could not find the '${key}' column`) ||
-    new RegExp(`column ["']?${key}["']? does not exist`, "i").test(message);
-}
-
-async function insertDocumentoCompat(payload: Record<string, unknown>) {
-  const body = { ...payload };
-  let lastError: string | null = null;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const ins = await supabase.from("documentos").insert(body).select("*").maybeSingle();
-    if (!ins.error) return (ins.data ?? body) as DocRow;
-
-    lastError = ins.error.message;
-    const missingKey = Object.keys(body).find((key) => isMissingColumn(ins.error.message, key));
-    if (!missingKey) break;
-    delete body[missingKey];
-  }
-  throw new Error(lastError ?? "Falha ao registrar documento.");
-}
-
 export function formatBytes(n: number | null | undefined): string {
   const b = Number(n ?? 0);
   if (!b) return "—";
@@ -99,13 +79,10 @@ function sanitize(name: string): string {
     .slice(0, 120);
 }
 
-export async function uploadDocumento(input: {
+export async function uploadDocumentoFile(input: {
   projeto_id: string;
   file: File;
-  titulo: string;
-  descricao?: string | null;
-  categoria: CategoriaKey;
-}) {
+}): Promise<{ path: string }> {
   const { file, projeto_id } = input;
   const uid = (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
   const path = `${projeto_id}/${uid}-${sanitize(file.name)}`;
@@ -115,32 +92,7 @@ export async function uploadDocumento(input: {
     upsert: false,
   });
   if (up.error) throw new Error(`Falha ao enviar arquivo: ${up.error.message}`);
-
-  const payload: Record<string, unknown> = {
-    projeto_id,
-    titulo: input.titulo,
-    categoria: input.categoria,
-    tipo: input.categoria,
-    storage_path: path,
-    nome_arquivo: file.name,
-    mime_type: file.type || null,
-    tamanho_bytes: file.size,
-  };
-  if (input.descricao !== undefined) payload.descricao = input.descricao;
-
-  const { data: userData } = await supabase.auth.getUser();
-  if (userData?.user?.id) {
-    payload.created_by = userData.user.id;
-    payload.autor_id = userData.user.id;
-  }
-
-  try {
-    return await insertDocumentoCompat(payload);
-  } catch (e) {
-    // rollback do arquivo caso o insert falhe
-    await supabase.storage.from(BUCKET).remove([path]);
-    throw new Error(`Falha ao registrar documento: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  return { path };
 }
 
 export async function deleteDocumento(row: DocRow) {
