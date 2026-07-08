@@ -1,21 +1,29 @@
-## Plano
+## Problema
 
-1. **Corrigir o upload manual de documentos**
-   - Parar de registrar o documento diretamente pelo cliente depois do upload.
-   - Criar/usar um fluxo de servidor autenticado para salvar o arquivo e registrar o item na tabela `documentos`, igual ao padrão já aplicado na importação pelo Drive.
-   - Manter rollback: se o registro falhar, remover o arquivo enviado para não deixar arquivo órfão.
-   - Exibir a mensagem real do erro no diálogo/toast caso algo ainda falhe.
+A exclusão pelo botão da lixeira usa `supabase.from("documentos").delete()` direto do cliente. Assim como acontecia no upload manual, esse caminho falha silenciosamente por RLS/permissões no schema atual (mesmos motivos do bug anterior: colunas variáveis como `autor_id`/`created_by`, políticas restritivas). O usuário confirma e nada acontece.
 
-2. **Ajustar compatibilidade com o schema atual**
-   - Reaproveitar a lógica adaptativa de inserção para lidar com campos que existem/não existem (`tipo`, `autor_id`, `storage_path`, etc.).
-   - Evitar novas tentativas inúteis em colunas inexistentes e tratar claramente erro de permissão/RLS quando acontecer.
+## Correção proposta
 
-3. **Corrigir o layout da caixa “Novo documento”**
-   - Limitar largura responsiva do diálogo e impedir que inputs/textarea extrapolem para fora.
-   - Quebrar/truncar nomes longos de arquivo e títulos longos corretamente.
-   - Ajustar rodapé e botões para ficarem alinhados em desktop e empilháveis no mobile.
-   - Trocar o texto técnico sobre “bucket privado” por uma descrição mais curta e legível.
+1. **Nova server function `deleteDocumentoById`** em `src/lib/base-conhecimento.functions.ts`:
+   - Middleware `requireSupabaseAuth`.
+   - Valida vínculo do usuário com o `projeto_id` do documento (mesma checagem de `user_roles` já usada no registro).
+   - Usa `supabaseAdmin` (service_role) para:
+     - Ler a linha (`id`, `projeto_id`, `storage_path`).
+     - `DELETE` no `documentos` por `id`.
+     - Remover o arquivo do bucket `documentos` (best-effort).
+   - Retorna erro claro se algo falhar.
 
-4. **Validar o fluxo**
-   - Confirmar que: selecionar arquivo → título preenchido → enviar → diálogo fecha → documento aparece na lista.
-   - Confirmar visualmente que o diálogo fica centralizado e proporcional com nomes longos como no anexo.
+2. **Atualizar `src/routes/_authenticated/base-conhecimento.tsx`**:
+   - Trocar `deleteDocumento(row)` na mutation por `deleteDocumentoById({ data: { id: row.id } })` via `useServerFn`.
+   - Manter toast de sucesso/erro exibindo a mensagem real do servidor.
+   - Fechar diálogo de confirmação apenas em sucesso.
+
+3. **Limpeza**: remover ou marcar como deprecated a `deleteDocumento` client-side em `base-conhecimento-queries.ts` para evitar reuso.
+
+## Verificação
+
+- Clicar em remover → toast "Documento removido" e a linha some da tabela.
+- Se o arquivo não existir mais no storage, a exclusão do registro ainda conclui.
+- Se o usuário não tiver vínculo com o projeto, mensagem 403 clara.
+
+Sem mudanças de schema, RLS ou UI além do fluxo de exclusão.

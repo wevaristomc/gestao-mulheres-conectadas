@@ -30,12 +30,12 @@ import {
 import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
-  CATEGORIAS, categoriaLabel, deleteDocumento, documentosListOptions,
+  CATEGORIAS, categoriaLabel, documentosListOptions,
   formatBytes, formatarData, getSignedUrl, pickFirst, removeDocumentoFile, uploadDocumentoFile,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
-import { registerUploadedDocumento } from "@/lib/base-conhecimento.functions";
+import { registerUploadedDocumento, deleteDocumentoById } from "@/lib/base-conhecimento.functions";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
@@ -60,6 +60,7 @@ function BaseConhecimentoPage() {
   const [importCat, setImportCat] = useState<CategoriaKey>("outros");
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const importGdrive = useServerFn(importGdriveToBucket);
+  const deleteDocumento = useServerFn(deleteDocumentoById);
 
   const importFromDrive = useMutation({
     mutationFn: async (files: GDriveFile[]) => {
@@ -138,7 +139,7 @@ function BaseConhecimentoPage() {
   }, [rows]);
 
   const del = useMutation({
-    mutationFn: (row: DocRow) => deleteDocumento(row),
+    mutationFn: (row: DocRow) => deleteDocumento({ data: { id: String(row.id) } }),
     onSuccess: () => {
       toast.success("Documento removido");
       qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
