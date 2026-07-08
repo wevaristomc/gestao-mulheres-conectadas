@@ -25,6 +25,7 @@ import { ImportarMoodleCard } from "@/components/mte/importar-moodle-card";
 import { GerarMatriculasAvaCard } from "@/components/mte/gerar-matriculas-ava-card";
 import { SugestoesBeneficiariasAvaCard } from "@/components/mte/sugestoes-beneficiarias-ava-card";
 import { CursosSemTurmaAvaCard } from "@/components/mte/cursos-sem-turma-ava-card";
+import { ImportarConsolidadoCard } from "@/components/mte/importar-consolidado-card";
 import {
   arquivoParaImagensBase64,
   carregarMatriculasDaTurma,
@@ -155,6 +156,7 @@ function ImportarListaPage() {
       />
 
       <ImportarTurmaCsvCard />
+      <ImportarConsolidadoCard />
       <ImportarMoodleCard />
       <CursosSemTurmaAvaCard />
       <SugestoesBeneficiariasAvaCard />
