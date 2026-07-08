@@ -291,6 +291,50 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
     }
 
     // =========================== 4. Matrículas ==========================
+    // 4a. Espelho de beneficiárias em `cursistas` (best-effort). O Pedagógico
+    // e o Administrativo leem `matriculas.cursista_id → cursistas(*)`, por isso
+    // além do vínculo MTE (beneficiaria_id) precisamos escrever cursista_id.
+    const chaveParaCursistaId = new Map<string, string>();
+    let cursistasIndisponivel = false;
+    for (const agg of porCpf.values()) {
+      const cursistaPayload: Record<string, unknown> = {
+        nome: agg.nome,
+        cpf: agg.chave,
+      };
+      const existQ = await admin
+        .from("cursistas")
+        .select("id")
+        .eq("cpf", agg.chave)
+        .limit(1)
+        .maybeSingle();
+      if (existQ.error) {
+        // tabela ou coluna ausente — degrada silenciosamente
+        cursistasIndisponivel = true;
+        break;
+      }
+      if (existQ.data) {
+        const upd = await admin
+          .from("cursistas")
+          .update(cursistaPayload)
+          .eq("id", (existQ.data as { id: string }).id);
+        if (!upd.error) {
+          chaveParaCursistaId.set(agg.chave, (existQ.data as { id: string }).id);
+          resumo.cursistas_atualizados += 1;
+        }
+      } else {
+        const ins = await admin.from("cursistas").insert(cursistaPayload).select("id").single();
+        if (!ins.error) {
+          chaveParaCursistaId.set(agg.chave, (ins.data as { id: string }).id);
+          resumo.cursistas_criados += 1;
+        }
+      }
+    }
+    if (cursistasIndisponivel) {
+      resumo.inconsistencias.push(
+        "Tabela `cursistas` indisponível — alunas aparecerão só no MTE. Habilite a tabela ou rode a migração para desbloquear Pedagógico/Administrativo.",
+      );
+    }
+
     // Pega existentes para diferenciar criadas × atualizadas
     const matExistentes = new Set<string>();
     {
@@ -310,6 +354,7 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
     type MatPayload = {
       turma_id: string;
       beneficiaria_id: string;
+      cursista_id?: string | null;
       status: string;
       assinou_lista: boolean;
       observacao_importacao: string | null;
@@ -320,6 +365,7 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
     for (const agg of porCpf.values()) {
       const benefId = chaveParaBenefId.get(agg.chave);
       if (!benefId) continue;
+      const cursistaId = chaveParaCursistaId.get(agg.chave) ?? null;
       for (const t of agg.turmas) {
         const turmaId = turmaIdPorCodigo.get(t.turma);
         if (!turmaId) {
@@ -330,6 +376,7 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
         matDedup.set(chave, {
           turma_id: turmaId,
           beneficiaria_id: benefId,
+          cursista_id: cursistaId,
           status: "cursando",
           assinou_lista: t.assinou_lista,
           observacao_importacao: t.observacao,
@@ -339,16 +386,30 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
     }
 
     const matRows = [...matDedup.values()];
+    let matriculaSemCursistaId = false;
     for (let k = 0; k < matRows.length; k += 500) {
       const slice = matRows.slice(k, k + 500);
-      const { error } = await admin
+      let { error } = await admin
         .from("matriculas")
         .upsert(slice, { onConflict: "turma_id,beneficiaria_id" });
+      if (error && /cursista_id/i.test(error.message)) {
+        matriculaSemCursistaId = true;
+        const stripped = slice.map(({ cursista_id: _c, ...rest }) => rest);
+        const retry = await admin
+          .from("matriculas")
+          .upsert(stripped, { onConflict: "turma_id,beneficiaria_id" });
+        error = retry.error;
+      }
       if (error) throw new Error(`matriculas UPSERT: ${error.message}`);
       for (const r of slice) {
         if (matExistentes.has(`${r.turma_id}::${r.beneficiaria_id}`)) resumo.matriculas_atualizadas += 1;
         else resumo.matriculas_criadas += 1;
       }
+    }
+    if (matriculaSemCursistaId) {
+      resumo.inconsistencias.push(
+        "Coluna `matriculas.cursista_id` não existe — rode docs/migrations/consolidado-pedagogico.sql para o Pedagógico/Administrativo verem as alunas.",
+      );
     }
 
     // =========================== 5. AVA links ===========================
@@ -391,6 +452,78 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
           }
         }
       }
+    }
+
+    // ============ 6. Esqueleto de aulas (30 aulas × 5h = 150h) ============
+    // Só cria se a turma ainda não tem aulas — idempotente e defensivo se a
+    // tabela não existir. Gera 30 datas em dias úteis a partir de 2026-05-09.
+    function gerarDatasDiasUteis(inicioISO: string, qtd: number): string[] {
+      const out: string[] = [];
+      const [y, m, d] = inicioISO.split("-").map(Number);
+      const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+      // Se cair no fim de semana, avança para segunda
+      while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) {
+        dt.setUTCDate(dt.getUTCDate() + 1);
+      }
+      while (out.length < qtd) {
+        const dow = dt.getUTCDay();
+        if (dow !== 0 && dow !== 6) {
+          out.push(dt.toISOString().slice(0, 10));
+        }
+        dt.setUTCDate(dt.getUTCDate() + 1);
+      }
+      return out;
+    }
+
+    const QTD_AULAS = 30;
+    const DURACAO_H = 5;
+    let aulasIndisponivel = false;
+    for (const [codigo, turmaId] of turmaIdPorCodigo.entries()) {
+      // já tem aulas?
+      const { count, error: cErr } = await admin
+        .from("aulas")
+        .select("id", { count: "exact", head: true })
+        .eq("turma_id", turmaId);
+      if (cErr) {
+        aulasIndisponivel = true;
+        continue;
+      }
+      if ((count ?? 0) > 0) continue;
+
+      const datas = gerarDatasDiasUteis("2026-05-09", QTD_AULAS);
+      const rows = datas.map((data, i) => ({
+        turma_id: turmaId,
+        data,
+        titulo: `Aula ${String(i + 1).padStart(2, "0")} — ${codigo}`,
+        duracao: DURACAO_H,
+        ordem: i + 1,
+      }));
+      // tentativa completa
+      let ins = await admin.from("aulas").insert(rows);
+      // fallback progressivo removendo colunas ausentes
+      const removerColuna = (nome: "titulo" | "duracao" | "ordem") => {
+        for (const r of rows) delete (r as Record<string, unknown>)[nome];
+      };
+      let tentativas = 0;
+      while (ins.error && tentativas < 4) {
+        const msg = ins.error.message;
+        if (/column .*ordem/i.test(msg)) removerColuna("ordem");
+        else if (/column .*duracao/i.test(msg)) removerColuna("duracao");
+        else if (/column .*titulo/i.test(msg)) removerColuna("titulo");
+        else break;
+        ins = await admin.from("aulas").insert(rows);
+        tentativas += 1;
+      }
+      if (ins.error) {
+        aulasIndisponivel = true;
+        continue;
+      }
+      resumo.aulas_criadas += rows.length;
+    }
+    if (aulasIndisponivel) {
+      resumo.inconsistencias.push(
+        "Não foi possível criar o esqueleto de aulas em todas as turmas — confirme se a tabela `aulas` existe com colunas turma_id/data.",
+      );
     }
 
     return resumo;
