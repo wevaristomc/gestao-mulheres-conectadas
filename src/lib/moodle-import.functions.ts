@@ -22,13 +22,17 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
     const helpers = await import("@/lib/moodle-import.server");
     const { parseInserts, colIdx, toIso, toNum, toBool, pickCpf } = helpers;
 
-    // Autoriza: apenas admin
-    const roleQ = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    if (roleQ.error || !roleQ.data) {
-      throw new Error("Apenas administradores podem importar dump do Moodle.");
+    // Autoriza: apenas coordenação geral (padrão do app — ver rbac.functions.ts)
+    const roleQ = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "coordenador_geral")
+      .limit(1)
+      .maybeSingle();
+    if (roleQ.error) throw new Error(roleQ.error.message);
+    if (!roleQ.data) {
+      throw new Error("Apenas a coordenação geral pode importar dump do Moodle.");
     }
 
     const admin = getSupabaseAdmin();
