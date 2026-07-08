@@ -24,12 +24,24 @@ export type ResumoConsolidado = {
   professores_vinculados: number;
   cpfs_invalidos: number;
   cpfs_duplicados: number;
+  cursistas_criados: number;
+  cursistas_atualizados: number;
+  aulas_criadas: number;
+  turmas_com_projeto: number;
   inconsistencias: string[];
 };
 
 export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<ResumoConsolidado> => {
+  .inputValidator((data: { projeto_id?: string | null } | undefined) => {
+    const projeto_id = data?.projeto_id ?? null;
+    if (projeto_id !== null && typeof projeto_id !== "string") {
+      throw new Error("projeto_id inválido");
+    }
+    return { projeto_id };
+  })
+  .handler(async ({ data, context }): Promise<ResumoConsolidado> => {
+    const projetoId = data.projeto_id;
     // 1. Autorização
     const roleQ = await context.supabase
       .from("user_roles")
@@ -41,6 +53,11 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
     if (roleQ.error) throw new Error(roleQ.error.message);
     if (!roleQ.data) {
       throw new Error("Apenas a coordenação geral pode rodar a importação consolidada.");
+    }
+    if (!projetoId) {
+      throw new Error(
+        "Selecione o projeto ativo (Manuel Querino / Mulheres Conectadas) no topo antes de rodar a importação.",
+      );
     }
 
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -58,6 +75,10 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
       professores_vinculados: 0,
       cpfs_invalidos: 0,
       cpfs_duplicados: 0,
+      cursistas_criados: 0,
+      cursistas_atualizados: 0,
+      aulas_criadas: 0,
+      turmas_com_projeto: 0,
       inconsistencias: [],
     };
 
@@ -89,6 +110,7 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
         ciclo: 1,
         professor_nome: prof?.nome ?? null,
         professor_email: prof?.email ?? null,
+        projeto_id: projetoId,
       };
 
       // Busca existente por código (case-insensitive)
@@ -107,33 +129,54 @@ export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
           .eq("id", (existQ.data as { id: string }).id);
         if (upd.error) {
           // Se a coluna professor_nome/email não existir, tenta sem esses campos
-          if (/professor_(nome|email)/i.test(upd.error.message)) {
-            delete payload.professor_nome;
-            delete payload.professor_email;
+          if (/professor_(nome|email)|projeto_id/i.test(upd.error.message)) {
+            if (/professor_(nome|email)/i.test(upd.error.message)) {
+              delete payload.professor_nome;
+              delete payload.professor_email;
+              resumo.inconsistencias.push(
+                "Colunas professor_nome/professor_email não existem em turmas — rode a migração docs/migrations/consolidado-qajbc.sql.",
+              );
+            }
+            if (/projeto_id/i.test(upd.error.message)) {
+              delete payload.projeto_id;
+              resumo.inconsistencias.push(
+                "Coluna projeto_id não existe em turmas — dados não aparecerão em Pedagógico/Administrativo/Relatórios.",
+              );
+            }
             const upd2 = await admin.from("turmas").update(payload).eq("id", (existQ.data as { id: string }).id);
             if (upd2.error) throw new Error(`turmas UPDATE: ${upd2.error.message}`);
-            resumo.inconsistencias.push(
-              "Colunas professor_nome/professor_email não existem em turmas — rode a migração docs/migrations/consolidado-qajbc.sql.",
-            );
           } else {
             throw new Error(`turmas UPDATE: ${upd.error.message}`);
           }
         }
         turmaIdPorCodigo.set(t.codigo_turma, (existQ.data as { id: string }).id);
         resumo.turmas_atualizadas += 1;
+        if ("projeto_id" in payload) resumo.turmas_com_projeto += 1;
       } else {
         let ins = await admin.from("turmas").insert(payload).select("id").single();
-        if (ins.error && /professor_(nome|email)/i.test(ins.error.message)) {
-          delete payload.professor_nome;
-          delete payload.professor_email;
+        while (
+          ins.error &&
+          /professor_(nome|email)|projeto_id/i.test(ins.error.message)
+        ) {
+          if (/professor_(nome|email)/i.test(ins.error.message)) {
+            delete payload.professor_nome;
+            delete payload.professor_email;
+            resumo.inconsistencias.push(
+              "Colunas professor_nome/professor_email não existem em turmas — rode a migração docs/migrations/consolidado-qajbc.sql.",
+            );
+          }
+          if (/projeto_id/i.test(ins.error.message)) {
+            delete payload.projeto_id;
+            resumo.inconsistencias.push(
+              "Coluna projeto_id não existe em turmas — dados não aparecerão em Pedagógico/Administrativo/Relatórios.",
+            );
+          }
           ins = await admin.from("turmas").insert(payload).select("id").single();
-          resumo.inconsistencias.push(
-            "Colunas professor_nome/professor_email não existem em turmas — rode a migração docs/migrations/consolidado-qajbc.sql.",
-          );
         }
         if (ins.error) throw new Error(`turmas INSERT: ${ins.error.message}`);
         turmaIdPorCodigo.set(t.codigo_turma, (ins.data as { id: string }).id);
         resumo.turmas_criadas += 1;
+        if ("projeto_id" in payload) resumo.turmas_com_projeto += 1;
       }
     }
 
