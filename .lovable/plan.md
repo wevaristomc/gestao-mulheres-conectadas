@@ -1,45 +1,83 @@
 
-## Análise de viabilidade
+## Diagnóstico
 
-Hoje o import do Moodle já preenche as tabelas espelho `ava_*` e faz dois cruzamentos:
-- `ava_users.beneficiaria_id` ← `beneficiarias` por CPF
-- `ava_courses.turma_id` ← `turmas` por `codigo_turma`/`shortname`
+Analisando as chamadas de rede da sua sessão e o resultado do botão "Gerar matrículas do AVA" (que retornou `criadas: 0 · atualizadas: 0 · ignoradas: 0 · total_pares: 0`), a importação **rodou**, mas quase nada foi promovido às tabelas operacionais por **três motivos distintos**:
 
-Ou seja, os dados estão no banco, mas **espelhados**, não escritos nas tabelas operacionais (`turmas`, `beneficiarias`, `matriculas`, `aulas`). É totalmente viável promover esse espelho para as tabelas reais — com ressalvas por tipo de dado.
+### 1. A tabela `beneficiarias` está vazia
+A consulta `GET /rest/v1/beneficiarias` retornou `[]`. Sem beneficiárias, o cruzamento por CPF (`ava_users.beneficiaria_id`) não tem para onde apontar → nenhuma matrícula pode ser gerada, porque `matriculas` exige `beneficiaria_id` real.
 
-### O que dá para materializar com segurança
+**Causa:** o import do dump do Moodle nunca cria beneficiária — ele apenas **cruza** com beneficiárias que já existem. Como o cadastro está vazio, o cruzamento inteiro falhou silenciosamente.
 
-| Origem AVA | Destino | Confiança | Observação |
-|---|---|---|---|
-| `ava_courses` (com `turma_id NULL`) | `turmas` | Média | Só temos `shortname`, `fullname`, `startdate`, `enddate`. Campos MTE obrigatórios (`horario_realizacao`, `local_endereco`, `contato_local_nome`, `municipio`, `ciclo`, `turno`, CH, vagas) **não existem no Moodle** — turma criada nasce incompleta e precisa ser completada manualmente. |
-| `ava_users` (com `beneficiaria_id NULL` e CPF válido) | `beneficiarias` | Baixa/Média | Moodle tem `firstname`, `lastname`, `email`, `cpf`. Faltam: `data_nascimento`, `genero`, `raca`, endereço, `municipio`, NIS, dados bancários. Criaria beneficiária com ficha incompleta (bloqueia relatórios MTE). |
-| `ava_enrolments` (user+course já cruzados) | `matriculas` | **Alta** | É o caso mais direto: se `ava_user_id` tem `beneficiaria_id` e `ava_course_id` tem `turma_id`, dá para inserir `matriculas (turma_id, beneficiaria_id)`. Já existe índice único `(turma_id, beneficiaria_id)`, então é idempotente por `upsert`. Status derivável de `ava_enrolments.status` + `ava_completions`. |
-| `ava_activities` | `aulas` | **Não recomendado** | "Aulas" no sistema são encontros presenciais com data/horário/CH; atividades do Moodle são recursos/tarefas do EAD. Semânticas diferentes — misturar polui frequência e certificação. |
+### 2. 7 de 8 cursos do AVA não bateram com nenhuma turma
+Do retorno `GET /rest/v1/ava_courses`:
 
-### Recomendação
+| `shortname` no Moodle | `codigo_turma` no sistema | Cruzou? |
+|---|---|---|
+| `JBT-MC-01` | `JBT-MC-01` | ✅ |
+| `Turma: BET-MC-01` | (não existe) | ❌ |
+| `Turma: BET-MC-02` | (não existe) | ❌ |
+| `Turma: BET-MC-03` | (não existe) | ❌ |
+| `Turma: JBT-MC-01` | `JBT-MC-01` | ❌ (prefixo "Turma: ") |
+| `Turma: JBT-MC-02` | (não existe) | ❌ |
+| `AVA PARA PROFESSORES` / `TREINAMENTO AVA` / `JBT-MC-03` | (não existem) | ❌ |
 
-Fazer **três passos opt-in** após o import, e **não** materializar aulas:
+Dois problemas se somam:
+- O algoritmo de match usa `shortname` igual/contido em `codigo_turma`, mas o Moodle grava `"Turma: BET-MC-01"` com prefixo. A lógica atual só limpa case/espaço, não remove o prefixo `Turma:`.
+- Só existe **uma turma cadastrada** no sistema (`JBT-MC-01`). As demais (`BET-MC-01/02/03`, `JBT-MC-02/03`) precisam ser criadas manualmente antes que o cruzamento funcione.
 
-1. **Matrículas automáticas** (ganho imediato, risco baixo): botão "Gerar matrículas a partir do AVA" que faz `upsert` em `matriculas` para todo par (`ava_user.beneficiaria_id`, `ava_course.turma_id`) já cruzado, com `status` derivado (`cursando`/`concluinte`/`evadida`) a partir de `ava_enrolments.status`/`timeend` e presença de conclusões.
-2. **Beneficiárias a partir do AVA** (opt-in por linha): tela de revisão listando `ava_users` com CPF válido e `beneficiaria_id NULL`, permitindo selecionar quais criar. Cria a beneficiária com o mínimo (`nome`, `cpf`, `email`) e marca como "cadastro incompleto" para completar depois.
-3. **Turmas a partir do AVA** (opt-in por linha, com wizard): tela listando `ava_courses` sem `turma_id`, pré-preenchendo `codigo_turma=shortname`, `nome_curso=fullname`, `data_inicio/data_fim` — usuária confirma e completa os campos MTE obrigatórios antes de salvar.
+### 3. `ava_enrolments` do curso cruzado está vazio
+`GET /rest/v1/ava_enrolments?ava_course_id=eq.5` retornou `[]`. Ou seja, mesmo para a única turma cruzada, nenhum aluno foi importado como matrícula do AVA. Isso acontece porque o parser do dump depende de `pmc_enrol` (instância de matrícula) → `pmc_user_enrolments` (aluno × instância). Se o dump não contém INSERTs em `pmc_enrol` para o curso 5, ou os IDs não bateram, as matrículas ficam sem `ava_course_id` e são filtradas.
 
-Aulas continuam sendo criadas pelo cronograma pedagógico atual; o AVA passa a alimentar frequência/notas de forma **paralela** (já feito na tela `mte.ava`), não a ser fonte de verdade das aulas.
+### 4. Professores/instrutores
+O import do dump **não trata professores** hoje. `pmc_role_assignments` (que liga usuário → curso → papel `editingteacher`) não está entre as tabelas parseadas. Por isso instrutor de turma nunca é preenchido a partir do AVA.
 
-### Escopo desta implementação (proposto)
+---
 
-Só o **passo 1** nesta primeira entrega, que é o mais seguro e o de maior valor:
+## Plano de correção (proposto)
 
-- Server function `gerarMatriculasDoAva` (createServerFn, admin) que:
-  - Busca pares únicos (`ava_enrolments` → `beneficiaria_id`, `turma_id`) onde ambos estão preenchidos.
-  - Deriva `status`: `concluinte` se existir `ava_grades.itemtype='course'` com `finalgrade > 0` **e** `timeend` no passado; `evadida` se `ava_enrolments.status = 1`; senão `cursando`.
-  - `upsert` em `matriculas` com `onConflict: turma_id,beneficiaria_id`, gravando `observacao_importacao='Gerada via AVA <importacao_id>'`.
-  - Retorna `{ criadas, atualizadas, ignoradas }`.
-- UI: novo card em `mte.importar-lista` (abaixo do card do dump) com botão "Gerar matrículas do AVA" e um resumo.
+### Passo A — Diagnóstico rápido (para você confirmar antes)
+Rodar no SQL Editor do banco:
+```sql
+select count(*) from ava_users;
+select count(*) from ava_users where cpf is not null;
+select count(*) from ava_enrolments;
+select count(*) from ava_enrolments where ava_course_id is not null;
+```
+Isso confirma se `pmc_enrol` foi de fato ignorado no parse ou se o dump não trouxe essa tabela.
 
-Passos 2 e 3 ficam como fase seguinte, precisam de UI de revisão (não é seguro criar em lote sem confirmação por causa dos campos MTE obrigatórios).
+### Passo B — Ajustes no import do dump
+1. **Normalizar `shortname` no match de turmas.** Remover prefixo `"Turma:"`/`"turma "` e comparar a chave já limpa. Isso resolve 4 dos 5 cursos não cruzados imediatamente.
+2. **Parse de `pmc_role_assignments` + `pmc_context`.** Popular `ava_users.role_por_curso` (nova coluna JSONB) para saber quem é `editingteacher`/`teacher` em cada curso. Servirá para o passo D.
+3. **Retornar contadores mais claros** no card do dump: "cursos sem turma equivalente", "alunos sem beneficiária", "enrolments sem curso mapeado" — hoje esses casos somem no resumo.
 
-### Perguntas antes de eu começar
+### Passo C — Criar beneficiárias a partir do AVA (opt-in, com revisão)
+Nova tela `mte/importar-lista` → card "Beneficiárias sugeridas pelo AVA":
+- Lista `ava_users` com CPF válido e `beneficiaria_id NULL`.
+- Cada linha marcável; botão "Criar N beneficiárias selecionadas".
+- Cria com `nome = firstname + lastname`, `cpf`, `email` — marca `observacoes = 'Cadastro incompleto — origem AVA'` para você completar depois.
+- Após criar, roda o cruzamento novamente e o botão "Gerar matrículas" passa a produzir resultado.
 
-1. Fecho o escopo desta entrega **só no passo 1 (matrículas automáticas)**, ou você quer os três já?
-2. Para status derivado, tudo bem usar a regra acima ou prefere sempre `cursando` e deixar a coordenação ajustar?
+### Passo D — Vincular professor da turma (a partir do AVA)
+Depois que o Passo B.2 estiver rodando, novo botão "Sugerir instrutores do AVA":
+- Para cada `ava_course` com `turma_id` e algum aluno com papel `editingteacher`, propor esse usuário como `turmas.instrutor_id` (via tabela `usuarios`/`profiles` por email/CPF).
+- Não grava automático — mostra tabela "AVA sugere X para turma Y" e você confirma.
+
+### Passo E — Recomendação sobre turmas ausentes
+Não criar turmas automaticamente: os campos MTE obrigatórios (`horario_realizacao`, `local_endereco`, `contato_local_nome`, `municipio`, `ciclo`, `turno`, CH, vagas) não vêm do Moodle. Em vez disso, o card do dump lista **"Cursos do AVA sem turma correspondente"** com um botão "Criar turma pré-preenchida" que abre o form MTE já com `codigo_turma` e `nome_curso` populados — você completa o resto.
+
+---
+
+## Escopo desta próxima entrega
+
+Sugestão de priorização (do maior impacto ao menor):
+
+1. **Passo B.1** (normalizar prefixo `Turma:`) — trivial, resolve 4 cruzamentos.
+2. **Passo A** — você roda o SQL e me diz os contadores, para eu saber se `ava_enrolments` está mesmo vazio ou se é problema de parse do `pmc_enrol`.
+3. **Passo C** — cadastro em lote de beneficiárias sugeridas (com revisão), que é o **bloqueio principal** hoje.
+4. **Passo B.2 + D** — professores via `pmc_role_assignments`.
+5. **Passo E** — atalho "criar turma pré-preenchida".
+
+### Perguntas antes de eu implementar
+
+1. Fecho o escopo **em B.1 + C + E** nesta rodada (o que desbloqueia matrículas de verdade) e deixo B.2/D (professores) para a rodada seguinte, ou você prefere que eu inclua professores já agora?
+2. No passo A, você consegue rodar aqueles 4 `select count(*)` e me mandar os números? Se `ava_enrolments` estiver vazio, precisamos ajustar o parser do dump antes de qualquer outra coisa.
