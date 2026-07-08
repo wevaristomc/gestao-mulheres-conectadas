@@ -1,34 +1,59 @@
-## Problema
+## Escopo
 
-Ao selecionar 22 arquivos no `GDrivePicker` da Base de Conhecimento e clicar em **Usar arquivos**, aparentemente nada acontece. Na verdade a mutação `importFromDrive` está rodando (baixa cada arquivo do Drive via server function, faz upload no bucket `documentos` e insere linha em `documentos`) — mas:
+Gerador de listas de presença pré-preenchidas por turma, uma folha por aula do cronograma, em PDF (imprimir), XLSX (editar antes de imprimir) e DOCX (Word).
 
-- O botão "Usar arquivos" não fica em estado de carregamento.
-- O diálogo continua aberto, sem barra de progresso nem contador (X de 22).
-- Não há `toast.loading` durante a operação, só `toast.success` no fim.
-- Se um item selecionado for uma pasta (edge case), a chamada falha silenciosamente no meio do laço.
+## UI
 
-## O que vou mudar
+### 1) Botão na tela da Turma (Pedagógico › Turmas › [id] › Aulas)
+- Novo botão **"Gerar listas de presença"** ao lado dos existentes.
+- Abre `DialogGerarListas` com:
+  - Seleção de aulas: checkbox por aula do cronograma da turma, pré-marcadas todas as aulas com `data >= hoje`. Cabeçalho "Selecionar todas / Nenhuma / Só futuras".
+  - Nº de linhas extras em branco: input numérico, default **5**.
+  - Formato: radio **PDF** | **XLSX** | **DOCX** (default PDF).
+  - Rodapé com totais: "N aulas × M cursistas + K extras = X folhas".
+- Botão "Gerar" dispara download único do arquivo (multi-página no PDF/DOCX; múltiplas abas ou múltiplas seções no XLSX — ver detalhes).
 
-### 1) `src/components/gdrive/gdrive-picker.tsx`
-- Nova prop opcional `busy?: boolean` e `progress?: { done: number; total: number } | null`.
-- Enquanto `busy`:
-  - "Usar arquivos" mostra spinner + texto `Importando… (X/Y)`.
-  - Botões "Cancelar", fechar (X do Dialog) e navegação de pastas ficam desabilitados.
-  - `onOpenChange` é ignorado (não fecha por clique fora / ESC).
-- Filtrar pastas ao confirmar: `Object.values(selected).filter(f => f.mimeType !== FOLDER_MIME)`; se sobrar zero, mostra erro amigável.
+### 2) Mesmo botão em MTE › Aulas
+- Reutiliza o mesmo diálogo (turma já vem do contexto), atalho para o mesmo gerador.
 
-### 2) `src/routes/_authenticated/base-conhecimento.tsx`
-- Adicionar `useState` `importProgress = { done, total }`.
-- Reescrever `importFromDrive.mutationFn` para atualizar `importProgress` a cada arquivo processado e capturar falhas individuais em `results.failed[]` sem abortar o lote (Promise sequencial com try/catch por item).
-- Emitir um `toast.loading` fixo (id estável) atualizando a mensagem `Importando X de Y…`; substituir por `toast.success`/`toast.error` no `onSettled` com resumo (`N importados, M falharam`).
-- Passar `busy={importFromDrive.isPending}` e `progress={importProgress}` ao `GDrivePicker`.
-- Fechar o picker somente em `onSettled` quando houver ao menos um sucesso.
+## Geração — layout genérico PMC
 
-### 3) Sem mudanças em backend / server functions
-Não altero `importGdriveToBucket`, `gdrive-helpers.server.ts`, tabela `documentos`, buckets ou RLS. Apenas UX/estado no cliente.
+Cabeçalho fixo em cada folha:
+- Linha 1 (esq.): logo/nome **"Programa Manuel Querino"** + subtítulo **"Mulheres Conectadas"**.
+- Linha 2 (esq.): "Lista de Frequência dos Cursistas às Aulas Teóricas e Práticas".
+- Bloco de metadados (2 colunas): **Turma** (código + nome), **Município**, **Turno**, **Data da aula**, **Tema/Conteúdo**, **Carga horária**, **Instrutor(a)**.
+- Tabela: `Nº | Nome completo | CPF | Assinatura` — CPF mascarado `***.***.***-**` (últimos 2 dígitos visíveis).
+- Cursistas ordenadas alfabeticamente por nome; N linhas em branco no final (Nº seguindo a sequência, sem nome/CPF).
+- Rodapé: linhas para **Assinatura do Instrutor(a)** e **Coordenação Pedagógica**, data por extenso, número da página `X/Y`.
+
+## Implementação técnica
+
+### Arquivos novos
+- `src/lib/lista-presenca-gerador.ts` — funções puras:
+  - `montarDadosLista({turma, aula, cursistas, extras})` → `ListaPresencaData`.
+  - `gerarListaPDF(dados[]): Blob` usando **jsPDF** (já no projeto, ver `certificado-pdf.ts`). Multi-página com `doc.addPage()` a cada aula.
+  - `gerarListaXLSX(dados[]): Promise<Blob>` usando **exceljs** (adicionar dep). Uma aba por aula, largura de coluna e bordas configuradas.
+  - `gerarListaDOCX(dados[]): Promise<Blob>` usando **docx** (adicionar dep). Uma seção com quebra de página por aula.
+- `src/components/pedagogico/dialog-gerar-listas.tsx` — o diálogo acima.
+
+### Dependências novas
+- `exceljs` (XLSX com formatação).
+- `docx` (Word).
+- `file-saver` já ausente — usar `URL.createObjectURL` + `<a download>` como já é feito em `certificado-pdf.ts`.
+
+### Fonte de dados (cliente, sem server function)
+- Turma: `turmasMteListOptions` já existente.
+- Aulas: `aulasByTurmaOptions(turmaId)` → filtra pelas selecionadas.
+- Cursistas: `supabase.from("matriculas").select("beneficiaria:beneficiarias(nome_completo, cpf)").eq("turma_id", turmaId).eq("status_ativa", true).order("beneficiaria(nome_completo)")`. Fallback se `status_ativa` não existir na tabela: filtra em memória por `situacao === "ativa"`.
+
+### Integração
+- Pontos de entrada: `src/routes/_authenticated/pedagogico.turmas.$id.aulas.tsx` (botão principal) e `src/routes/_authenticated/mte.aulas.tsx` (atalho passando turma selecionada).
+- Nome do arquivo: `listas-presenca_<codigo_turma>_<YYYY-MM-DD>.{pdf|xlsx|docx}`.
 
 ## Fora do escopo
 
-- Paralelizar downloads (mantém sequencial para não estourar rate limit do Google Drive).
-- Retomar importação em caso de erro parcial.
-- Mudanças em outros consumidores do `GDrivePicker` (o novo prop `busy` é opcional e retrocompatível).
+- Assinatura digital / QR code de validação.
+- Envio automático por e-mail para instrutor.
+- Edição do template do cabeçalho pela UI (fica fixo no código; futura personalização por projeto).
+- Preenchimento pós-aula (OCR/importação) — já existe fluxo separado em `leitor-lista`.
+- Mudanças em `certificado-pdf.ts` ou nos importadores.

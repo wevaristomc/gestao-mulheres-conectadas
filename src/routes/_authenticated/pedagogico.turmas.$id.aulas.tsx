@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
+import { ClipboardList, Loader2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 import {
   aulasByTurmaOptions, upsertAula, deleteAula, pickFirst, formatarData, type Row,
 } from "@/lib/pedagogico-queries";
+import { DialogGerarListas } from "@/components/pedagogico/dialog-gerar-listas";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/aulas")({
   component: AulasTab,
@@ -36,6 +37,7 @@ function AulasTab() {
   const [novaOpen, setNovaOpen] = useState(false);
   const [editando, setEditando] = useState<Row | null>(null);
   const [confirmarExcluir, setConfirmarExcluir] = useState<string | null>(null);
+  const [gerarOpen, setGerarOpen] = useState(false);
 
   const excluir = useMutation({
     mutationFn: (id: string) => deleteAula(id),
@@ -62,7 +64,11 @@ function AulasTab() {
         <p className="text-sm text-muted-foreground">
           {q.isLoading ? "Carregando…" : `${aulasOrdenadas.length} aula(s)`}
         </p>
-        <Dialog open={novaOpen} onOpenChange={setNovaOpen}>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setGerarOpen(true)}>
+            <ClipboardList className="mr-1.5 h-4 w-4" /> Gerar listas de presença
+          </Button>
+          <Dialog open={novaOpen} onOpenChange={setNovaOpen}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="mr-1.5 h-4 w-4" /> Nova aula</Button>
           </DialogTrigger>
@@ -76,7 +82,8 @@ function AulasTab() {
               setNovaOpen(false);
             }}
           />
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {erro ? (
@@ -174,6 +181,8 @@ function AulasTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DialogGerarListas open={gerarOpen} onOpenChange={setGerarOpen} turmaId={turmaId} />
     </div>
   );
 }
