@@ -175,7 +175,12 @@ async function buscarCursistas(turmaId: string): Promise<Cursista[]> {
     .select("beneficiaria:beneficiarias(nome, cpf), status")
     .eq("turma_id", turmaId);
   if (res.error) throw new Error(res.error.message);
-  const rows = (res.data ?? []) as Array<{ beneficiaria: { nome: string; cpf: string | null } | null; status: string | null }>;
+  const raw = (res.data ?? []) as unknown as Array<{ beneficiaria: unknown; status: string | null }>;
+  const rows = raw.map((r) => {
+    const b = Array.isArray(r.beneficiaria) ? r.beneficiaria[0] : r.beneficiaria;
+    const ben = (b ?? null) as { nome?: string | null; cpf?: string | null } | null;
+    return { beneficiaria: ben, status: r.status };
+  });
   const ativas = rows.filter((r) => {
     const s = String(r.status ?? "").toLowerCase();
     return s === "" || ["inscrita", "matriculada", "cursando", "concluinte"].includes(s);
