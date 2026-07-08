@@ -22,6 +22,7 @@ import { turmasMteListOptions } from "@/lib/mte-queries";
 import { lerListaPresenca } from "@/lib/ia.functions";
 import { ImportarTurmaCsvCard } from "@/components/mte/importar-turma-csv-card";
 import { ImportarMoodleCard } from "@/components/mte/importar-moodle-card";
+import { GerarMatriculasAvaCard } from "@/components/mte/gerar-matriculas-ava-card";
 import {
   arquivoParaImagensBase64,
   carregarMatriculasDaTurma,
@@ -153,6 +154,7 @@ function ImportarListaPage() {
 
       <ImportarTurmaCsvCard />
       <ImportarMoodleCard />
+      <GerarMatriculasAvaCard />
 
       <div className="rounded-md border p-4 space-y-2">
         <Label className="text-xs uppercase text-muted-foreground">Tipo de documento</Label>
