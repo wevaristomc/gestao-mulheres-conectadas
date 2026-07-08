@@ -133,7 +133,6 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
     if (up.error) throw new Error(`Falha ao subir no bucket ${data.bucket}: ${up.error.message}`);
     const pub = supabaseAdmin.storage.from(data.bucket).getPublicUrl(path);
 
-    let documento: Record<string, unknown> | null = null;
     if (data.bucket === "documentos" && data.registrarDocumento) {
       if (!data.projetoId) throw new Error("Selecione um projeto ativo para registrar o documento.");
 
@@ -154,7 +153,6 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
       for (let attempt = 0; attempt < 10; attempt += 1) {
         const ins = await supabaseAdmin.from("documentos").insert(payload).select("*").maybeSingle();
         if (!ins.error) {
-          documento = (ins.data ?? payload) as Record<string, unknown>;
           lastError = null;
           break;
         }
@@ -184,7 +182,6 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
       arquivo_url: pub.data.publicUrl,
       gdrive_id: meta.id,
       gdrive_link: meta.webViewLink ?? null,
-      documento,
     };
   });
 
