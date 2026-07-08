@@ -39,6 +39,8 @@ export function GDrivePicker({
   description = "Navegue pela pasta do Projeto ou busque por nome.",
   multi = false,
   filesOnly = true,
+  busy = false,
+  progress = null,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -47,6 +49,8 @@ export function GDrivePicker({
   description?: string;
   multi?: boolean;
   filesOnly?: boolean;
+  busy?: boolean;
+  progress?: { done: number; total: number } | null;
 }) {
   const list = useServerFn(listGdrive);
   const search = useServerFn(searchGdrive);
@@ -114,9 +118,9 @@ export function GDrivePicker({
   }
 
   function confirmar() {
-    const arr = Object.values(selected);
+    const arr = Object.values(selected).filter((f) => f.mimeType !== FOLDER_MIME);
     if (arr.length === 0) {
-      toast.error("Selecione ao menos um arquivo.");
+      toast.error("Selecione ao menos um arquivo (pastas são ignoradas).");
       return;
     }
     onPick(arr);
@@ -129,7 +133,7 @@ export function GDrivePicker({
   }, [items, filesOnly]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!busy) onOpenChange(o); }}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -200,10 +204,11 @@ export function GDrivePicker({
                     key={f.id}
                     className={
                       "flex items-center gap-2 px-3 py-2 text-sm cursor-pointer " +
-                      (sel ? "bg-primary/10" : "hover:bg-muted/50")
+                      (sel ? "bg-primary/10" : "hover:bg-muted/50") +
+                      (busy ? " pointer-events-none opacity-60" : "")
                     }
-                    onClick={() => (isFolder ? void load(f.id) : toggle(f))}
-                    onDoubleClick={() => isFolder && void load(f.id)}
+                    onClick={() => { if (busy) return; isFolder ? void load(f.id) : toggle(f); }}
+                    onDoubleClick={() => { if (!busy && isFolder) void load(f.id); }}
                   >
                     {isFolder ? (
                       <Folder className="h-4 w-4 shrink-0 text-blue-500" />
@@ -227,13 +232,17 @@ export function GDrivePicker({
 
         <DialogFooter className="flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
-            {Object.keys(selected).length} selecionado(s)
+            {busy && progress
+              ? `Importando ${progress.done} de ${progress.total}…`
+              : `${Object.keys(selected).length} selecionado(s)`}
           </span>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button onClick={confirmar} disabled={Object.keys(selected).length === 0}>
-              {loading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Usar arquivo{multi ? "s" : ""}
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancelar</Button>
+            <Button onClick={confirmar} disabled={busy || Object.keys(selected).length === 0}>
+              {busy || loading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              {busy
+                ? (progress ? `Importando ${progress.done}/${progress.total}` : "Importando…")
+                : `Usar arquivo${multi ? "s" : ""}`}
             </Button>
           </div>
         </DialogFooter>
