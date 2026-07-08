@@ -174,6 +174,8 @@ function AulasIndex() {
 
       {effectiveTurma ? (
         <AulaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} turmaId={effectiveTurma} aula={editing} />
+
+      <DialogGerarListas open={gerarOpen} onOpenChange={setGerarOpen} turmaId={effectiveTurma} />
       ) : null}
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
