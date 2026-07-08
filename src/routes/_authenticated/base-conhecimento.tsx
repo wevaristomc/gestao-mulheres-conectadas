@@ -36,7 +36,6 @@ import {
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
   head: () => ({ meta: [{ title: "Base de Conhecimento · Painel Mulheres Conectadas" }] }),
@@ -68,29 +67,21 @@ function BaseConhecimentoPage() {
       const total = files.length;
       setImportProgress({ done: 0, total });
       toast.loading(`Importando 0 de ${total}…`, { id: toastId });
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u?.user?.id;
       const failed: { name: string; error: string }[] = [];
       let ok = 0;
       for (let i = 0; i < files.length; i += 1) {
         const f = files[i];
         try {
-          const res = await importGdrive({
-            data: { fileId: f.id, bucket: "documentos", pathPrefix: projetoId },
+          await importGdrive({
+            data: {
+              fileId: f.id,
+              bucket: "documentos",
+              pathPrefix: projetoId,
+              projetoId,
+              categoria: importCat,
+              registrarDocumento: true,
+            },
           });
-          const payload: Record<string, unknown> = {
-            projeto_id: projetoId,
-            titulo: f.name,
-            descricao: `Importado do Google Drive`,
-            categoria: importCat,
-            storage_path: res.storage_path,
-            nome_arquivo: res.nome_arquivo,
-            mime_type: res.mime_type,
-            tamanho_bytes: res.tamanho_bytes,
-          };
-          if (uid) payload.created_by = uid;
-          const { error } = await supabase.from("documentos").insert(payload);
-          if (error) throw new Error(error.message);
           ok += 1;
         } catch (e) {
           failed.push({ name: f.name, error: e instanceof Error ? e.message : String(e) });
@@ -106,7 +97,12 @@ function BaseConhecimentoPage() {
         ? `${r.ok} documento(s) importado(s) do Drive`
         : `${r.ok} importado(s), ${r.failed.length} com falha`;
       if (r.failed.length === 0) toast.success(msg, { id: r.toastId });
-      else toast.error(msg + `: ${r.failed.slice(0, 3).map((x) => x.name).join(", ")}`, { id: r.toastId });
+      else {
+        const detalhe = r.failed[0]
+          ? `${r.failed[0].name}: ${r.failed[0].error}`
+          : "Verifique os arquivos selecionados.";
+        toast.error(`${msg}. ${detalhe}`, { id: r.toastId, duration: 9000 });
+      }
       if (r.ok > 0) setPickerOpen(false);
       qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
     },
