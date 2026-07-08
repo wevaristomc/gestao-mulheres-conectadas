@@ -31,10 +31,11 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
   CATEGORIAS, categoriaLabel, deleteDocumento, documentosListOptions,
-  formatBytes, formatarData, getSignedUrl, pickFirst, uploadDocumento,
+  formatBytes, formatarData, getSignedUrl, pickFirst, removeDocumentoFile, uploadDocumentoFile,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
+import { registerUploadedDocumento } from "@/lib/base-conhecimento.functions";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
@@ -390,18 +391,32 @@ function UploadDialog({
   const [categoria, setCategoria] = useState<CategoriaKey>("outros");
   const [file, setFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const registerDocumento = useServerFn(registerUploadedDocumento);
 
   const up = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Selecione um arquivo.");
       if (!titulo.trim()) throw new Error("Informe um título.");
-      return uploadDocumento({
-        projeto_id: projetoId,
-        file,
-        titulo: titulo.trim(),
-        descricao: descricao.trim() || null,
-        categoria,
-      });
+      let uploadedPath: string | null = null;
+      try {
+        const uploaded = await uploadDocumentoFile({ projeto_id: projetoId, file });
+        uploadedPath = uploaded.path;
+        return await registerDocumento({
+          data: {
+            projetoId,
+            storagePath: uploaded.path,
+            nomeArquivo: file.name,
+            mimeType: file.type || null,
+            tamanhoBytes: file.size,
+            categoria,
+            descricao: descricao.trim() || null,
+            titulo: titulo.trim(),
+          },
+        });
+      } catch (e) {
+        if (uploadedPath) await removeDocumentoFile(uploadedPath);
+        throw e;
+      }
     },
     onSuccess: () => {
       toast.success("Documento enviado");
@@ -417,16 +432,16 @@ function UploadDialog({
   }
 
   return (
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-[640px] overflow-y-auto p-4 sm:p-6">
       <DialogHeader>
-        <DialogTitle>Novo documento</DialogTitle>
-        <DialogDescription>
-          O arquivo é enviado para o bucket privado <code>documentos</code>. Links de download são gerados sob demanda.
+        <DialogTitle className="pr-8">Novo documento</DialogTitle>
+        <DialogDescription className="pr-8">
+          Envie um arquivo para a Base de Conhecimento do projeto.
         </DialogDescription>
       </DialogHeader>
 
-      <div className="grid gap-4">
-        <div className="grid gap-1.5">
+      <div className="grid min-w-0 gap-4">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="bc-file">Arquivo</Label>
           <input
             ref={inputRef}
@@ -435,25 +450,25 @@ function UploadDialog({
             className="hidden"
             onChange={onPick}
           />
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+          <div className="grid min-w-0 gap-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+            <Button type="button" variant="outline" size="sm" className="justify-self-start" onClick={() => inputRef.current?.click()}>
               <Upload className="mr-1.5 h-4 w-4" /> Selecionar arquivo
             </Button>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="min-w-0 break-words text-xs leading-relaxed text-muted-foreground sm:truncate">
               {file ? `${file.name} · ${formatBytes(file.size)}` : "Nenhum arquivo selecionado"}
             </span>
           </div>
         </div>
 
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="bc-titulo">Título</Label>
-          <Input id="bc-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
+          <Input id="bc-titulo" className="min-w-0" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
         </div>
 
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="bc-categoria">Categoria</Label>
           <Select value={categoria} onValueChange={(v) => setCategoria(v as CategoriaKey)}>
-            <SelectTrigger id="bc-categoria"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="bc-categoria" className="min-w-0"><SelectValue /></SelectTrigger>
             <SelectContent>
               {CATEGORIAS.map((c) => (
                 <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
@@ -462,10 +477,11 @@ function UploadDialog({
           </Select>
         </div>
 
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           <Label htmlFor="bc-desc">Descrição (opcional)</Label>
           <Textarea
             id="bc-desc"
+            className="min-w-0 resize-y"
             rows={3}
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
@@ -473,7 +489,7 @@ function UploadDialog({
         </div>
       </div>
 
-      <DialogFooter>
+      <DialogFooter className="gap-2 sm:gap-0">
         <Button variant="ghost" onClick={onClose} disabled={up.isPending}>Cancelar</Button>
         <Button onClick={() => up.mutate()} disabled={up.isPending || !file}>
           {up.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Upload className="mr-1.5 h-4 w-4" />}
