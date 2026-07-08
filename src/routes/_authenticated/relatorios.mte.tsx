@@ -21,6 +21,7 @@ type RelatorioDef = {
   arquivo: string;
   cabecalhoDuplo?: boolean;
   variant?: "relacao_qualificados" | "execucao_ff";
+  deqItem?: string;
 };
 
 const INSTRUMENTO = {
@@ -43,20 +44,26 @@ const RELATORIOS: RelatorioDef[] = [
   {
     view: "vw_cursos_executados",
     titulo: "Cursos Executados",
-    descricao: "Consolidado dos cursos ofertados, cargas horárias e vagas.",
+    descricao:
+      "Município, curso, turma, turno, público-alvo, carga horária, vagas registradas, inscritas/matriculadas, concluintes, evadidas.",
     arquivo: "cursos-executados.xlsx",
+    deqItem: "DEQ — Item IV",
   },
   {
     view: "vw_beneficiarias",
     titulo: "Beneficiárias",
-    descricao: "Cadastro completo das beneficiárias atendidas.",
+    descricao:
+      "Nome, CPF, nascimento, gênero, raça/cor, PCD, curso, turma, CH e conclusão. Campos vazios permanecem em branco.",
     arquivo: "beneficiarias.xlsx",
+    deqItem: "DEQ — Item V",
   },
   {
     view: "vw_consolidacao_turma",
     titulo: "Consolidação por Turma",
-    descricao: "Indicadores consolidados por turma: matrículas, frequência, evasão.",
+    descricao:
+      "Matriculadas, % frequência média, lanches, transporte, kit, material, camiseta e certificados por turma.",
     arquivo: "consolidacao-turma.xlsx",
+    deqItem: "DEQ — Item VI",
   },
   {
     view: "vw_relacao_qualificados",
@@ -200,7 +207,14 @@ function RelatoriosMte() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm">{r.titulo}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">{r.descricao}</div>
-                <div className="text-[10px] text-muted-foreground mt-1 font-mono">{r.view}</div>
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                  {r.deqItem ? (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                      {r.deqItem}
+                    </span>
+                  ) : null}
+                  <span className="font-mono">{r.view}</span>
+                </div>
               </div>
             </div>
             <Button
