@@ -1,27 +1,22 @@
 ## Problema
 
-Ao importar o dump do Moodle, o servidor responde "Apenas administradores podem importar dump do Moodle." mesmo para usuários que são coordenação geral.
+O import falha com `Could not find the table 'public.ava_importacoes' in the schema cache` porque as tabelas espelho do AVA (`ava_importacoes`, `ava_users`, `ava_courses`, `ava_enrolments`, `ava_activities`, `ava_completions`, `ava_grades`) ainda não existem no banco de dados real do projeto (`yqvocpnvunaprpmhlswn`).
 
-**Causa:** `src/lib/moodle-import.functions.ts` chama `context.supabase.rpc("has_role", { _user_id, _role: "admin" })`. Esse RPC não existe neste projeto e o papel "admin" também não é usado — o sistema usa a role `coordenador_geral` diretamente na tabela `user_roles` (ver `src/lib/rbac.functions.ts::assertCoordenadorGeral`). Como o RPC retorna erro, o check cai no `else` e bloqueia todos os usuários.
+O SQL de criação já está pronto e versionado em `docs/migrations/importar-turmas-e-ava.sql` (idempotente, com `GRANT`, RLS e políticas). Ele nunca foi executado.
 
-## Correção
+## Restrição
 
-Substituir o check em `src/lib/moodle-import.functions.ts` pelo mesmo padrão já usado no resto do app: consultar `user_roles` via `context.supabase` e exigir `role = 'coordenador_geral'` para o usuário logado. Sem `projeto_id` no formulário, aceita-se qualquer vínculo `coordenador_geral` do usuário (padrão de ações globais como a importação do AVA).
+As ferramentas de migration do Lovable Cloud apontam para o projeto gerenciado padrão (`ahgcdtnpdfkcrjkxclhb`), e não para o projeto real usado pelo app (`yqvocpnvunaprpmhlswn`, hardcoded em `client.server.ts` e `auth-middleware.ts`). Portanto a migração **não pode** ser aplicada via tool automatizada — precisa ser executada manualmente no SQL Editor do projeto correto.
 
-```ts
-const { data: vinc, error: roleErr } = await context.supabase
-  .from("user_roles")
-  .select("role")
-  .eq("user_id", context.userId)
-  .eq("role", "coordenador_geral")
-  .limit(1)
-  .maybeSingle();
-if (roleErr) throw new Error(roleErr.message);
-if (!vinc) throw new Error("Apenas a coordenação geral pode importar dump do Moodle.");
-```
+## Ação
 
-Nenhuma outra mudança: parse, upserts e cruzamentos permanecem iguais. Mensagem de erro passa a refletir corretamente o papel exigido.
+1. Abrir o SQL Editor do projeto `yqvocpnvunaprpmhlswn` no painel do Supabase.
+2. Copiar o conteúdo integral de `docs/migrations/importar-turmas-e-ava.sql` e executar. O script é idempotente (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`), então rodar duas vezes não causa dano.
+3. Confirmar que também existe o bucket `evidencias` no Storage (o import faz `upload` em `evidencias/moodle-dumps/…`). Criar caso não exista, marcando como privado.
+4. Voltar ao app e reenviar o dump — o erro de schema deve desaparecer.
 
-## Arquivos alterados
+Nenhuma alteração de código é necessária nesta rodada: a lógica do server function e do cartão de UI já espera exatamente esse schema.
 
-- `src/lib/moodle-import.functions.ts` — troca do `rpc("has_role", …)` pela consulta direta em `user_roles`.
+## Arquivos envolvidos
+
+- `docs/migrations/importar-turmas-e-ava.sql` — SQL a ser executado manualmente (sem edição).
