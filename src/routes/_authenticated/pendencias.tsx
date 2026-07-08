@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Search } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { AlertCircle, FileText, Loader2, Search } from "lucide-react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +26,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { pendenciasListOptions, type PendenciaRow } from "@/lib/dashboard-queries";
+import {
+  carregarPendenciasOficio49148,
+  PENDENCIAS_OFICIO_49148,
+  type ResumoSeedOficio,
+} from "@/lib/oficio-49148.functions";
 
 export const Route = createFileRoute("/_authenticated/pendencias")({
   head: () => ({ meta: [{ title: "Pendências · Painel Mulheres Conectadas" }] }),
@@ -58,12 +66,44 @@ function payloadResumo(payload: PendenciaRow["payload"]): string {
   }
 }
 
+function prioridadeVariant(p: string | undefined): "destructive" | "default" | "secondary" {
+  if (p === "CRITICA") return "destructive";
+  if (p === "ALTA") return "default";
+  return "secondary";
+}
+
+function fmtDataCurta(iso: string | undefined | null): string {
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    }).format(new Date(iso + "T00:00:00"));
+  } catch {
+    return iso;
+  }
+}
+
 function PendenciasPage() {
   const [status, setStatus] = useState<string>("aberta");
   const [busca, setBusca] = useState("");
   const query = useQuery(pendenciasListOptions(status));
   const rows = (query.data?.rows ?? []) as PendenciaRow[];
   const erro = query.data?.error ?? (query.isError ? String(query.error) : null);
+  const qc = useQueryClient();
+  const carregar = useServerFn(carregarPendenciasOficio49148);
+  const seedMut = useMutation({
+    mutationFn: async () => (await carregar()) as ResumoSeedOficio,
+    onSuccess: (r) => {
+      toast.success(
+        `Ofício 49148/2026 · ${r.criadas} nova(s), ${r.existentes} já cadastrada(s)`,
+      );
+      qc.invalidateQueries({ queryKey: ["pendencias"] });
+      qc.invalidateQueries({ queryKey: ["kpi", "pendencias-abertas"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao carregar pendências"),
+  });
 
   const rowsFiltradas = useMemo(() => {
     if (!busca.trim()) return rows;
@@ -95,6 +135,39 @@ function PendenciasPage() {
         title="Pendências"
         description="Itens sinalizados pelo sistema aguardando ação da equipe."
       />
+
+      <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm flex flex-wrap items-center gap-3">
+        <FileText className="h-4 w-4 text-primary shrink-0" />
+        <div className="flex-1 min-w-64">
+          <div className="font-medium">Ofício SEI nº 49148/2026 (doc. 9151564)</div>
+          <div className="text-xs text-muted-foreground">
+            Processo 19968.200342/2025-94 · {PENDENCIAS_OFICIO_49148.length} pendências
+            (idempotente — não duplica por título).
+          </div>
+        </div>
+        <Button
+          size="sm"
+          onClick={() => seedMut.mutate()}
+          disabled={seedMut.isPending}
+        >
+          {seedMut.isPending ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+          ) : (
+            <FileText className="mr-1 h-4 w-4" />
+          )}
+          Carregar pendências do Ofício 49148/2026
+        </Button>
+      </div>
+      {seedMut.data ? (
+        <div className="mb-4 rounded-md border bg-background p-3 text-xs">
+          Ofício 49148/2026 · <strong>{seedMut.data.criadas}</strong> criada(s), <strong>{seedMut.data.existentes}</strong> já existia(m) de <strong>{seedMut.data.total}</strong> itens.
+          {seedMut.data.inconsistencias.length > 0 ? (
+            <ul className="mt-1 list-disc pl-4 text-amber-800">
+              {seedMut.data.inconsistencias.map((s, i) => <li key={i}>{s}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Select value={status} onValueChange={setStatus}>
@@ -137,7 +210,10 @@ function PendenciasPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-32">Status</TableHead>
+                <TableHead className="w-24">Prioridade</TableHead>
                 <TableHead>Descrição</TableHead>
+                <TableHead className="w-40">Responsável</TableHead>
+                <TableHead className="w-24">Prazo</TableHead>
                 <TableHead className="w-48">Criado em</TableHead>
               </TableRow>
             </TableHeader>
@@ -146,32 +222,50 @@ function PendenciasPage() {
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-full" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   </TableRow>
                 ))
               ) : rowsFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                     Nenhuma pendência para o filtro atual.
                   </TableCell>
                 </TableRow>
               ) : (
-                rowsFiltradas.map((r) => (
+                rowsFiltradas.map((r) => {
+                  const p = (r.payload ?? {}) as Record<string, unknown>;
+                  const prioridade = typeof p.prioridade === "string" ? p.prioridade : undefined;
+                  const responsavel = typeof p.responsavel === "string" ? p.responsavel : "—";
+                  const prazo = typeof p.prazo === "string" ? p.prazo : null;
+                  return (
                   <TableRow key={r.id}>
                     <TableCell>
                       <Badge variant={statusVariant(r.status)} className="capitalize">
                         {r.status.replace("_", " ")}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {prioridade ? (
+                        <Badge variant={prioridadeVariant(prioridade)} className="text-[10px]">
+                          {prioridade}
+                        </Badge>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="max-w-xl truncate" title={payloadResumo(r.payload)}>
                       {payloadResumo(r.payload)}
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{responsavel}</TableCell>
+                    <TableCell className="text-xs">{fmtDataCurta(prazo)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {fmtData(r.criado_em)}
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
