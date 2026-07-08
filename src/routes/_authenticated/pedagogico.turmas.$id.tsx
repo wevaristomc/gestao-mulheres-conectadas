@@ -29,11 +29,14 @@ function TurmaLayout() {
   const turno = pickFirst(row, ["turno", "periodo"]);
   const inicio = pickFirst(row, ["data_inicio", "inicio"]);
   const fim = pickFirst(row, ["data_fim", "fim"]);
+  const profNome = pickFirst(row, ["professor_nome", "professor"]);
+  const profEmail = pickFirst(row, ["professor_email"]);
 
   const desc = [
     turno ? `Turno: ${turno}` : null,
     inicio ? `Início: ${formatarData(inicio)}` : null,
     fim ? `Fim: ${formatarData(fim)}` : null,
+    profNome ? `Prof(a): ${profNome}${profEmail ? ` · ${profEmail}` : ""}` : null,
   ]
     .filter(Boolean)
     .join(" · ");

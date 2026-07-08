@@ -83,6 +83,7 @@ function PedagogicoIndex() {
               <TableRow>
                 <TableHead>Turma</TableHead>
                 <TableHead className="w-32">Turno</TableHead>
+                <TableHead className="w-56">Professor(a)</TableHead>
                 <TableHead className="w-40">Início</TableHead>
                 <TableHead className="w-40">Fim</TableHead>
                 <TableHead className="w-40 text-right"></TableHead>
@@ -94,6 +95,7 @@ function PedagogicoIndex() {
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-56" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell></TableCell>
@@ -101,7 +103,7 @@ function PedagogicoIndex() {
                 ))
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                     Nenhuma turma cadastrada neste projeto.
                   </TableCell>
                 </TableRow>
@@ -111,6 +113,7 @@ function PedagogicoIndex() {
                   const turno = pickFirst(r, ["turno", "periodo"]);
                   const inicio = pickFirst(r, ["data_inicio", "inicio", "data_de_inicio"]);
                   const fim = pickFirst(r, ["data_fim", "fim", "data_de_fim"]);
+                  const prof = pickFirst(r, ["professor_nome", "professor"]);
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">
@@ -123,6 +126,7 @@ function PedagogicoIndex() {
                         </Link>
                       </TableCell>
                       <TableCell className="capitalize">{turno ?? "—"}</TableCell>
+                      <TableCell className="text-sm">{prof ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatarData(inicio)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatarData(fim)}</TableCell>
                       <TableCell className="text-right">
