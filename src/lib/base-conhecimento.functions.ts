@@ -14,6 +14,10 @@ const RegisterDocumentoInput = z.object({
   tamanhoBytes: z.number().int().nonnegative(),
 });
 
+const DeleteDocumentoInput = z.object({
+  id: z.string().uuid(),
+});
+
 export const registerUploadedDocumento = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => RegisterDocumentoInput.parse(v))
