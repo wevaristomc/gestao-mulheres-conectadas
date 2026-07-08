@@ -276,9 +276,11 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
       .select("id, codigo_turma")
       .not("codigo_turma", "is", null);
     if (turmas) {
+      const norm = (s: string) =>
+        s.toUpperCase().trim().replace(/^TURMA\s*:?\s*/i, "").trim();
       const mapa = new Map<string, string>();
       for (const t of turmas as { id: string; codigo_turma: string }[]) {
-        mapa.set(t.codigo_turma.toUpperCase().trim(), t.id);
+        mapa.set(norm(t.codigo_turma), t.id);
       }
       const { data: cursos } = await admin
         .from("ava_courses")
@@ -286,7 +288,7 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
         .not("shortname", "is", null)
         .is("turma_id", null);
       for (const c of (cursos ?? []) as { moodle_id: number; shortname: string }[]) {
-        const key = c.shortname.toUpperCase().trim();
+        const key = norm(c.shortname);
         let tid = mapa.get(key);
         if (!tid) {
           for (const [k, v] of mapa.entries()) {
