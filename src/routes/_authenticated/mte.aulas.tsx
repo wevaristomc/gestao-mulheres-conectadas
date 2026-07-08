@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -29,6 +29,7 @@ import {
   aulasMteListOptions, deleteAulaMTE, turmasMteListOptions, upsertAulaMTE,
   TIPOS_CH, type AulaMTE,
 } from "@/lib/mte-queries";
+import { DialogGerarListas } from "@/components/pedagogico/dialog-gerar-listas";
 
 export const Route = createFileRoute("/_authenticated/mte/aulas")({
   component: AulasIndex,
@@ -59,6 +60,7 @@ function AulasIndex() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AulaMTE | null>(null);
   const [deleting, setDeleting] = useState<AulaMTE | null>(null);
+  const [gerarOpen, setGerarOpen] = useState(false);
 
   const del = useMutation({
     mutationFn: (id: string) => deleteAulaMTE(id),
@@ -77,9 +79,14 @@ function AulasIndex() {
         description="Registro de aulas ministradas por turma (data, conteúdo, carga horária)."
         actions={
           canWrite && effectiveTurma ? (
-            <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
-              <Plus className="mr-1 h-4 w-4" /> Nova aula
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setGerarOpen(true)}>
+                <ClipboardList className="mr-1 h-4 w-4" /> Gerar listas
+              </Button>
+              <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
+                <Plus className="mr-1 h-4 w-4" /> Nova aula
+              </Button>
+            </div>
           ) : null
         }
       />
