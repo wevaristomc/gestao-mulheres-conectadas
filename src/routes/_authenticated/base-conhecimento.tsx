@@ -58,37 +58,60 @@ function BaseConhecimentoPage() {
   const [tab, setTab] = useState<"biblioteca" | "drive">("biblioteca");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [importCat, setImportCat] = useState<CategoriaKey>("outros");
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const importGdrive = useServerFn(importGdriveToBucket);
 
   const importFromDrive = useMutation({
     mutationFn: async (files: GDriveFile[]) => {
       if (!projetoId) throw new Error("Selecione um projeto ativo.");
-      for (const f of files) {
-        const res = await importGdrive({
-          data: { fileId: f.id, bucket: "documentos", pathPrefix: projetoId },
-        });
-        const payload: Record<string, unknown> = {
-          projeto_id: projetoId,
-          titulo: f.name,
-          descricao: `Importado do Google Drive`,
-          categoria: importCat,
-          storage_path: res.storage_path,
-          nome_arquivo: res.nome_arquivo,
-          mime_type: res.mime_type,
-          tamanho_bytes: res.tamanho_bytes,
-        };
-        const { data: u } = await supabase.auth.getUser();
-        if (u?.user?.id) payload.created_by = u.user.id;
-        const { error } = await supabase.from("documentos").insert(payload);
-        if (error) throw new Error(error.message);
+      const toastId = "gdrive-import";
+      const total = files.length;
+      setImportProgress({ done: 0, total });
+      toast.loading(`Importando 0 de ${total}…`, { id: toastId });
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u?.user?.id;
+      const failed: { name: string; error: string }[] = [];
+      let ok = 0;
+      for (let i = 0; i < files.length; i += 1) {
+        const f = files[i];
+        try {
+          const res = await importGdrive({
+            data: { fileId: f.id, bucket: "documentos", pathPrefix: projetoId },
+          });
+          const payload: Record<string, unknown> = {
+            projeto_id: projetoId,
+            titulo: f.name,
+            descricao: `Importado do Google Drive`,
+            categoria: importCat,
+            storage_path: res.storage_path,
+            nome_arquivo: res.nome_arquivo,
+            mime_type: res.mime_type,
+            tamanho_bytes: res.tamanho_bytes,
+          };
+          if (uid) payload.created_by = uid;
+          const { error } = await supabase.from("documentos").insert(payload);
+          if (error) throw new Error(error.message);
+          ok += 1;
+        } catch (e) {
+          failed.push({ name: f.name, error: e instanceof Error ? e.message : String(e) });
+        }
+        const done = i + 1;
+        setImportProgress({ done, total });
+        toast.loading(`Importando ${done} de ${total}…`, { id: toastId });
       }
+      return { ok, failed, toastId };
     },
-    onSuccess: () => {
-      toast.success("Documento(s) importado(s) do Drive");
-      setPickerOpen(false);
+    onSuccess: (r) => {
+      const msg = r.failed.length === 0
+        ? `${r.ok} documento(s) importado(s) do Drive`
+        : `${r.ok} importado(s), ${r.failed.length} com falha`;
+      if (r.failed.length === 0) toast.success(msg, { id: r.toastId });
+      else toast.error(msg + `: ${r.failed.slice(0, 3).map((x) => x.name).join(", ")}`, { id: r.toastId });
+      if (r.ok > 0) setPickerOpen(false);
       qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
     },
-    onError: (e: Error) => toast.error(e.message || "Falha ao importar"),
+    onError: (e: Error) => toast.error(e.message || "Falha ao importar", { id: "gdrive-import" }),
+    onSettled: () => setImportProgress(null),
   });
 
   const filtered = useMemo(() => {
@@ -331,6 +354,8 @@ function BaseConhecimentoPage() {
         title="Importar do Google Drive"
         description={`Os arquivos selecionados serão baixados e salvos como categoria "${categoriaLabel(importCat)}".`}
         onPick={(files) => importFromDrive.mutate(files)}
+        busy={importFromDrive.isPending}
+        progress={importProgress}
       />
     </div>
   );
