@@ -14,18 +14,16 @@ const RegisterDocumentoInput = z.object({
   tamanhoBytes: z.number().int().nonnegative(),
 });
 
-function missingColumn(message: string): string | null {
-  return (
-    message.match(/Could not find the '([^']+)' column/)?.[1] ||
-    message.match(/column ["']?([^"'\s.]+)["']? does not exist/i)?.[1] ||
-    null
-  );
-}
-
 export const registerUploadedDocumento = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => RegisterDocumentoInput.parse(v))
   .handler(async ({ data, context }) => {
+    const missingColumn = (message: string): string | null => (
+      message.match(/Could not find the '([^']+)' column/)?.[1] ||
+      message.match(/column ["']?([^"'\s.]+)["']? does not exist/i)?.[1] ||
+      null
+    );
+
     const normalizedPrefix = `${data.projetoId}/`;
     if (!data.storagePath.startsWith(normalizedPrefix)) {
       throw new Error("Caminho de arquivo inválido para o projeto selecionado.");
