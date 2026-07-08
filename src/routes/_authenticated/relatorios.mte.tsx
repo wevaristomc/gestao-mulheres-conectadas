@@ -207,7 +207,14 @@ function RelatoriosMte() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm">{r.titulo}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">{r.descricao}</div>
-                <div className="text-[10px] text-muted-foreground mt-1 font-mono">{r.view}</div>
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                  {r.deqItem ? (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                      {r.deqItem}
+                    </span>
+                  ) : null}
+                  <span className="font-mono">{r.view}</span>
+                </div>
               </div>
             </div>
             <Button
