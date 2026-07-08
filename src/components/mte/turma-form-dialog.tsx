@@ -22,6 +22,7 @@ type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   turma?: TurmaMTE | null;
+  initialValues?: Partial<TurmaMTE> | null;
 };
 
 const empty: Partial<TurmaMTE> = {
@@ -45,14 +46,16 @@ const empty: Partial<TurmaMTE> = {
   observacoes: "",
 };
 
-export function TurmaFormDialog({ open, onOpenChange, turma }: Props) {
+export function TurmaFormDialog({ open, onOpenChange, turma, initialValues }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Partial<TurmaMTE>>(empty);
 
   useEffect(() => {
     if (!open) return;
-    setForm(turma ? { ...empty, ...turma } : empty);
-  }, [open, turma]);
+    if (turma) setForm({ ...empty, ...turma });
+    else if (initialValues) setForm({ ...empty, ...initialValues });
+    else setForm(empty);
+  }, [open, turma, initialValues]);
 
   const set = <K extends keyof TurmaMTE>(k: K, v: TurmaMTE[K] | string | number | null) =>
     setForm((p) => ({ ...p, [k]: v as TurmaMTE[K] }));
