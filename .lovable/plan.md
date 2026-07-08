@@ -1,59 +1,28 @@
-## Escopo
+## Objetivo
+Fazer com que, ao clicar em **Usar arquivos**, a importação do Google Drive finalize de forma visível: registre os documentos na Base de Conhecimento, feche o seletor quando houver sucesso e mostre erro claro quando algo falhar.
 
-Gerador de listas de presença pré-preenchidas por turma, uma folha por aula do cronograma, em PDF (imprimir), XLSX (editar antes de imprimir) e DOCX (Word).
+## Diagnóstico provável
+Pelos registros de rede, o download/importação para o armazenamento está retornando sucesso. O ponto frágil está depois disso: o app tenta inserir o registro em `documentos` pelo cliente. Se esse insert falhar por permissão/RLS/schema, a falha fica agrupada como “0 importado(s), X com falha”, sem detalhe suficiente, e o usuário percebe como se nada tivesse acontecido.
 
-## UI
+## Plano de correção
+1. **Centralizar a importação no servidor**
+   - Ajustar `importGdriveToBucket` para também criar o registro em `documentos` no mesmo fluxo em que baixa o arquivo do Drive e salva no armazenamento.
+   - Enviar para essa função: `projetoId`, `categoria` e dados mínimos do arquivo.
+   - Retornar um DTO simples com o documento criado e os dados do arquivo.
 
-### 1) Botão na tela da Turma (Pedagógico › Turmas › [id] › Aulas)
-- Novo botão **"Gerar listas de presença"** ao lado dos existentes.
-- Abre `DialogGerarListas` com:
-  - Seleção de aulas: checkbox por aula do cronograma da turma, pré-marcadas todas as aulas com `data >= hoje`. Cabeçalho "Selecionar todas / Nenhuma / Só futuras".
-  - Nº de linhas extras em branco: input numérico, default **5**.
-  - Formato: radio **PDF** | **XLSX** | **DOCX** (default PDF).
-  - Rodapé com totais: "N aulas × M cursistas + K extras = X folhas".
-- Botão "Gerar" dispara download único do arquivo (multi-página no PDF/DOCX; múltiplas abas ou múltiplas seções no XLSX — ver detalhes).
+2. **Evitar insert duplicado no cliente**
+   - Remover da tela `base-conhecimento` o insert manual em `documentos` após o upload.
+   - O cliente passará apenas a chamar a função de importação e atualizar o progresso.
 
-### 2) Mesmo botão em MTE › Aulas
-- Reutiliza o mesmo diálogo (turma já vem do contexto), atalho para o mesmo gerador.
+3. **Melhorar mensagens de erro**
+   - Mostrar no toast os nomes dos arquivos que falharam e o primeiro motivo real da falha.
+   - Manter o seletor aberto quando todos falharem, para a pessoa poder tentar novamente.
+   - Fechar o seletor quando pelo menos um arquivo for importado com sucesso.
 
-## Geração — layout genérico PMC
+4. **Limpeza e consistência da lista**
+   - Invalidar a query da Base de Conhecimento após importar para os novos documentos aparecerem imediatamente.
+   - Confirmar que `importProgress` volta ao estado normal no fim, mesmo com erro parcial.
 
-Cabeçalho fixo em cada folha:
-- Linha 1 (esq.): logo/nome **"Programa Manuel Querino"** + subtítulo **"Mulheres Conectadas"**.
-- Linha 2 (esq.): "Lista de Frequência dos Cursistas às Aulas Teóricas e Práticas".
-- Bloco de metadados (2 colunas): **Turma** (código + nome), **Município**, **Turno**, **Data da aula**, **Tema/Conteúdo**, **Carga horária**, **Instrutor(a)**.
-- Tabela: `Nº | Nome completo | CPF | Assinatura` — CPF mascarado `***.***.***-**` (últimos 2 dígitos visíveis).
-- Cursistas ordenadas alfabeticamente por nome; N linhas em branco no final (Nº seguindo a sequência, sem nome/CPF).
-- Rodapé: linhas para **Assinatura do Instrutor(a)** e **Coordenação Pedagógica**, data por extenso, número da página `X/Y`.
-
-## Implementação técnica
-
-### Arquivos novos
-- `src/lib/lista-presenca-gerador.ts` — funções puras:
-  - `montarDadosLista({turma, aula, cursistas, extras})` → `ListaPresencaData`.
-  - `gerarListaPDF(dados[]): Blob` usando **jsPDF** (já no projeto, ver `certificado-pdf.ts`). Multi-página com `doc.addPage()` a cada aula.
-  - `gerarListaXLSX(dados[]): Promise<Blob>` usando **exceljs** (adicionar dep). Uma aba por aula, largura de coluna e bordas configuradas.
-  - `gerarListaDOCX(dados[]): Promise<Blob>` usando **docx** (adicionar dep). Uma seção com quebra de página por aula.
-- `src/components/pedagogico/dialog-gerar-listas.tsx` — o diálogo acima.
-
-### Dependências novas
-- `exceljs` (XLSX com formatação).
-- `docx` (Word).
-- `file-saver` já ausente — usar `URL.createObjectURL` + `<a download>` como já é feito em `certificado-pdf.ts`.
-
-### Fonte de dados (cliente, sem server function)
-- Turma: `turmasMteListOptions` já existente.
-- Aulas: `aulasByTurmaOptions(turmaId)` → filtra pelas selecionadas.
-- Cursistas: `supabase.from("matriculas").select("beneficiaria:beneficiarias(nome_completo, cpf)").eq("turma_id", turmaId).eq("status_ativa", true).order("beneficiaria(nome_completo)")`. Fallback se `status_ativa` não existir na tabela: filtra em memória por `situacao === "ativa"`.
-
-### Integração
-- Pontos de entrada: `src/routes/_authenticated/pedagogico.turmas.$id.aulas.tsx` (botão principal) e `src/routes/_authenticated/mte.aulas.tsx` (atalho passando turma selecionada).
-- Nome do arquivo: `listas-presenca_<codigo_turma>_<YYYY-MM-DD>.{pdf|xlsx|docx}`.
-
-## Fora do escopo
-
-- Assinatura digital / QR code de validação.
-- Envio automático por e-mail para instrutor.
-- Edição do template do cabeçalho pela UI (fica fixo no código; futura personalização por projeto).
-- Preenchimento pós-aula (OCR/importação) — já existe fluxo separado em `leitor-lista`.
-- Mudanças em `certificado-pdf.ts` ou nos importadores.
+## Validação
+- Reproduzir o fluxo: abrir Base de Conhecimento, selecionar arquivo(s) do Drive e clicar em **Usar arquivos**.
+- Confirmar que aparece toast de sucesso/erro detalhado e que a tabela mostra os documentos importados sem recarregar a página.
