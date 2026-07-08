@@ -99,6 +99,9 @@ const ImportInput = z.object({
   fileId: z.string(),
   bucket: z.enum(["documentos", "evidencias"]),
   pathPrefix: z.string().optional(),
+  projetoId: z.string().optional(),
+  categoria: z.string().optional(),
+  registrarDocumento: z.boolean().optional(),
 });
 
 export const importGdriveToBucket = createServerFn({ method: "POST" })
@@ -129,6 +132,50 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
     });
     if (up.error) throw new Error(`Falha ao subir no bucket ${data.bucket}: ${up.error.message}`);
     const pub = supabaseAdmin.storage.from(data.bucket).getPublicUrl(path);
+
+    if (data.bucket === "documentos" && data.registrarDocumento) {
+      if (!data.projetoId) throw new Error("Selecione um projeto ativo para registrar o documento.");
+
+      const basePayload: Record<string, unknown> = {
+        projeto_id: data.projetoId,
+        titulo: meta.name.replace(/\.[^.]+$/, "") || meta.name,
+        descricao: "Importado do Google Drive",
+        categoria: data.categoria ?? "outros",
+        tipo: data.categoria ?? "outros",
+        storage_path: path,
+        nome_arquivo: meta.name,
+        mime_type: dl.contentType,
+        tamanho_bytes: dl.size,
+        created_by: context.userId,
+        autor_id: context.userId,
+        drive_url: meta.webViewLink ?? null,
+      };
+
+      const payload = { ...basePayload };
+      let lastError: string | null = null;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const ins = await supabaseAdmin.from("documentos").insert(payload).select("*").maybeSingle();
+        if (!ins.error) {
+          lastError = null;
+          break;
+        }
+
+        lastError = ins.error.message;
+        const missing =
+          ins.error.message.match(/Could not find the '([^']+)' column/)?.[1] ||
+          ins.error.message.match(/column ["']?([^"'\s.]+)["']? does not exist/i)?.[1];
+        if (missing && missing in payload) {
+          delete payload[missing];
+          continue;
+        }
+        break;
+      }
+
+      if (lastError) {
+        await supabaseAdmin.storage.from(data.bucket).remove([path]);
+        throw new Error(`Arquivo salvo, mas não foi possível registrar na Base de Conhecimento: ${lastError}`);
+      }
+    }
 
     return {
       storage_path: path,

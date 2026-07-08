@@ -23,6 +23,26 @@ export function categoriaLabel(k: string | null | undefined): string {
   return CATEGORIAS.find((c) => c.key === k)?.label ?? String(k ?? "—");
 }
 
+function isMissingColumn(message: string, key: string): boolean {
+  return message.includes(`Could not find the '${key}' column`) ||
+    new RegExp(`column ["']?${key}["']? does not exist`, "i").test(message);
+}
+
+async function insertDocumentoCompat(payload: Record<string, unknown>) {
+  const body = { ...payload };
+  let lastError: string | null = null;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const ins = await supabase.from("documentos").insert(body).select("*").maybeSingle();
+    if (!ins.error) return (ins.data ?? body) as DocRow;
+
+    lastError = ins.error.message;
+    const missingKey = Object.keys(body).find((key) => isMissingColumn(ins.error.message, key));
+    if (!missingKey) break;
+    delete body[missingKey];
+  }
+  throw new Error(lastError ?? "Falha ao registrar documento.");
+}
+
 export function formatBytes(n: number | null | undefined): string {
   const b = Number(n ?? 0);
   if (!b) return "—";
@@ -56,6 +76,13 @@ export function documentosListOptions(projetoId: string | null) {
         .eq("projeto_id", projetoId)
         .order("created_at", { ascending: false });
       if (res.error && /column .*created_at.* does not exist/i.test(res.error.message)) {
+        res = await supabase
+          .from("documentos")
+          .select("*")
+          .eq("projeto_id", projetoId)
+          .order("criado_em", { ascending: false });
+      }
+      if (res.error && /column .*criado_em.* does not exist/i.test(res.error.message)) {
         res = await supabase.from("documentos").select("*").eq("projeto_id", projetoId);
       }
       if (res.error) return { rows: [], error: res.error.message };
@@ -93,6 +120,7 @@ export async function uploadDocumento(input: {
     projeto_id,
     titulo: input.titulo,
     categoria: input.categoria,
+    tipo: input.categoria,
     storage_path: path,
     nome_arquivo: file.name,
     mime_type: file.type || null,
@@ -101,15 +129,18 @@ export async function uploadDocumento(input: {
   if (input.descricao !== undefined) payload.descricao = input.descricao;
 
   const { data: userData } = await supabase.auth.getUser();
-  if (userData?.user?.id) payload.created_by = userData.user.id;
+  if (userData?.user?.id) {
+    payload.created_by = userData.user.id;
+    payload.autor_id = userData.user.id;
+  }
 
-  const ins = await supabase.from("documentos").insert(payload).select("*").maybeSingle();
-  if (ins.error) {
+  try {
+    return await insertDocumentoCompat(payload);
+  } catch (e) {
     // rollback do arquivo caso o insert falhe
     await supabase.storage.from(BUCKET).remove([path]);
-    throw new Error(`Falha ao registrar documento: ${ins.error.message}`);
+    throw new Error(`Falha ao registrar documento: ${e instanceof Error ? e.message : String(e)}`);
   }
-  return ins.data as DocRow;
 }
 
 export async function deleteDocumento(row: DocRow) {

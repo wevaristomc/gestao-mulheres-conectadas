@@ -31,12 +31,11 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
   CATEGORIAS, categoriaLabel, deleteDocumento, documentosListOptions,
-  formatBytes, formatarData, getSignedUrl, uploadDocumento,
+  formatBytes, formatarData, getSignedUrl, pickFirst, uploadDocumento,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
   head: () => ({ meta: [{ title: "Base de Conhecimento · Painel Mulheres Conectadas" }] }),
@@ -68,29 +67,21 @@ function BaseConhecimentoPage() {
       const total = files.length;
       setImportProgress({ done: 0, total });
       toast.loading(`Importando 0 de ${total}…`, { id: toastId });
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u?.user?.id;
       const failed: { name: string; error: string }[] = [];
       let ok = 0;
       for (let i = 0; i < files.length; i += 1) {
         const f = files[i];
         try {
-          const res = await importGdrive({
-            data: { fileId: f.id, bucket: "documentos", pathPrefix: projetoId },
+          await importGdrive({
+            data: {
+              fileId: f.id,
+              bucket: "documentos",
+              pathPrefix: projetoId,
+              projetoId,
+              categoria: importCat,
+              registrarDocumento: true,
+            },
           });
-          const payload: Record<string, unknown> = {
-            projeto_id: projetoId,
-            titulo: f.name,
-            descricao: `Importado do Google Drive`,
-            categoria: importCat,
-            storage_path: res.storage_path,
-            nome_arquivo: res.nome_arquivo,
-            mime_type: res.mime_type,
-            tamanho_bytes: res.tamanho_bytes,
-          };
-          if (uid) payload.created_by = uid;
-          const { error } = await supabase.from("documentos").insert(payload);
-          if (error) throw new Error(error.message);
           ok += 1;
         } catch (e) {
           failed.push({ name: f.name, error: e instanceof Error ? e.message : String(e) });
@@ -106,7 +97,12 @@ function BaseConhecimentoPage() {
         ? `${r.ok} documento(s) importado(s) do Drive`
         : `${r.ok} importado(s), ${r.failed.length} com falha`;
       if (r.failed.length === 0) toast.success(msg, { id: r.toastId });
-      else toast.error(msg + `: ${r.failed.slice(0, 3).map((x) => x.name).join(", ")}`, { id: r.toastId });
+      else {
+        const detalhe = r.failed[0]
+          ? `${r.failed[0].name}: ${r.failed[0].error}`
+          : "Verifique os arquivos selecionados.";
+        toast.error(`${msg}. ${detalhe}`, { id: r.toastId, duration: 9000 });
+      }
       if (r.ok > 0) setPickerOpen(false);
       qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
     },
@@ -117,9 +113,14 @@ function BaseConhecimentoPage() {
   const filtered = useMemo(() => {
     const s = busca.trim().toLowerCase();
     return rows.filter((r) => {
-      if (categoria !== "todas" && String(r.categoria ?? "") !== categoria) return false;
+      const rowCategoria = String(pickFirst(r, ["categoria", "tipo"]) ?? "");
+      if (categoria !== "todas" && rowCategoria !== categoria) return false;
       if (!s) return true;
-      const hay = [r.titulo, r.descricao, r.nome_arquivo, r.categoria]
+      const hay = [
+        pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"]),
+        pickFirst(r, ["descricao", "observacao"]),
+        rowCategoria,
+      ]
         .map((v) => String(v ?? "").toLowerCase())
         .join(" ");
       return hay.includes(s);
@@ -129,7 +130,7 @@ function BaseConhecimentoPage() {
   const porCategoria = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) {
-      const k = String(r.categoria ?? "outros");
+      const k = String(pickFirst(r, ["categoria", "tipo"]) ?? "outros");
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
@@ -291,23 +292,27 @@ function BaseConhecimentoPage() {
                     <div className="flex items-start gap-2">
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
-                        <div className="truncate font-medium">{String(r.titulo ?? r.nome_arquivo ?? "—")}</div>
-                        {r.descricao ? (
-                          <div className="truncate text-xs text-muted-foreground">{String(r.descricao)}</div>
-                        ) : r.nome_arquivo && r.titulo ? (
-                          <div className="truncate text-xs text-muted-foreground">{String(r.nome_arquivo)}</div>
+                        <div className="truncate font-medium">
+                          {String(pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"]) ?? "—")}
+                        </div>
+                        {pickFirst(r, ["descricao", "observacao", "drive_url"]) ? (
+                          <div className="truncate text-xs text-muted-foreground">
+                            {String(pickFirst(r, ["descricao", "observacao", "drive_url"]))}
+                          </div>
+                        ) : pickFirst(r, ["nome_arquivo"]) && pickFirst(r, ["titulo"]) ? (
+                          <div className="truncate text-xs text-muted-foreground">{String(pickFirst(r, ["nome_arquivo"]))}</div>
                         ) : null}
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{categoriaLabel(String(r.categoria ?? ""))}</Badge>
+                    <Badge variant="secondary">{categoriaLabel(String(pickFirst(r, ["categoria", "tipo"]) ?? ""))}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatBytes(Number(r.tamanho_bytes ?? 0))}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatarData(r.created_at)}
+                    {formatarData(pickFirst(r, ["created_at", "criado_em"]))}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
