@@ -31,7 +31,7 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
   CATEGORIAS, categoriaLabel, deleteDocumento, documentosListOptions,
-  formatBytes, formatarData, getSignedUrl, pickFirst, uploadDocumentoFile,
+  formatBytes, formatarData, getSignedUrl, pickFirst, removeDocumentoFile, uploadDocumentoFile,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
@@ -397,19 +397,26 @@ function UploadDialog({
     mutationFn: async () => {
       if (!file) throw new Error("Selecione um arquivo.");
       if (!titulo.trim()) throw new Error("Informe um título.");
-      const uploaded = await uploadDocumentoFile({ projeto_id: projetoId, file });
-      return registerDocumento({
-        data: {
-          projetoId,
-          storagePath: uploaded.path,
-          nomeArquivo: file.name,
-          mimeType: file.type || null,
-          tamanhoBytes: file.size,
-          categoria,
-          descricao: descricao.trim() || null,
-          titulo: titulo.trim(),
-        },
-      });
+      let uploadedPath: string | null = null;
+      try {
+        const uploaded = await uploadDocumentoFile({ projeto_id: projetoId, file });
+        uploadedPath = uploaded.path;
+        return await registerDocumento({
+          data: {
+            projetoId,
+            storagePath: uploaded.path,
+            nomeArquivo: file.name,
+            mimeType: file.type || null,
+            tamanhoBytes: file.size,
+            categoria,
+            descricao: descricao.trim() || null,
+            titulo: titulo.trim(),
+          },
+        });
+      } catch (e) {
+        if (uploadedPath) await removeDocumentoFile(uploadedPath);
+        throw e;
+      }
     },
     onSuccess: () => {
       toast.success("Documento enviado");

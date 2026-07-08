@@ -95,6 +95,10 @@ export async function uploadDocumentoFile(input: {
   return { path };
 }
 
+export async function removeDocumentoFile(path: string) {
+  await supabase.storage.from(BUCKET).remove([path]);
+}
+
 export async function deleteDocumento(row: DocRow) {
   const path = row.storage_path ? String(row.storage_path) : null;
   const del = await supabase.from("documentos").delete().eq("id", row.id);
