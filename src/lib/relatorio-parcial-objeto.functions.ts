@@ -54,6 +54,7 @@ const GerarInput = z.object({
   secao: z.enum(SECOES_KEYS),
   instrucaoExtra: z.string().max(2000).optional(),
 });
+const ExportarDocxInput = z.object({ id: z.string().uuid() });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -783,4 +784,438 @@ export const gerarSecaoParcialObjeto = createServerFn({ method: "POST" })
       citacoes,
       aviso: "Gerado por IA — revisar antes de enviar ao SEI/TransfereGov.",
     };
+  });
+// ---------------------------------------------------------------------------
+// Fase 3c — Exportação DOCX
+// Gera arquivo Word institucional a partir das seções do rascunho.
+// Parser markdown minimalista: cabeçalhos ##/###, listas -/*, tabelas |...|,
+// negrito **texto**, itálico *texto*, código inline `texto`. Para o resto,
+// trata como parágrafo comum. Suficiente para o fluxo de revisão humana.
+// ---------------------------------------------------------------------------
+
+type InlineChunk = { text: string; bold?: boolean; italic?: boolean; code?: boolean };
+
+function parseInline(linha: string): InlineChunk[] {
+  const out: InlineChunk[] = [];
+  let i = 0;
+  const s = linha;
+  const push = (text: string, opts: Partial<InlineChunk> = {}) => {
+    if (!text) return;
+    out.push({ text, ...opts });
+  };
+  while (i < s.length) {
+    // negrito **...**
+    if (s[i] === "*" && s[i + 1] === "*") {
+      const fim = s.indexOf("**", i + 2);
+      if (fim > i + 2) {
+        push(s.slice(i + 2, fim), { bold: true });
+        i = fim + 2;
+        continue;
+      }
+    }
+    // itálico *...* (evita colidir com **)
+    if (s[i] === "*" && s[i + 1] !== "*") {
+      const fim = s.indexOf("*", i + 1);
+      if (fim > i + 1) {
+        push(s.slice(i + 1, fim), { italic: true });
+        i = fim + 1;
+        continue;
+      }
+    }
+    // código `...`
+    if (s[i] === "`") {
+      const fim = s.indexOf("`", i + 1);
+      if (fim > i + 1) {
+        push(s.slice(i + 1, fim), { code: true });
+        i = fim + 1;
+        continue;
+      }
+    }
+    // texto até próximo marcador
+    let j = i;
+    while (j < s.length && s[j] !== "*" && s[j] !== "`") j += 1;
+    push(s.slice(i, j));
+    i = j;
+  }
+  return out.length ? out : [{ text: s }];
+}
+
+export const exportarParcialObjetoDocx = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v: unknown) => ExportarDocxInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+
+    const { data: row, error: readErr } = await admin
+      .from("relatorios_parcial_objeto")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (!row) throw new Error("Rascunho não encontrado.");
+    await validarAcessoProjeto(context.supabase, context.userId, (row as any).projeto_id);
+
+    const ciclo = (row as any).ciclo as number | null;
+    const ini = (row as any).periodo_inicio as string | null;
+    const fim = (row as any).periodo_fim as string | null;
+    const titulo = ((row as any).titulo as string | null) ?? null;
+    const contexto = ((row as any).contexto ?? {}) as Record<string, any>;
+    const secoes = ((row as any).secoes ?? {}) as Record<string, { texto?: string }>;
+    const projetoNome = (contexto?.projeto?.nome as string | null) ?? null;
+
+    const docx = await import("docx");
+    const {
+      Document,
+      Packer,
+      Paragraph,
+      TextRun,
+      HeadingLevel,
+      AlignmentType,
+      PageOrientation,
+      LevelFormat,
+      BorderStyle,
+      Table,
+      TableRow,
+      TableCell,
+      WidthType,
+      ShadingType,
+    } = docx;
+
+    const runFromChunks = (chunks: InlineChunk[]) =>
+      chunks.map(
+        (c) =>
+          new TextRun({
+            text: c.text,
+            bold: !!c.bold,
+            italics: !!c.italic,
+            font: c.code ? "Consolas" : undefined,
+            size: c.code ? 20 : undefined,
+          }),
+      );
+
+    function paragrafosDeMarkdown(markdown: string): InstanceType<typeof Paragraph>[] {
+      const linhas = (markdown ?? "").replace(/\r\n/g, "\n").split("\n");
+      const out: InstanceType<typeof Paragraph>[] = [];
+      let i = 0;
+      while (i < linhas.length) {
+        const bruta = linhas[i];
+        const linha = bruta.trimEnd();
+
+        // linha em branco
+        if (!linha.trim()) {
+          i += 1;
+          continue;
+        }
+
+        // heading ### / ##
+        const mH3 = linha.match(/^###\s+(.*)$/);
+        const mH2 = linha.match(/^##\s+(.*)$/);
+        if (mH2 || mH3) {
+          const nivel = mH2 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4;
+          const texto = (mH2 ? mH2[1] : mH3![1]).trim();
+          out.push(new Paragraph({ heading: nivel, children: runFromChunks(parseInline(texto)) }));
+          i += 1;
+          continue;
+        }
+
+        // bullet -, *
+        const mBullet = linha.match(/^\s*[-*]\s+(.*)$/);
+        if (mBullet) {
+          out.push(
+            new Paragraph({
+              numbering: { reference: "parcial-bullets", level: 0 },
+              children: runFromChunks(parseInline(mBullet[1])),
+            }),
+          );
+          i += 1;
+          continue;
+        }
+
+        // tabela markdown: linha começa com | e a linha seguinte é separador
+        if (linha.startsWith("|") && i + 1 < linhas.length && /^\s*\|?\s*[-:| ]+\|?\s*$/.test(linhas[i + 1])) {
+          const linhasTabela: string[] = [linha];
+          i += 1;
+          const sep = linhas[i];
+          i += 1;
+          void sep;
+          while (i < linhas.length && linhas[i].trim().startsWith("|")) {
+            linhasTabela.push(linhas[i]);
+            i += 1;
+          }
+          const linhaEmCelulas = (l: string) =>
+            l.replace(/^\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+          const rowsBrutas = linhasTabela.map(linhaEmCelulas);
+          const nCols = Math.max(...rowsBrutas.map((r) => r.length));
+          const larguraTotal = 9360;
+          const larguraCol = Math.floor(larguraTotal / Math.max(nCols, 1));
+          const columnWidths = Array.from({ length: nCols }, (_, k) =>
+            k === nCols - 1 ? larguraTotal - larguraCol * (nCols - 1) : larguraCol,
+          );
+          const cellBorder = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
+          const cellBorders = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
+          const rows = rowsBrutas.map((celulas, idx) =>
+            new TableRow({
+              children: Array.from({ length: nCols }, (_, k) => {
+                const conteudo = celulas[k] ?? "";
+                return new TableCell({
+                  width: { size: columnWidths[k], type: WidthType.DXA },
+                  borders: cellBorders,
+                  margins: { top: 60, bottom: 60, left: 100, right: 100 },
+                  shading: idx === 0 ? { fill: "E8EEF5", type: ShadingType.CLEAR } : undefined,
+                  children: [
+                    new Paragraph({
+                      children: runFromChunks(
+                        parseInline(conteudo).map((c) => (idx === 0 ? { ...c, bold: true } : c)),
+                      ),
+                    }),
+                  ],
+                });
+              }),
+            }),
+          );
+          out.push(
+            // Table precisa vir dentro do array de children da seção; docx-js aceita Table como bloco de nível superior — devolvemos como "any" para caber no array de Paragraphs.
+            new Table({
+              width: { size: larguraTotal, type: WidthType.DXA },
+              columnWidths,
+              rows,
+            }) as unknown as InstanceType<typeof Paragraph>,
+          );
+          out.push(new Paragraph({ children: [new TextRun("")] }));
+          continue;
+        }
+
+        // parágrafo comum (une linhas seguintes até um blank/heading/bullet/tabela)
+        const parBuf: string[] = [linha];
+        i += 1;
+        while (i < linhas.length) {
+          const prox = linhas[i];
+          if (!prox.trim()) break;
+          if (/^(#{2,3}\s|[-*]\s|\|)/.test(prox.trim())) break;
+          parBuf.push(prox);
+          i += 1;
+        }
+        const paragrafoTexto = parBuf.join(" ").replace(/\s+/g, " ").trim();
+        out.push(new Paragraph({ children: runFromChunks(parseInline(paragrafoTexto)), spacing: { after: 120 } }));
+      }
+      return out;
+    }
+
+    // Formatação de datas
+    const fmtData = (v: string | null | undefined) => {
+      if (!v) return "—";
+      const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
+    };
+
+    // Monta corpo do documento
+    const corpo: InstanceType<typeof Paragraph>[] = [];
+
+    // Cabeçalho institucional
+    corpo.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        heading: HeadingLevel.HEADING_1,
+        children: [new TextRun({ text: "RELATÓRIO PARCIAL DE EXECUÇÃO DO OBJETO", bold: true })],
+      }),
+    );
+    corpo.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: "DEQ_FISCAL — Item I · Prestação de Contas SEI/TransfereGov", italics: true })],
+        spacing: { after: 240 },
+      }),
+    );
+
+    // Banner de revisão humana
+    corpo.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({
+            text: "RASCUNHO GERADO POR IA — REVISAR ANTES DE ENVIAR AO SEI/TRANSFEREGOV",
+            bold: true,
+            color: "9A6700",
+          }),
+        ],
+        border: {
+          top: { style: BorderStyle.SINGLE, size: 6, color: "D4A72C", space: 6 },
+          bottom: { style: BorderStyle.SINGLE, size: 6, color: "D4A72C", space: 6 },
+        },
+        spacing: { after: 300 },
+      }),
+    );
+
+    // Metadados do relatório
+    const metaLinhas: [string, string][] = [
+      ["Projeto", projetoNome ?? "—"],
+      ["Ciclo", ciclo != null ? String(ciclo) : "—"],
+      ["Período de referência", `${fmtData(ini)} a ${fmtData(fim)}`],
+      ["Título do relatório", titulo ?? "—"],
+      ["Data de exportação", new Date().toLocaleString("pt-BR")],
+    ];
+    for (const [k, v] of metaLinhas) {
+      corpo.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: `${k}: `, bold: true }),
+            new TextRun({ text: v }),
+          ],
+          spacing: { after: 60 },
+        }),
+      );
+    }
+    corpo.push(new Paragraph({ children: [new TextRun("")], spacing: { after: 240 } }));
+
+    // Seções na ordem oficial
+    const SECOES_ORDENADAS: [SecaoKey, string][] = [
+      ["historico", "1. Histórico da execução"],
+      ["divulgacao", "2. Divulgação e mobilização"],
+      ["metas", "3. Metas previstas × realizadas"],
+      ["parcerias", "4. Parcerias e articulação institucional"],
+      ["monitoramento", "5. Monitoramento e acompanhamento"],
+      ["material", "6. Material comprobatório"],
+      ["objetivos", "7. Objetivos e resultados alcançados"],
+      ["avaliacao", "8. Avaliação dos resultados"],
+    ];
+    for (const [key, label] of SECOES_ORDENADAS) {
+      corpo.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          children: [new TextRun({ text: label, bold: true })],
+          spacing: { before: 240, after: 120 },
+        }),
+      );
+      const texto = String(secoes[key]?.texto ?? "").trim();
+      if (!texto) {
+        corpo.push(
+          new Paragraph({
+            children: [new TextRun({ text: "[Seção não preenchida.]", italics: true, color: "808080" })],
+          }),
+        );
+        continue;
+      }
+      for (const p of paragrafosDeMarkdown(texto)) corpo.push(p);
+    }
+
+    // Assinatura
+    corpo.push(new Paragraph({ children: [new TextRun("")], spacing: { before: 480 } }));
+    corpo.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: "___________________________________________" })],
+      }),
+    );
+    corpo.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: "Coordenação Geral do Projeto", bold: true })],
+      }),
+    );
+
+    const doc = new Document({
+      creator: "Painel Mulheres Conectadas",
+      title: titulo ?? `Relatório Parcial de Execução do Objeto${ciclo != null ? ` — Ciclo ${ciclo}` : ""}`,
+      description: "DEQ_FISCAL Item I — rascunho gerado pelo sistema para revisão humana.",
+      styles: {
+        default: { document: { run: { font: "Calibri", size: 22 } } },
+        paragraphStyles: [
+          {
+            id: "Heading1",
+            name: "Heading 1",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { size: 32, bold: true, font: "Calibri" },
+            paragraph: { spacing: { before: 240, after: 240 }, outlineLevel: 0 },
+          },
+          {
+            id: "Heading2",
+            name: "Heading 2",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { size: 26, bold: true, font: "Calibri" },
+            paragraph: { spacing: { before: 200, after: 120 }, outlineLevel: 1 },
+          },
+          {
+            id: "Heading3",
+            name: "Heading 3",
+            basedOn: "Normal",
+            next: "Normal",
+            quickFormat: true,
+            run: { size: 24, bold: true, font: "Calibri" },
+            paragraph: { spacing: { before: 160, after: 80 }, outlineLevel: 2 },
+          },
+        ],
+      },
+      numbering: {
+        config: [
+          {
+            reference: "parcial-bullets",
+            levels: [
+              {
+                level: 0,
+                format: LevelFormat.BULLET,
+                text: "•",
+                alignment: AlignmentType.LEFT,
+                style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+              },
+            ],
+          },
+        ],
+      },
+      sections: [
+        {
+          properties: {
+            page: {
+              size: { width: 11906, height: 16838, orientation: PageOrientation.PORTRAIT },
+              margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+            },
+          },
+          children: corpo,
+        },
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    const base64 = Buffer.from(buffer).toString("base64");
+
+    // Atualiza status para exportado (preserva se já estava revisado/exportado)
+    const statusAtual = (row as any).status as string;
+    const novoStatus = statusAtual === "revisado" || statusAtual === "exportado" ? statusAtual : "exportado";
+    await admin
+      .from("relatorios_parcial_objeto")
+      .update({ status: "exportado", atualizado_por: context.userId })
+      .eq("id", data.id);
+    void novoStatus;
+
+    // Notificação (dedup por rascunho + dia)
+    try {
+      const chave = `parcial_objeto:${data.id}:${new Date().toISOString().slice(0, 10)}`;
+      await admin.from("notificacoes").insert({
+        user_id: context.userId,
+        tipo: "relatorio_parcial_objeto_exportado",
+        severidade: "info",
+        titulo: "Relatório Parcial exportado (DOCX)",
+        corpo: `Rascunho ${titulo ?? "(sem título)"} exportado. Lembre-se de revisar o arquivo antes de enviar ao SEI/TransfereGov.`,
+        link_rota: "/relatorios/parcial-objeto",
+        chave_dedup: chave,
+        origem: "relatorio_parcial_objeto",
+      });
+    } catch {
+      // notificação é auxiliar, não bloqueia o download
+    }
+
+    const slug = (titulo ?? `parcial-objeto-${ciclo ?? "sc"}`)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+      .slice(0, 60) || "relatorio-parcial-objeto";
+    const filename = `${slug}-${new Date().toISOString().slice(0, 10)}.docx`;
+
+    return { ok: true, base64, filename };
   });
