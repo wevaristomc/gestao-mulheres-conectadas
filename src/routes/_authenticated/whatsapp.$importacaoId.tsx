@@ -199,6 +199,65 @@ function MensagensLista({
   importacaoId: string;
   analisesById: Map<string, { transcricao?: string | null; ocr?: string | null; descricao?: string | null }>;
 }) {
+  return <MensagensListaInner importacaoId={importacaoId} analisesById={analisesById} />;
+}
+
+function PublicarAudiosBtn({
+  status,
+  pending,
+  onConfirm,
+}: {
+  status: { total: number; transcritos: number; pendentes: number; publicados: number; publicaveis: number } | undefined;
+  pending: boolean;
+  onConfirm: () => void;
+}) {
+  const publicaveis = status?.publicaveis ?? 0;
+  const transcritos = status?.transcritos ?? 0;
+  const jaPublicados = status?.publicados ?? 0;
+  const pendentes = status?.pendentes ?? 0;
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="outline" disabled={pending || publicaveis === 0}>
+          {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
+          Publicar na Base {publicaveis > 0 ? `(${publicaveis})` : ""}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Publicar áudios transcritos na Base de Conhecimento?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                Cria um registro em <span className="font-medium">Base de Conhecimento</span> por áudio, com a
+                transcrição consolidada, e indexa para busca semântica e para o Relatório Parcial de Objeto.
+                Não roda transcrição — só publica o que já foi transcrito.
+              </p>
+              <ul className="ml-4 list-disc text-xs text-muted-foreground">
+                <li><span className="font-medium text-foreground">{publicaveis}</span> áudio(s) prontos para publicar</li>
+                <li>{transcritos} transcritos ao todo · {jaPublicados} já publicados · {pendentes} sem transcrição</li>
+                <li>O grupo do WhatsApp precisa estar vinculado a um projeto (senão a publicação é rejeitada).</li>
+              </ul>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Publicar {publicaveis}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function MensagensListaInner({
+  importacaoId,
+  analisesById,
+}: {
+  importacaoId: string;
+  analisesById: Map<string, { transcricao?: string | null; ocr?: string | null; descricao?: string | null }>;
+}) {
   const q = useQuery(mensagensOptions(importacaoId, 500));
   if (q.isLoading) return <Skeleton className="h-64 w-full" />;
   const rows = q.data?.rows ?? [];
