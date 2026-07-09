@@ -169,6 +169,12 @@ export function formatBRL(v: number): string {
 
 export function formatarData(iso: string | null | undefined): string {
   if (!iso) return "—";
+  const s = String(iso).slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return String(iso);

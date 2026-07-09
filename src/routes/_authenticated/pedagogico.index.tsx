@@ -17,6 +17,8 @@ import {
 import { useActiveContext, useHasRole } from "@/hooks/use-active-context";
 import { turmasListOptions, pickFirst, formatarData, deleteTurma, nomeTurma, type Row } from "@/lib/pedagogico-queries";
 import { TurmaDialog } from "@/components/turma-dialog";
+import { TurmaFormDialog } from "@/components/mte/turma-form-dialog";
+import type { TurmaMTE } from "@/lib/mte-queries";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/")({
   component: PedagogicoIndex,
@@ -33,6 +35,7 @@ function PedagogicoIndex() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [dialogMode, setDialogMode] = useState<"simples" | "mte">("simples");
   const [deleting, setDeleting] = useState<Row | null>(null);
 
   const delMut = useMutation({
@@ -60,7 +63,7 @@ function PedagogicoIndex() {
             <Button
               size="sm"
               disabled={!projetoId}
-              onClick={() => { setEditing(null); setDialogOpen(true); }}
+              onClick={() => { setDialogMode("simples"); setEditing(null); setDialogOpen(true); }}
             >
               <Plus className="mr-1 h-4 w-4" /> Nova turma
             </Button>
@@ -134,7 +137,12 @@ function PedagogicoIndex() {
                           {canWrite ? (
                             <>
                               <Button size="icon" variant="ghost" title="Editar"
-                                onClick={() => { setEditing(r); setDialogOpen(true); }}>
+                                onClick={() => {
+                                  const isMTE = !!(r.codigo_turma || r.nome_curso);
+                                  setDialogMode(isMTE ? "mte" : "simples");
+                                  setEditing(r);
+                                  setDialogOpen(true);
+                                }}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                               <Button size="icon" variant="ghost" title="Excluir"
@@ -161,12 +169,20 @@ function PedagogicoIndex() {
         </div>
       )}
 
-      {projetoId ? (
+      {projetoId && dialogMode === "simples" ? (
         <TurmaDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           projetoId={projetoId}
           turma={editing}
+        />
+      ) : null}
+
+      {projetoId && dialogMode === "mte" ? (
+        <TurmaFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          turma={(editing as unknown as TurmaMTE) ?? null}
         />
       ) : null}
 

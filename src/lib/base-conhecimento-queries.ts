@@ -33,6 +33,12 @@ export function formatBytes(n: number | null | undefined): string {
 
 export function formatarData(v: unknown): string {
   if (!v) return "—";
+  const s = String(v).slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
   const d = new Date(String(v));
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });

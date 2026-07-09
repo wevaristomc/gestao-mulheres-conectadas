@@ -1,68 +1,61 @@
-# Importar lista de presença do Google Drive + status de verificação por documento
+## Problemas identificados
 
-## Contexto (o que já existe)
+**1. Datas exibidas um dia antes do valor real**
 
-O pipeline de leitura de lista de presença **já está pronto** em `/mte/importar-lista`:
+`formatarData()` em `src/lib/pedagogico-queries.ts` (e cópias em `captacao-queries.ts`, `financeiro-queries.ts`, `base-conhecimento-queries.ts`) faz `new Date("2026-05-09")`, que o navegador interpreta como **meia-noite UTC**. No fuso do Brasil (UTC-3) isso vira 21h do dia anterior → exibe 08/05 quando o banco tem 09/05. Mesmo comportamento para o Fim.
 
-- `src/lib/leitor-lista.ts` — PDF → PNGs (via `pdfjs-dist`), cruzamento com matrículas por CPF/nome, gravação em `aulas` + `presencas` + `entregas_beneficios` + `evidencias` + `importacoes_presenca` (é isso que alimenta a frequência no Pedagógico via `matricula.frequencia_percentual`).
-- `src/lib/ia.functions.ts` — prompt de IA que já lê cabeçalho (turma, data, instrutor, horário, CH, conteúdo) e detecta, linha por linha, **assinatura presente** na coluna Assinatura + "Sim" na coluna Frequência.
-- `GDrivePicker` (`src/components/gdrive/gdrive-picker.tsx`) e `downloadFileBase64` (`src/lib/gdrive-helpers.server.ts`) — já em uso em outros pontos do sistema.
+**2. Editar turma abre "criar nova"**
 
-Vou aproveitar tudo isso e acrescentar três coisas:
+Em `/pedagogico` (`src/routes/_authenticated/pedagogico.index.tsx`) o botão de editar abre `TurmaDialog` (`src/components/turma-dialog.tsx`), que só tem 5 campos (`nome`, `turno`, `data_inicio`, `data_fim`, `descricao`) e lê o nome via `pickFirst(turma, ["nome", "titulo"])`. As turmas cadastradas pelo Cronograma MTE não têm `nome` — têm `codigo_turma` + `nome_curso`, além de dezenas de outros campos (ciclo, endereço, CH, contato, etc.). Resultado: o diálogo abre com quase tudo em branco e parece um "cadastro novo". Salvar por ali sobrescreve o registro com um `nome` genérico e apaga o restante do contexto ao usuário.
 
-## 1. Importação de PDF de lista de presença direto do Drive
+Já existe o diálogo completo `TurmaFormDialog` em `src/components/mte/turma-form-dialog.tsx` — é o mesmo usado no Cronograma para criar/editar turmas MTE.
 
-Novos itens:
+## Correções
 
-- Server function nova em `src/lib/leitor-drive.functions.ts`:
-  `baixarPdfDoDrive({ fileId })` com `requireSupabaseAuth`, valida papel (coordenador_geral / coordenador_pedagogico / instrutor), chama `downloadFileBase64`, rejeita mime que não seja `application/pdf` ou `image/*`, devolve `{ nome, mime, base64, tamanho }`.
-- Na tela `/mte/importar-lista`, ao lado do `<Input type="file">` atual, adiciono botão **"Escolher do Google Drive"** que abre o `GDrivePicker` existente. Quando o usuário escolhe, reconstruo um `File` a partir do base64 e sigo pelo mesmo `arquivoParaImagensBase64(file)` → IA → `cruzarComMatriculas` → tabela de conferência que já existe. Um badge acima do input mostra `Origem: Google Drive · <nome>` ou `Origem: Upload local`.
+### A. Corrigir formatação de datas (`YYYY-MM-DD` sem UTC)
 
-## 2. Cabeçalho analisa também o endereço e sugere atualização da turma
+Em `src/lib/pedagogico-queries.ts` reescrever `formatarData()` para tratar strings `YYYY-MM-DD` (com ou sem hora) construindo a data em horário local:
 
-O prompt de IA em `ia.functions.ts` já extrai turma/data/instrutor/horário/CH/conteúdo. Adiciono no schema:
-
-- `endereco: string | null` (rua/número/bairro/cidade impressos no cabeçalho).
-
-E no cabeçalho editável da tela:
-
-- Campo **"Endereço da unidade"** que aparece pré-preenchido pelo OCR.
-- Se `turmas.local_endereco` estiver vazio ou for diferente do lido, mostro um botão **"Atualizar endereço da turma"** que grava em `turmas.local_endereco` (via mutation simples usando o client Supabase). Não crio tabela nova de "unidades" — o campo `local_endereco` da turma já cumpre esse papel no modelo atual e evita duplicar dado.
-
-Quanto ao **professor**: o cabeçalho já traz o nome do instrutor. Se `turmas.professor_nome` estiver vazio ou diferente, exponho o mesmo padrão de botão **"Atualizar professor da turma"** — mesma mutation, mesmo comportamento.
-
-Nada disso é automático: o usuário revê o cabeçalho e decide antes de gravar (é a mesma etapa de conferência humana que já existe).
-
-## 3. Status de revisão por documento (verificado / reanálise / em análise)
-
-Nova migration (uma só) em cima da tabela `importacoes_presenca`, que já registra cada PDF importado:
-
-```sql
-ALTER TABLE public.importacoes_presenca
-  ADD COLUMN IF NOT EXISTS revisao_status text
-    NOT NULL DEFAULT 'em_analise'
-    CHECK (revisao_status IN ('em_analise','verificado','reanalise_solicitada')),
-  ADD COLUMN IF NOT EXISTS revisao_por uuid REFERENCES auth.users(id),
-  ADD COLUMN IF NOT EXISTS revisao_em timestamptz,
-  ADD COLUMN IF NOT EXISTS revisao_observacao text;
+```ts
+export function formatarData(v: string | null | undefined): string {
+  if (!v) return "—";
+  const s = String(v).slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+}
 ```
 
-Na tela `/mte/importar-lista`, na tabela **"Histórico de importações"** que já existe no final da página, acrescento uma coluna **"Revisão"** e, ao clicar numa linha do histórico, mostro três ações:
+Aplicar a mesma correção nas cópias em `src/lib/captacao-queries.ts`, `src/lib/financeiro-queries.ts` e `src/lib/base-conhecimento-queries.ts` para manter comportamento consistente entre Pedagógico, Administrativo, Relatórios, Captação, Financeiro e Base de Conhecimento.
 
-- **Marcar como verificado** — grava `verificado` + `revisao_por = auth.uid()` + `revisao_em = now()`.
-- **Solicitar reanálise** — abre um campo `revisao_observacao` obrigatório (ex.: "3 assinaturas ilegíveis, refazer OCR") e grava `reanalise_solicitada`.
-- **Voltar para em análise** — reset simples.
+### B. Editar turma abre o diálogo correto no Pedagógico
 
-Cada status exibe um Badge colorido (cinza / verde / âmbar).
+Em `src/routes/_authenticated/pedagogico.index.tsx`:
 
-O mesmo modelo serve para os **outros tipos de documento** subidos (ficha de inscrição, entrega de benefícios, relação de qualificados) porque a tabela `importacoes_presenca` já é o registro central por PDF, e as ações são independentes do tipo.
+1. Importar `TurmaFormDialog` além do atual `TurmaDialog`.
+2. Detectar se a linha é uma turma MTE (tem `codigo_turma` ou `nome_curso`). Se sim, abrir `TurmaFormDialog` passando `turma={r}` (o componente já carrega todos os campos via `{...empty, ...turma}`). Caso contrário, abrir o `TurmaDialog` simples atual.
+3. Estado passa a distinguir os dois modos:
+   ```ts
+   const [editing, setEditing] = useState<Row | null>(null);
+   const [dialogMode, setDialogMode] = useState<"simples" | "mte">("simples");
+   ```
+   No clique de "Editar": `setDialogMode(r.codigo_turma || r.nome_curso ? "mte" : "simples")`.
+4. Após salvar, invalidar `["mte","turmas"]` e `["pedagogico","turmas"]` (o `TurmaFormDialog` já faz isso).
 
-## Verificação depois de pronto
+## Escopo
 
-Abrir `/mte/importar-lista`, selecionar turma, clicar em "Escolher do Google Drive", pegar um PDF de lista já digitalizado do drive do projeto, conferir se o cabeçalho traz turma/data/professor/endereço, clicar em "Atualizar endereço" se aparecer diferente, "Confirmar e registrar", depois no histórico marcar a importação como "Verificado" — e conferir em `/pedagogico/turmas/<id>/frequencia` se as presenças aparecem lançadas.
+- **Fora do escopo**: alterar schema, mudar `TurmaDialog` para virar o formulário completo, ou alterar o cadastro de turmas MTE em `/mte/cronograma`.
+- Nenhuma migração de banco é necessária.
 
-## Fora do escopo
+## Arquivos afetados
 
-- Não crio tabela `unidades` nova (o `local_endereco` da turma já cobre esse campo no modelo atual — se depois precisar de uma unidade compartilhada entre turmas, aviso).
-- Não faço importação em lote de vários PDFs da mesma pasta do Drive — mantenho um por vez para preservar a conferência humana.
-- Não mexo no card Importação Consolidada QAJBC, no card do Ofício 49148/2026 nem no Cronograma.
+- `src/lib/pedagogico-queries.ts` (fix `formatarData`)
+- `src/lib/captacao-queries.ts` (fix `formatarData`)
+- `src/lib/financeiro-queries.ts` (fix `formatarData`)
+- `src/lib/base-conhecimento-queries.ts` (fix `formatarData`)
+- `src/routes/_authenticated/pedagogico.index.tsx` (roteamento entre `TurmaDialog` e `TurmaFormDialog` no editar)
