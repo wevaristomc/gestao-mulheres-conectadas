@@ -11,7 +11,7 @@
 --     produzido é SEMPRE tratado como proposta ("Gerado por IA — revisar
 --     antes de enviar ao SEI/TransfereGov").
 
-INSERT INTO public.ia_politicas (processo, descricao, prioridade, provedor_preferido, max_tokens, temperatura, usar_fallback)
+INSERT INTO public.ia_politicas (processo, descricao, complexidade, provedor_preferido, max_tokens, temperatura, usar_fallback)
 VALUES (
   'relatorio_parcial_objeto',
   'Geração assistida das seções do Relatório Parcial de Execução do Objeto (DEQ Item I) com RAG sobre documentos_chunks.',
