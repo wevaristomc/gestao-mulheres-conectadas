@@ -76,6 +76,11 @@ function BaseConhecimentoPage() {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState<string>("todas");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [anotacaoOpen, setAnotacaoOpen] = useState(false);
+  const [buscaSemantica, setBuscaSemantica] = useState("");
+  const [resultadoRag, setResultadoRag] = useState<
+    Array<{ chunk_id: string; documento_id: string; texto: string; similarity: number; titulo: string | null; categoria: string | null; formato: string | null }>
+  >([]);
   const [confirmDel, setConfirmDel] = useState<DocRow | null>(null);
   const [tab, setTab] = useState<"biblioteca" | "drive">("biblioteca");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -83,6 +88,27 @@ function BaseConhecimentoPage() {
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const importGdrive = useServerFn(importGdriveToBucket);
   const deleteDocumento = useServerFn(deleteDocumentoById);
+  const reindexar = useServerFn(indexarDocumento);
+  const buscarRag = useServerFn(buscarConhecimento);
+
+  const buscaSem = useMutation({
+    mutationFn: async (q: string) => {
+      if (!projetoId) throw new Error("Selecione um projeto ativo.");
+      const r = await buscarRag({ data: { projetoId, query: q, k: 8 } });
+      return r.trechos;
+    },
+    onSuccess: (rows) => setResultadoRag(rows),
+    onError: (e: Error) => toast.error(e.message || "Falha na busca semântica"),
+  });
+
+  const reindexMut = useMutation({
+    mutationFn: (id: string) => reindexar({ data: { documentoId: id } }),
+    onSuccess: () => {
+      toast.success("Reindexação concluída");
+      qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao reindexar"),
+  });
 
   const importFromDrive = useMutation({
     mutationFn: async (files: GDriveFile[]) => {
@@ -202,6 +228,23 @@ function BaseConhecimentoPage() {
             <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!projetoId}>
               <HardDrive className="mr-1.5 h-4 w-4" /> Importar do Drive
             </Button>
+            <Dialog open={anotacaoOpen} onOpenChange={setAnotacaoOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" disabled={!projetoId}>
+                  <NotebookPen className="mr-1.5 h-4 w-4" /> Nova anotação
+                </Button>
+              </DialogTrigger>
+              {projetoId ? (
+                <AnotacaoDialog
+                  projetoId={projetoId}
+                  onClose={() => setAnotacaoOpen(false)}
+                  onSaved={() => {
+                    qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
+                    setAnotacaoOpen(false);
+                  }}
+                />
+              ) : null}
+            </Dialog>
           <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
             <DialogTrigger asChild>
               <Button size="sm" disabled={!projetoId}>
