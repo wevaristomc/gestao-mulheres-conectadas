@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertCircle, CheckCircle2, Database, Loader2, Mail, RefreshCcw, Upload, Users } from "lucide-react";
+import { AlertCircle, CheckCircle2, Database, Loader2, Mail, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
