@@ -5,10 +5,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { executarAiRouter } from "@/lib/ia.functions";
+import { executarAiRouter, executarTranscricaoRouter } from "@/lib/ia.functions";
 
 const PROCESSO = "orbe_assistente";
+const PROCESSO_TRANSCRICAO = "orbe_transcricao";
 const MAX_LINHAS = 100;
+const MAX_TOOL_RESULT = 6000;
+
+function extrairToolCall(conteudo: string): { tool?: string; args?: any } | null {
+  const tentativas: string[] = [];
+  const trimmed = conteudo.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) tentativas.push(trimmed);
+  const fence = conteudo.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (fence?.[1]) tentativas.push(fence[1]);
+  const inline = conteudo.match(/\{[\s\S]*?"tool"\s*:\s*"[^"]+"[\s\S]*?\}/);
+  if (inline?.[0]) tentativas.push(inline[0]);
+  for (const raw of tentativas) {
+    try {
+      const p = JSON.parse(raw);
+      if (p && typeof p.tool === "string") return p;
+    } catch { /* tenta próximo */ }
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Ferramentas (somente leitura). Cada uma retorna JSON compacto.
@@ -327,11 +346,24 @@ REGRAS DE TOOL-CALLING:
       const conteudo = String(r.content ?? "").trim();
 
       // Tenta detectar chamada de ferramenta (JSON)
-      const jsonMatch = conteudo.match(/^\s*\{[\s\S]*\}\s*$/) || conteudo.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-      const raw = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : null;
-      let toolCall: { tool?: string; args?: any } | null = null;
-      if (raw) {
-        try { toolCall = JSON.parse(raw); } catch { toolCall = null; }
+      const toolCall = extrairToolCall(conteudo);
+
+      if (toolCall && typeof toolCall.tool === "string" && !TOOLS[toolCall.tool]) {
+        // Ferramenta desconhecida: instrui o modelo em vez de falhar.
+        const aviso = {
+          erro: `ferramenta "${toolCall.tool}" não existe`,
+          ferramentas_validas: ferramentasPermitidas,
+        };
+        await admin.from("orbe_mensagens").insert({
+          conversa_id: conversaId, role: "tool", tool_name: toolCall.tool,
+          content: JSON.stringify(aviso),
+        });
+        mensagensLoop.push({ role: "assistant", content: conteudo });
+        mensagensLoop.push({
+          role: "user",
+          content: `Ferramenta inválida. Use apenas uma destas: ${ferramentasPermitidas.join(", ")}. Ou responda direto em markdown.`,
+        });
+        continue;
       }
 
       if (toolCall && typeof toolCall.tool === "string" && TOOLS[toolCall.tool]) {
@@ -345,14 +377,15 @@ REGRAS DE TOOL-CALLING:
           continue;
         }
         const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, toolCall!.args ?? {}), { erro: "falha na ferramenta" });
+        const resultadoStr = JSON.stringify(resultado).slice(0, MAX_TOOL_RESULT);
         await admin.from("orbe_mensagens").insert({
           conversa_id: conversaId, role: "tool", tool_name: toolCall.tool,
-          content: JSON.stringify(resultado).slice(0, 8000),
+          content: resultadoStr,
         });
         mensagensLoop.push({ role: "assistant", content: conteudo });
         mensagensLoop.push({
           role: "user",
-          content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(resultado).slice(0, 8000)}`,
+          content: `Resultado da ferramenta ${toolCall.tool}:\n${resultadoStr}`,
         });
         continue;
       }
