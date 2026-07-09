@@ -47,7 +47,6 @@ import {
   cursistasComStatusOptions,
   emitirCertificado,
   formatarData,
-  pickFirst,
   revogarCertificado,
   turmasDoProjetoOptions,
   type CursistaLinha,
