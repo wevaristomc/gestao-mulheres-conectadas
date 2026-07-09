@@ -86,6 +86,110 @@ export type Database = {
         }
         Relationships: []
       }
+      notificacoes: {
+        Row: {
+          chave_dedup: string | null
+          corpo: string | null
+          criado_em: string
+          id: string
+          lida: boolean
+          link_rota: string | null
+          origem: string
+          severidade: string
+          tipo: string
+          titulo: string
+          user_id: string | null
+        }
+        Insert: {
+          chave_dedup?: string | null
+          corpo?: string | null
+          criado_em?: string
+          id?: string
+          lida?: boolean
+          link_rota?: string | null
+          origem?: string
+          severidade?: string
+          tipo: string
+          titulo: string
+          user_id?: string | null
+        }
+        Update: {
+          chave_dedup?: string | null
+          corpo?: string | null
+          criado_em?: string
+          id?: string
+          lida?: boolean
+          link_rota?: string | null
+          origem?: string
+          severidade?: string
+          tipo?: string
+          titulo?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      orbe_conversas: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          id: string
+          titulo: string | null
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          titulo?: string | null
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          titulo?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      orbe_mensagens: {
+        Row: {
+          content: string
+          conversa_id: string
+          criado_em: string
+          id: string
+          role: string
+          tokens: number
+          tool_name: string | null
+        }
+        Insert: {
+          content: string
+          conversa_id: string
+          criado_em?: string
+          id?: string
+          role: string
+          tokens?: number
+          tool_name?: string | null
+        }
+        Update: {
+          content?: string
+          conversa_id?: string
+          criado_em?: string
+          id?: string
+          role?: string
+          tokens?: number
+          tool_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orbe_mensagens_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "orbe_conversas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
