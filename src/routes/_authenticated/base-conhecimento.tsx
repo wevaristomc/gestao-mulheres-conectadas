@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, Download, FileText, HardDrive, Loader2, Plus, Search, Trash2, Upload,
+  AlertCircle, Download, FileText, HardDrive, Loader2, Mic, NotebookPen, Plus,
+  RefreshCw, Search, Sparkles, StickyNote, Trash2, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -31,11 +32,15 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
   CATEGORIAS, categoriaLabel, documentosListOptions,
-  formatBytes, formatarData, getSignedUrl, pickFirst, removeDocumentoFile, uploadDocumentoFile,
+  formatBytes, formatarData, FORMATO_LABEL, getSignedUrl, pickFirst,
+  removeDocumentoFile, uploadDocumentoFile,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
-import { registerUploadedDocumento, deleteDocumentoById } from "@/lib/base-conhecimento.functions";
+import {
+  registerUploadedDocumento, deleteDocumentoById,
+  criarAnotacao, indexarDocumento, buscarConhecimento,
+} from "@/lib/base-conhecimento.functions";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
