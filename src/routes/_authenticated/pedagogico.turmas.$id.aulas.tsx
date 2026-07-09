@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Loader2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
+import { ClipboardList, Loader2, Pencil, Plus, Trash2, AlertCircle, FileCheck2, FileWarning, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -20,8 +21,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   aulasByTurmaOptions, upsertAula, deleteAula, pickFirst, formatarData, type Row,
+  evidenciasCountByTurmaOptions, turmaByIdOptions,
 } from "@/lib/pedagogico-queries";
 import { DialogGerarListas } from "@/components/pedagogico/dialog-gerar-listas";
+import { AulaComprovacaoDialog } from "@/components/pedagogico/aula-comprovacao-dialog";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/aulas")({
   component: AulasTab,
@@ -33,11 +36,16 @@ function AulasTab() {
   const q = useQuery(aulasByTurmaOptions(turmaId));
   const rows = q.data?.rows ?? [];
   const erro = q.data?.error ?? (q.isError ? String(q.error) : null);
+  const turmaQ = useQuery(turmaByIdOptions(turmaId));
+  const codigoTurma = (pickFirst(turmaQ.data?.row, ["codigo_turma"]) ?? null) as string | null;
+  const countQ = useQuery(evidenciasCountByTurmaOptions(turmaId));
+  const countByAula = countQ.data?.byAula ?? {};
 
   const [novaOpen, setNovaOpen] = useState(false);
   const [editando, setEditando] = useState<Row | null>(null);
   const [confirmarExcluir, setConfirmarExcluir] = useState<string | null>(null);
   const [gerarOpen, setGerarOpen] = useState(false);
+  const [comprovando, setComprovando] = useState<Row | null>(null);
 
   const excluir = useMutation({
     mutationFn: (id: string) => deleteAula(id),
@@ -102,6 +110,7 @@ function AulasTab() {
                 <TableHead className="w-40">Data</TableHead>
                 <TableHead>Tema</TableHead>
                 <TableHead className="w-24">Duração</TableHead>
+                <TableHead className="w-44">Comprovação</TableHead>
                 <TableHead className="w-24 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -112,22 +121,46 @@ function AulasTab() {
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-full" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                 ))
               ) : aulasOrdenadas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
                     Nenhuma aula cadastrada. Use "Nova aula" para lançar a primeira.
                   </TableCell>
                 </TableRow>
               ) : (
-                aulasOrdenadas.map((r) => (
+                aulasOrdenadas.map((r) => {
+                  const n = countByAula[r.id] ?? 0;
+                  return (
                   <TableRow key={r.id}>
                     <TableCell>{formatarData(pickFirst(r, ["data"]))}</TableCell>
                     <TableCell>{pickFirst(r, ["titulo", "tema", "assunto", "descricao"]) ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {pickFirst(r, ["duracao", "carga_horaria"]) ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {n > 0 ? (
+                          <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                            <FileCheck2 className="mr-1 h-3 w-3" /> Comprovada ({n})
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            <FileWarning className="mr-1 h-3 w-3" /> Sem comprovação
+                          </Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setComprovando(r)}
+                        >
+                          <Paperclip className="mr-1 h-3 w-3" /> Anexar
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -140,7 +173,8 @@ function AulasTab() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -183,6 +217,17 @@ function AulasTab() {
       </AlertDialog>
 
       <DialogGerarListas open={gerarOpen} onOpenChange={setGerarOpen} turmaId={turmaId} />
+
+      {comprovando ? (
+        <AulaComprovacaoDialog
+          open={!!comprovando}
+          onOpenChange={(o) => !o && setComprovando(null)}
+          turmaId={turmaId}
+          aulaId={comprovando.id}
+          codigoTurma={codigoTurma}
+          dataAula={pickFirst(comprovando, ["data"])}
+        />
+      ) : null}
     </div>
   );
 }

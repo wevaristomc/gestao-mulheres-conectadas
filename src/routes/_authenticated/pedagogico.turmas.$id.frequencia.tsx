@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Info } from "lucide-react";
+import { AlertCircle, FileCheck2, Info, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/table";
 import {
   aulasByTurmaOptions, cursistasByTurmaOptions, frequenciaByTurmaOptions,
-  upsertFrequencia, pickFirst, formatarData, type FrequenciaRow, type Row,
+  upsertFrequencia, pickFirst, formatarData, evidenciasCountByTurmaOptions,
+  turmaByIdOptions, type FrequenciaRow, type Row,
 } from "@/lib/pedagogico-queries";
+import { AulaComprovacaoDialog } from "@/components/pedagogico/aula-comprovacao-dialog";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/frequencia")({
   component: FrequenciaTab,
@@ -37,6 +39,12 @@ function FrequenciaTab() {
   const aulasQ = useQuery(aulasByTurmaOptions(turmaId));
   const cursistasQ = useQuery(cursistasByTurmaOptions(turmaId));
   const freqQ = useQuery(frequenciaByTurmaOptions(turmaId));
+  const countQ = useQuery(evidenciasCountByTurmaOptions(turmaId));
+  const turmaQ = useQuery(turmaByIdOptions(turmaId));
+  const codigoTurma = (pickFirst(turmaQ.data?.row, ["codigo_turma"]) ?? null) as string | null;
+  const countByAula = countQ.data?.byAula ?? {};
+
+  const [comprovando, setComprovando] = useState<Row | null>(null);
 
   const aulas = useMemo(
     () =>
@@ -147,6 +155,24 @@ function FrequenciaTab() {
                 <div className="text-[10px] font-normal text-muted-foreground truncate max-w-[120px]">
                   {pickFirst(a, ["titulo", "tema", "assunto"]) ?? ""}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setComprovando(a)}
+                  className="mt-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-normal text-muted-foreground hover:bg-muted"
+                  title="Comprovação da aula"
+                >
+                  {(countByAula[a.id] ?? 0) > 0 ? (
+                    <>
+                      <FileCheck2 className="h-3 w-3 text-emerald-600" />
+                      <span className="text-emerald-700">{countByAula[a.id]}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Paperclip className="h-3 w-3" />
+                      <span>anexar</span>
+                    </>
+                  )}
+                </button>
               </TableHead>
             ))}
           </TableRow>
@@ -180,6 +206,16 @@ function FrequenciaTab() {
           ))}
         </TableBody>
       </Table>
+      {comprovando ? (
+        <AulaComprovacaoDialog
+          open={!!comprovando}
+          onOpenChange={(o) => !o && setComprovando(null)}
+          turmaId={turmaId}
+          aulaId={comprovando.id}
+          codigoTurma={codigoTurma}
+          dataAula={pickFirst(comprovando, ["data"])}
+        />
+      ) : null}
     </div>
   );
 }

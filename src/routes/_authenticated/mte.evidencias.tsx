@@ -48,7 +48,13 @@ function EvidenciasIndex() {
   const aulas = aulasQ.data?.rows ?? [];
 
   const q = useQuery(evidenciasByTurmaOptions(effectiveTurma || null));
-  const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
+  const rowsRaw = useMemo(() => q.data?.rows ?? [], [q.data]);
+  const [filtroAula, setFiltroAula] = useState<string>("");
+  const rows = useMemo(() => {
+    if (!filtroAula) return rowsRaw;
+    if (filtroAula === "__sem_aula__") return rowsRaw.filter((r) => !(r as { aula_id?: string | null }).aula_id);
+    return rowsRaw.filter((r) => (r as { aula_id?: string | null }).aula_id === filtroAula);
+  }, [rowsRaw, filtroAula]);
 
   const [tipo, setTipo] = useState<string>("foto_aula");
   const [aulaVinc, setAulaVinc] = useState<string>("");
@@ -137,6 +143,26 @@ function EvidenciasIndex() {
           </SelectContent>
         </Select>
       </div>
+
+      {effectiveTurma ? (
+        <div className="mb-4 grid gap-1.5 md:max-w-md">
+          <Label className="text-xs">Filtrar por aula</Label>
+          <Select value={filtroAula || "__all__"} onValueChange={(v) => setFiltroAula(v === "__all__" ? "" : v)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Todas as aulas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas as aulas</SelectItem>
+              <SelectItem value="__sem_aula__">Sem aula vinculada</SelectItem>
+              {aulas.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.data ?? "s/ data"}{a.conteudo_programatico ? ` — ${a.conteudo_programatico}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {canWrite && effectiveTurma ? (
         <div className="mb-6 rounded-md border p-4">
