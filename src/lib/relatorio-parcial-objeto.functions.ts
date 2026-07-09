@@ -54,6 +54,7 @@ const GerarInput = z.object({
   secao: z.enum(SECOES_KEYS),
   instrucaoExtra: z.string().max(2000).optional(),
 });
+const ExportarDocxInput = z.object({ id: z.string().uuid() });
 
 // ---------------------------------------------------------------------------
 // Helpers
