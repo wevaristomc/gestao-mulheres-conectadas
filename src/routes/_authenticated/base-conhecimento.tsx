@@ -119,7 +119,7 @@ function BaseConhecimentoPage() {
       if (categoria !== "todas" && rowCategoria !== categoria) return false;
       if (!s) return true;
       const hay = [
-        pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"]),
+        labelDocumento(r),
         pickFirst(r, ["descricao", "observacao"]),
         rowCategoria,
       ]
@@ -295,7 +295,7 @@ function BaseConhecimentoPage() {
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
                         <div className="truncate font-medium">
-                          {String(pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"]) ?? "—")}
+                          {labelDocumento(r)}
                         </div>
                         {pickFirst(r, ["descricao", "observacao", "drive_url"]) ? (
                           <div className="truncate text-xs text-muted-foreground">
