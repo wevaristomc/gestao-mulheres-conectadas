@@ -44,6 +44,23 @@ export const Route = createFileRoute("/_authenticated/base-conhecimento")({
   component: BaseConhecimentoPage,
 });
 
+// Rótulo humano de um documento. Prefere titulo/nome/nome_arquivo; se só houver
+// storage_path (formato `<projeto_id>/<uuid>-<arquivo>`), extrai apenas o
+// nome do arquivo, removendo o prefixo do projeto e o UUID.
+function labelDocumento(row: DocRow): string {
+  const direto = pickFirst(row, ["titulo", "nome", "nome_arquivo"]);
+  if (direto) return String(direto);
+  const path = pickFirst(row, ["storage_path"]);
+  if (path) {
+    const last = String(path).split("/").pop() ?? String(path);
+    return last.replace(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i,
+      "",
+    ) || "Documento sem título";
+  }
+  return "Documento sem título";
+}
+
 function BaseConhecimentoPage() {
   const { projetoId } = useActiveContext();
   const qc = useQueryClient();
