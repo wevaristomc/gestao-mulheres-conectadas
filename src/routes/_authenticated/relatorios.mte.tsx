@@ -16,6 +16,7 @@ type RelatorioDef = {
     | "vw_beneficiarias"
     | "vw_consolidacao_turma"
     | "vw_relacao_qualificados"
+    | "vw_checklist_fiscalizacao"
     | "execucao_fisico_financeira";
   titulo: string;
   descricao: string;
@@ -65,6 +66,14 @@ const RELATORIOS: RelatorioDef[] = [
       "Matriculadas, % frequência média, lanches, transporte, kit, material, camiseta e certificados por turma.",
     arquivo: "consolidacao-turma.xlsx",
     deqItem: "DEQ — Item VI",
+  },
+  {
+    view: "vw_checklist_fiscalizacao",
+    titulo: "Checklist de Fiscalização (Identificação PMQ)",
+    descricao:
+      "Evidências de identificação do PMQ nas turmas/atividades — verificação exigida pela fiscalização MTE.",
+    arquivo: "checklist-fiscalizacao-pmq.xlsx",
+    deqItem: "DEQ — Item VII",
   },
   {
     view: "vw_relacao_qualificados",

@@ -13,7 +13,12 @@ alter table public.documentos
   add column if not exists transcricao_status text not null default 'pendente',
   add column if not exists duracao_segundos integer,
   add column if not exists metadata jsonb not null default '{}'::jsonb,
-  add column if not exists tags text[] not null default '{}'::text[];
+  add column if not exists tags text[] not null default '{}'::text[],
+  -- Correção aplicada pelo Cowork (Claude) em 2026-07: RPC match_documentos_chunks
+  -- referenciava d.titulo/d.categoria e essas colunas não existiam no schema real.
+  -- Adicionadas de forma aditiva para manter compatibilidade com base já populada.
+  add column if not exists titulo text,
+  add column if not exists categoria text not null default 'outros';
 
 -- Aceita formatos conhecidos; qualquer outro cai em 'arquivo'.
 do $$
@@ -31,6 +36,16 @@ begin
     alter table public.documentos
       add constraint documentos_transcricao_status_chk
       check (transcricao_status in ('pendente','processando','concluida','erro','nao_aplicavel'));
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'documentos_categoria_chk'
+  ) then
+    alter table public.documentos
+      add constraint documentos_categoria_chk
+      check (categoria in (
+        'termo_fomento','modelos','normas','comunicacao','pedagogico',
+        'relatorios_externos','anotacoes','audios_whatsapp','outros'
+      ));
   end if;
 end $$;
 
@@ -128,7 +143,9 @@ as $$
     c.ordem,
     c.texto,
     1 - (c.embedding <=> p_query_embedding) as similarity,
-    coalesce(d.titulo, d.nome, d.nome_arquivo) as titulo,
+    -- Correção Cowork/Claude 2026-07: d.nome / d.nome_arquivo não existem no
+    -- schema real; fallback usa storage_path/drive_url/tipo.
+    coalesce(d.titulo, d.storage_path, d.drive_url, d.tipo) as titulo,
     coalesce(d.categoria, d.tipo) as categoria,
     d.formato,
     d.storage_path
@@ -141,4 +158,11 @@ as $$
   limit greatest(1, least(coalesce(p_match_count, 8), 30));
 $$;
 
+-- Segurança (Cowork/Claude 2026-07): a função é SECURITY DEFINER e a base de
+-- conhecimento pode conter CPFs, dados financeiros e transcrições de WhatsApp.
+-- Advisor do Supabase apontou que `anon` poderia chamar via /rest/v1/rpc
+-- contornando o requireSupabaseAuth. Revogamos public/anon e mantemos apenas
+-- authenticated e service_role.
+revoke all on function public.match_documentos_chunks(uuid, vector, integer, text[]) from public;
+revoke all on function public.match_documentos_chunks(uuid, vector, integer, text[]) from anon;
 grant execute on function public.match_documentos_chunks(uuid, vector, integer, text[]) to authenticated, service_role;
