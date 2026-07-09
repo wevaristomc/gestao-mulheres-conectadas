@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, FileText, Loader2, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, FileText, Loader2, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import {
   atualizarSecaoParcialObjeto,
   criarRascunhoParcialObjeto,
   excluirRascunhoParcialObjeto,
+  exportarParcialObjetoDocx,
   gerarSecaoParcialObjeto,
   regenerarContextoParcialObjeto,
 } from "@/lib/relatorio-parcial-objeto.functions";
