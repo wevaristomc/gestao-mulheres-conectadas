@@ -772,9 +772,14 @@ export const gerarSecaoParcialObjeto = createServerFn({ method: "POST" })
 
     return {
       ok: true,
-      texto: (resultado as any).texto ?? (resultado as any).content ?? String((resultado as any).mensagem ?? ""),
-      provedor: (resultado as any).provedor ?? null,
-      fallback_de: (resultado as any).fallback_de ?? null,
+      texto: String((resultado as { content?: string }).content ?? ""),
+      provedor: (resultado as { provedor?: string }).provedor ?? null,
+      modelo: (resultado as { modelo?: string }).modelo ?? null,
+      fallback_de: (resultado as { fallback_de?: string }).fallback_de ?? null,
+      tokens: {
+        entrada: (resultado as { tokens_entrada?: number }).tokens_entrada ?? 0,
+        saida: (resultado as { tokens_saida?: number }).tokens_saida ?? 0,
+      },
       citacoes,
       aviso: "Gerado por IA — revisar antes de enviar ao SEI/TransfereGov.",
     };
