@@ -12,94 +12,253 @@ export type CertificadoData = {
   cargaHoraria?: number | null;
   municipio?: string | null;
   periodo?: string | null;
+  entidade?: string | null;
+  dataInicio?: Date | null;
+  dataFim?: Date | null;
 };
 
+/**
+ * Certificado de Conclusão — layout oficial PMQ.
+ * Paisagem A4. Fundo creme. Faixa esquerda com padrão de triângulos terracota.
+ * Emblema PMQ no topo direito (desenhado programaticamente para manter API síncrona).
+ * Rodapé com faixa institucional (PMQ / FAT / SRTE / MTE / Governo Federal).
+ */
 export function gerarCertificadoPDF(data: CertificadoData): Blob {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
 
-  // Moldura — azul-marinho PMQ
-  doc.setDrawColor(26, 43, 82);
-  doc.setLineWidth(4);
-  doc.rect(24, 24, W - 48, H - 48);
-  doc.setDrawColor(212, 85, 43); // terracota
-  doc.setLineWidth(1);
-  doc.rect(36, 36, W - 72, H - 72);
+  // ————— Cores institucionais —————
+  const CREME: [number, number, number] = [250, 243, 220]; // #FAF3DC
+  const AZUL: [number, number, number] = [27, 42, 74]; // #1B2A4A
+  const TERRACOTA: [number, number, number] = [217, 108, 71]; // #D96C47
+  const TERRACOTA_ESC: [number, number, number] = [194, 82, 50]; // #C25232
+  const CINZA_TXT: [number, number, number] = [45, 45, 45];
 
-  // Cabeçalho
+  // Fundo creme
+  doc.setFillColor(...CREME);
+  doc.rect(0, 0, W, H, "F");
+
+  // ————— Faixa vertical esquerda com padrão de triângulos —————
+  const bandW = W * 0.15;
+  desenharFaixaTriangulos(doc, 0, 0, bandW, H, TERRACOTA, TERRACOTA_ESC);
+
+  // ————— Emblema PMQ no topo direito —————
+  desenharEmblemaPMQ(doc, W - 96, 60, 36, AZUL);
+
+  // ————— Título principal —————
+  const contentX = bandW + 40;
+  const contentW = W - contentX - 40;
+
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(26, 43, 82);
-  doc.setFontSize(12);
-  doc.text("PROGRAMA MANUEL QUERINO", W / 2, 72, { align: "center" });
-  doc.setFontSize(30);
-  doc.text("CERTIFICADO", W / 2, 108, { align: "center" });
+  doc.setTextColor(...AZUL);
+  doc.setFontSize(11);
+  doc.text("PROGRAMA MANUEL QUERINO", contentX, 76);
 
+  doc.setFontSize(36);
+  doc.text("CERTIFICADO", contentX, 118);
+  doc.setFontSize(22);
+  doc.text("DE CONCLUSÃO", contentX, 148);
+
+  // ————— Corpo —————
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 90, 90);
+  doc.setTextColor(...AZUL);
   doc.setFontSize(13);
-  doc.text("de Qualificação Profissional", W / 2, 138, { align: "center" });
+  doc.text("Certifico que", contentX, 192);
 
-  // Corpo
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(13);
-  doc.text("Certificamos que", W / 2, 188, { align: "center" });
-
+  // Linha do nome
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
-  doc.text(data.nome, W / 2, 220, { align: "center" });
+  doc.setFontSize(22);
+  doc.setTextColor(...CINZA_TXT);
+  doc.text(data.nome, contentX, 226);
+  doc.setDrawColor(...AZUL);
+  doc.setLineWidth(0.6);
+  doc.line(contentX, 232, contentX + contentW, 232);
 
   if (data.cpf) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    doc.text(`CPF: ${data.cpf}`, W / 2, 240, { align: "center" });
+    doc.text(`CPF: ${data.cpf}`, contentX, 246);
   }
+
+  // Texto corrido (modelo oficial DEQ/PMQ)
+  const dataConcl = data.dataConclusao;
+  const diaConcl = String(dataConcl.getDate()).padStart(2, "0");
+  const mesConcl = mesExtenso(dataConcl.getMonth());
+  const anoConcl = String(dataConcl.getFullYear()).slice(-2);
+  const curso = data.curso ?? data.turma ?? "Mulheres Conectadas – Formação em Tecnologia e Inovação Digital";
+  const ch = data.cargaHoraria ?? 150;
+  const periodoTxt = data.periodo
+    ?? (data.dataInicio && data.dataFim
+      ? `${formatarBR(data.dataInicio)} a ${formatarBR(data.dataFim)}`
+      : "__/__/____ a __/__/____");
+  const entidade = (data.entidade ?? "QUINTA ARTE").toUpperCase();
+
+  const texto =
+    `em ${diaConcl}, de ${mesConcl} de 20${anoConcl}, a Sr.ª acima nominada concluiu, realizando ` +
+    `satisfatoriamente as tarefas propostas, o curso de "${curso}", com carga horária total de ${ch} horas, ` +
+    `realizado no período de ${periodoTxt}${data.municipio ? `, no município de ${data.municipio}` : ""}, ` +
+    `na entidade ${entidade}.`;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(13);
-  doc.setTextColor(30, 30, 30);
-  const curso = data.curso ?? data.turma;
-  const ch = data.cargaHoraria ?? 150;
-  const mun = data.municipio ? ` no município de ${data.municipio},` : "";
-  const per = data.periodo ? ` no período de ${data.periodo},` : "";
-  const texto =
-    `concluiu com aproveitamento o curso de qualificação profissional "${curso}", ` +
-    `com carga horária total de ${ch} horas,${per}${mun} ` +
-    `no âmbito do Programa Manuel Querino — Termo de Fomento MROSC — estando devidamente qualificada.`;
-  const linhas = doc.splitTextToSize(texto, W - 220);
-  doc.text(linhas, W / 2, 280, { align: "center" });
+  doc.setFontSize(12);
+  doc.setTextColor(...CINZA_TXT);
+  const linhas = doc.splitTextToSize(texto, contentW);
+  doc.text(linhas, contentX, 274, { lineHeightFactor: 1.5 });
 
   if (data.observacoes) {
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    const obs = doc.splitTextToSize(data.observacoes, W - 260);
-    doc.text(obs, W / 2, 340, { align: "center" });
+    const obs = doc.splitTextToSize(data.observacoes, contentW);
+    doc.text(obs, contentX, 274 + linhas.length * 18 + 12, { lineHeightFactor: 1.4 });
   }
 
-  // Data + assinatura
-  const dataFmt = new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(data.dataConclusao);
-  doc.setFontSize(12);
-  doc.setTextColor(60, 60, 60);
-  doc.text(`Emitido em ${dataFmt}`, W / 2, H - 130, { align: "center" });
+  // ————— Assinaturas (centro inferior) —————
+  const sigY = H - 128;
+  const sigW = 240;
+  const gap = 60;
+  const totalW = sigW * 2 + gap;
+  const sigX1 = contentX + (contentW - totalW) / 2;
+  const sigX2 = sigX1 + sigW + gap;
 
-  doc.setDrawColor(120, 120, 120);
-  doc.line(W / 2 - 140, H - 90, W / 2 + 140, H - 90);
-  doc.setFontSize(11);
-  doc.text("Coordenação — Programa Manuel Querino", W / 2, H - 72, { align: "center" });
+  doc.setDrawColor(80, 80, 80);
+  doc.setLineWidth(0.6);
+  doc.line(sigX1, sigY, sigX1 + sigW, sigY);
+  doc.line(sigX2, sigY, sigX2 + sigW, sigY);
 
-  // Número do certificado (rodapé esquerdo)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...CINZA_TXT);
+  doc.text("Assinatura do/a responsável pela entidade", sigX1 + sigW / 2, sigY + 12, { align: "center" });
+  doc.text("Assinatura do/a concluinte", sigX2 + sigW / 2, sigY + 12, { align: "center" });
+
+  // ————— Rodapé institucional —————
+  desenharRodapeInstitucional(doc, bandW, W, H, AZUL);
+
+  // Nº do certificado (canto inferior direito, discreto)
   if (data.numero) {
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text(`Nº ${data.numero}`, 52, H - 44);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Certificado nº ${data.numero}`, W - 24, H - 8, { align: "right" });
   }
 
   return doc.output("blob");
+}
+
+// ————————————————————————————————————————————————————————————————
+// Helpers de desenho
+// ————————————————————————————————————————————————————————————————
+
+function desenharFaixaTriangulos(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cor1: [number, number, number],
+  cor2: [number, number, number],
+) {
+  // Base creme claro por baixo (a página já está creme)
+  const cols = 3;
+  const rows = 10;
+  const cw = w / cols;
+  const ch = h / rows;
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const cx = x + c * cw;
+      const cy = y + r * ch;
+      const usarEscuro = (r + c) % 2 === 0;
+      const cor = usarEscuro ? cor2 : cor1;
+      // alterna orientação do triângulo por linha/coluna
+      const orient = (r * cols + c) % 4;
+      doc.setFillColor(...cor);
+      doc.setDrawColor(...cor);
+      let tri: [number, number][];
+      if (orient === 0) tri = [[cx, cy], [cx + cw, cy], [cx, cy + ch]];
+      else if (orient === 1) tri = [[cx + cw, cy], [cx + cw, cy + ch], [cx, cy + ch]];
+      else if (orient === 2) tri = [[cx, cy], [cx + cw, cy], [cx + cw, cy + ch]];
+      else tri = [[cx, cy], [cx + cw, cy + ch], [cx, cy + ch]];
+      doc.triangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0], tri[2][1], "F");
+      // pequeno quadrado sobreposto para textura
+      if ((r + c) % 3 === 0) {
+        doc.setFillColor(cor[0], cor[1], cor[2]);
+        const s = Math.min(cw, ch) * 0.18;
+        doc.rect(cx + cw / 2 - s / 2, cy + ch / 2 - s / 2, s, s, "F");
+      }
+    }
+  }
+}
+
+function desenharEmblemaPMQ(
+  doc: jsPDF,
+  cx: number,
+  cy: number,
+  r: number,
+  azul: [number, number, number],
+) {
+  // Círculo azul-marinho de fundo
+  doc.setFillColor(...azul);
+  doc.circle(cx, cy, r, "F");
+  // Faixas laranja/âmbar diagonais (base do rosto estilizado)
+  doc.setFillColor(240, 158, 48); // âmbar
+  doc.triangle(cx - r, cy + r * 0.15, cx + r, cy + r * 0.15, cx + r, cy + r * 0.55, "F");
+  doc.setFillColor(217, 108, 71); // terracota
+  doc.triangle(cx - r, cy + r * 0.55, cx + r, cy + r * 0.55, cx + r, cy + r * 0.9, "F");
+  // Rosto — círculo creme
+  doc.setFillColor(250, 243, 220);
+  doc.circle(cx, cy - r * 0.15, r * 0.35, "F");
+  // Sigla
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6);
+  doc.setTextColor(...azul);
+  doc.text("PMQ", cx, cy - r * 0.13, { align: "center" });
+}
+
+function desenharRodapeInstitucional(
+  doc: jsPDF,
+  bandW: number,
+  W: number,
+  H: number,
+  azul: [number, number, number],
+) {
+  const y = H - 56;
+  const x0 = bandW + 20;
+  const x1 = W - 20;
+
+  // Linha separadora
+  doc.setDrawColor(...azul);
+  doc.setLineWidth(0.6);
+  doc.line(x0, y, x1, y);
+
+  const labels = [
+    "Programa Manuel Querino",
+    "QUINTA ARTE",
+    "FAT — Fundo de Amparo ao Trabalhador",
+    "SRTE",
+    "Ministério do Trabalho e Emprego",
+    "Governo Federal — BRASIL",
+  ];
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...azul);
+  const step = (x1 - x0) / labels.length;
+  labels.forEach((label, i) => {
+    const cx = x0 + step * i + step / 2;
+    doc.text(label, cx, y + 18, { align: "center", maxWidth: step - 8 });
+  });
+}
+
+function mesExtenso(m: number): string {
+  return [
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  ][m] ?? "";
+}
+
+function formatarBR(d: Date): string {
+  return d.toLocaleDateString("pt-BR");
 }
 
 export function slugifyNome(nome: string): string {
