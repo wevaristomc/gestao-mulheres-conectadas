@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, FileText, Loader2, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, FileText, Loader2, Plus, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import {
   atualizarSecaoParcialObjeto,
   criarRascunhoParcialObjeto,
   excluirRascunhoParcialObjeto,
+  gerarSecaoParcialObjeto,
   regenerarContextoParcialObjeto,
 } from "@/lib/relatorio-parcial-objeto.functions";
 
@@ -74,8 +75,7 @@ function RelatorioParcialObjetoPage() {
         <div className="flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            <strong>Rascunho estruturado (Fase 3a).</strong> As seções são pré-preenchidas com resumos dos dados do banco (turmas, indicadores, evidências).
-            A geração assistida por IA e a exportação DOCX vêm nas próximas rodadas. Revise sempre antes de enviar ao SEI/TransfereGov.
+            <strong>Fase 3b — geração assistida por IA.</strong> Cada seção pode ser regerada com IA usando os dados estruturados do projeto e os trechos indexados na Base de Conhecimento. Todo texto gerado é rascunho — <strong>revisar sempre antes de enviar ao SEI/TransfereGov.</strong> Exportação DOCX vem na Fase 3c.
           </div>
         </div>
       </div>
@@ -446,6 +446,55 @@ function SecaoEditor({
 
   const contador = useMemo(() => `${texto.length.toLocaleString("pt-BR")} caracteres`, [texto]);
 
+  const [iaOpen, setIaOpen] = useState(false);
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaInstrucao, setIaInstrucao] = useState("");
+  const [iaResultado, setIaResultado] = useState<null | {
+    texto: string;
+    provedor: string | null;
+    modelo: string | null;
+    fallback_de: string | null;
+    citacoes: { ref: string; titulo: string | null; similarity: number }[];
+    aviso: string;
+  }>(null);
+
+  async function gerarComIA() {
+    setIaLoading(true);
+    setIaResultado(null);
+    try {
+      const res = await gerarSecaoParcialObjeto({
+        data: { id: rascunhoId, secao, instrucaoExtra: iaInstrucao.trim() || undefined },
+      });
+      setIaResultado({
+        texto: (res as { texto: string }).texto,
+        provedor: (res as { provedor: string | null }).provedor ?? null,
+        modelo: (res as { modelo: string | null }).modelo ?? null,
+        fallback_de: (res as { fallback_de: string | null }).fallback_de ?? null,
+        citacoes: (res as { citacoes: { ref: string; titulo: string | null; similarity: number }[] }).citacoes ?? [],
+        aviso: (res as { aviso: string }).aviso ?? "Gerado por IA — revisar antes de enviar ao SEI/TransfereGov.",
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIaLoading(false);
+    }
+  }
+
+  function aplicar(modo: "substituir" | "anexar") {
+    if (!iaResultado) return;
+    const proposto = iaResultado.texto.trim();
+    if (!proposto) {
+      toast.error("Proposta vazia — nada para aplicar.");
+      return;
+    }
+    const novo = modo === "substituir" ? proposto : `${texto.trim()}\n\n${proposto}`.trim();
+    setTexto(novo);
+    setDirty(true);
+    setIaOpen(false);
+    setIaResultado(null);
+    toast.success("Proposta aplicada — lembre-se de revisar antes de enviar ao SEI/TransfereGov.");
+  }
+
   return (
     <details className="rounded-lg border bg-card" open>
       <summary className="cursor-pointer list-none p-3 flex items-start justify-between gap-3">
@@ -464,6 +513,79 @@ function SecaoEditor({
         </div>
       </summary>
       <div className="border-t p-3 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Dialog open={iaOpen} onOpenChange={(o) => { setIaOpen(o); if (!o) setIaResultado(null); }}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <Sparkles className="h-4 w-4" /> Gerar rascunho com IA
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Gerar rascunho com IA — {label}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                  <div className="flex items-start gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Rascunho gerado por IA — revisar antes de enviar ao SEI/TransfereGov.</strong> A IA usa os dados do contexto estruturado e trechos da Base de Conhecimento do projeto; cita como <code>[Doc N]</code>. Números fora desse contexto são marcados como <code>[preencher: …]</code>.
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="ia-instr" className="text-xs">Instrução adicional (opcional)</Label>
+                  <Textarea
+                    id="ia-instr"
+                    value={iaInstrucao}
+                    onChange={(e) => setIaInstrucao(e.target.value)}
+                    rows={2}
+                    placeholder="Ex: destaque as parcerias com CRAS de Cariacica; foque no ciclo 1."
+                  />
+                </div>
+                {!iaResultado ? (
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={gerarComIA} disabled={iaLoading} className="gap-1.5">
+                      {iaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Gerar proposta
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-[10px] text-muted-foreground">
+                      Provedor: <strong>{iaResultado.provedor ?? "—"}</strong>
+                      {iaResultado.modelo ? ` · Modelo: ${iaResultado.modelo}` : ""}
+                      {iaResultado.fallback_de ? ` · Fallback de: ${iaResultado.fallback_de}` : ""}
+                    </div>
+                    <Textarea
+                      value={iaResultado.texto}
+                      onChange={(e) => setIaResultado({ ...iaResultado, texto: e.target.value })}
+                      rows={14}
+                      className="font-mono text-xs"
+                    />
+                    {iaResultado.citacoes.length > 0 && (
+                      <div className="rounded border bg-muted/30 p-2 text-[11px]">
+                        <div className="font-medium mb-1">Citações usadas na geração:</div>
+                        <ul className="space-y-0.5">
+                          {iaResultado.citacoes.map((c) => (
+                            <li key={c.ref}>
+                              <strong>{c.ref}:</strong> {c.titulo ?? "(sem título)"} — similaridade {(c.similarity * 100).toFixed(0)}%
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => setIaResultado(null)}>Descartar e gerar de novo</Button>
+                      <Button size="sm" variant="outline" onClick={() => aplicar("anexar")}>Anexar ao final</Button>
+                      <Button size="sm" onClick={() => aplicar("substituir")}>Substituir seção</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
         <Textarea
           value={texto}
           onChange={(e) => {
