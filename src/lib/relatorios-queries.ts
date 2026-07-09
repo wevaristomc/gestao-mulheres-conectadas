@@ -301,7 +301,9 @@ export function frequenciaResumoOptions(projetoId: string | null) {
 
         result.push({
           turmaId: t.id,
-          turmaNome: pickStr(t, ["nome", "titulo", "descricao"]) ?? t.id,
+          turmaNome:
+            pickStr(t, ["nome", "titulo", "descricao", "codigo_turma", "nome_curso"]) ??
+            "Turma sem nome",
           aulasTotal: aulaIds.length,
           cursistas,
         });
