@@ -364,7 +364,44 @@ function ImportarListaPage() {
               <Field label="Conteúdo">
                 <Input value={cabecalho.conteudo ?? ""} onChange={(e) => setCabecalho({ ...cabecalho, conteudo: e.target.value })} />
               </Field>
+              <Field label="Endereço da unidade">
+                <Input
+                  value={cabecalho.endereco ?? ""}
+                  onChange={(e) => setCabecalho({ ...cabecalho, endereco: e.target.value })}
+                  placeholder="Rua, número, bairro, cidade"
+                />
+              </Field>
             </div>
+            {(enderecoDivergente || professorDivergente) ? (
+              <div className="mt-3 grid gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+                {enderecoDivergente ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">Endereço lido difere do cadastro da turma</div>
+                      <div className="text-muted-foreground">
+                        Cadastro: <em>{enderecoTurma || "—"}</em> · Lido: <strong>{enderecoLido}</strong>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => salvarEndereco.mutate()} disabled={salvarEndereco.isPending}>
+                      Atualizar endereço da turma
+                    </Button>
+                  </div>
+                ) : null}
+                {professorDivergente ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">Professor lido difere do cadastro da turma</div>
+                      <div className="text-muted-foreground">
+                        Cadastro: <em>{professorTurma || "—"}</em> · Lido: <strong>{professorLido}</strong>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => salvarProfessor.mutate()} disabled={salvarProfessor.isPending}>
+                      Atualizar professor da turma
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs">
