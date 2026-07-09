@@ -22,6 +22,7 @@ export type CabecalhoExtraido = {
   instrutor?: string | null;
   horario?: string | null;
   ch_dia?: number | null;
+  endereco?: string | null;
 };
 
 export type ResultadoLeitura = {
