@@ -198,14 +198,22 @@ function construirLista(turma: TurmaMTE, aula: AulaMTE, cursistas: Cursista[], e
       municipio: turma.municipio,
       turno: turma.turno,
       local: turma.local_endereco,
+      entidade: turma.executora ?? "QUINTA ARTE",
     },
     aula: {
       data: aula.data,
       tema: aula.conteudo_programatico,
       cargaHoraria: aula.ch_prevista ? `${aula.ch_prevista}h` : null,
       instrutor: aula.instrutor,
+      horaInicio: aula.hora_inicio ?? null,
+      horaFim: aula.hora_fim ?? null,
     },
     cursistas,
     extras,
   };
 }
+
+// TODO(entrega): implementar listas de entrega (kits/materiais/EPI e auxílios
+// transporte/alimentação) no mesmo padrão visual do modelo de frequência.
+// Colunas: Nº | Nome | CPF | Item/Benefício entregue | Data | Assinatura.
+// Conferir contra modelo oficial docx (kits/auxílios) quando disponibilizado.
