@@ -63,7 +63,7 @@ function PedagogicoIndex() {
             <Button
               size="sm"
               disabled={!projetoId}
-              onClick={() => { setEditing(null); setDialogOpen(true); }}
+              onClick={() => { setDialogMode("simples"); setEditing(null); setDialogOpen(true); }}
             >
               <Plus className="mr-1 h-4 w-4" /> Nova turma
             </Button>
