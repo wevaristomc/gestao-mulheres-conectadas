@@ -575,3 +575,207 @@ export const previewContextoParcialObjeto = createServerFn({ method: "POST" })
     await validarAcessoProjeto(context.supabase, context.userId, (row as any).projeto_id);
     return { row };
   });
+
+// ---------------------------------------------------------------------------
+// Fase 3b — Geração assistida por IA (proposta, não persiste no banco).
+// RAG: embed da query da seção → match_documentos_chunks no projeto do
+// rascunho → concatena trechos com [Doc N: <titulo>].
+// Geração: SEMPRE via executarAiRouter (processo='relatorio_parcial_objeto').
+// Nunca chama Lovable AI Gateway para geração de texto (apenas embeddings
+// da base de conhecimento reutilizam o gateway, mesmo padrão da Fase 1).
+// ---------------------------------------------------------------------------
+
+const SECAO_LABEL: Record<SecaoKey, { label: string; descricao: string; foco: string }> = {
+  historico: {
+    label: "1. Histórico da execução",
+    descricao: "Resumo do que foi executado no período (turmas, aulas, beneficiárias, marcos).",
+    foco: "Descreva cronologicamente o que foi executado, com números consolidados e marcos institucionais relevantes.",
+  },
+  divulgacao: {
+    label: "2. Divulgação e mobilização",
+    descricao: "Ações de divulgação, canais, inscrições, seleção.",
+    foco: "Descreva canais utilizados, materiais produzidos, alcance estimado e resultados de inscrição/seleção.",
+  },
+  metas: {
+    label: "3. Metas previstas × realizadas",
+    descricao: "Quadro comparativo previsto/realizado.",
+    foco: "Compare cada meta prevista no Plano de Trabalho com o realizado, justificando parciais/não atingidas.",
+  },
+  parcerias: {
+    label: "4. Parcerias e articulação institucional",
+    descricao: "Parcerias com poder público, sociedade civil e iniciativa privada.",
+    foco: "Liste parcerias formalizadas no período, tipo de colaboração e resultados obtidos.",
+  },
+  monitoramento: {
+    label: "5. Monitoramento e acompanhamento",
+    descricao: "Como a execução foi monitorada (visitas, sistemas, frequência, evasão).",
+    foco: "Descreva instrumentos de acompanhamento, reuniões, visitas técnicas e ações contra evasão.",
+  },
+  material: {
+    label: "6. Material comprobatório",
+    descricao: "Evidências: listas de presença, fotos, atas, ofícios.",
+    foco: "Organize por tipo de evidência, referenciando volumes; cite documentos anexos quando aplicável.",
+  },
+  objetivos: {
+    label: "7. Objetivos e resultados alcançados",
+    descricao: "Objetivos do Plano de Trabalho e grau de alcance.",
+    foco: "Cruze cada objetivo do Plano de Trabalho com resultados quantitativos e qualitativos alcançados.",
+  },
+  avaliacao: {
+    label: "8. Avaliação dos resultados",
+    descricao: "Análise qualitativa: impacto, dificuldades, ajustes.",
+    foco: "Faça análise qualitativa: impacto nas beneficiárias, dificuldades enfrentadas, aprendizados, recomendações.",
+  },
+};
+
+function jsonBloqueado(obj: unknown, max = 8000): string {
+  const s = JSON.stringify(obj, null, 2);
+  if (s.length <= max) return s;
+  return `${s.slice(0, max)}\n… (truncado — ${s.length - max} chars restantes)`;
+}
+
+function textoLimpo(s: string, max = 1200): string {
+  const t = (s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
+export const gerarSecaoParcialObjeto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v: unknown) => GerarInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+
+    const { data: row, error: readErr } = await admin
+      .from("relatorios_parcial_objeto")
+      .select("id, projeto_id, ciclo, periodo_inicio, periodo_fim, titulo, contexto, secoes")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (!row) throw new Error("Rascunho não encontrado.");
+    await validarAcessoProjeto(context.supabase, context.userId, (row as any).projeto_id);
+
+    const projetoId = String((row as any).projeto_id);
+    const secaoKey = data.secao;
+    const secaoMeta = SECAO_LABEL[secaoKey];
+    const contexto = ((row as any).contexto ?? {}) as Record<string, unknown>;
+    const secoes = ((row as any).secoes ?? {}) as Record<string, { texto?: string }>;
+    const textoAtual = String(secoes[secaoKey]?.texto ?? "");
+
+    // RAG: embed da query e busca no projeto ------------------------------------
+    type Trecho = {
+      chunk_id: string;
+      documento_id: string;
+      ordem: number;
+      texto: string;
+      similarity: number;
+      titulo: string | null;
+      categoria: string | null;
+      formato: string | null;
+      storage_path: string | null;
+    };
+    let trechos: Trecho[] = [];
+    try {
+      const { embedTexto, vetorToLiteral } = await import("@/lib/base-conhecimento-embed.server");
+      const queryRAG = [
+        `Seção: ${secaoMeta.label}`,
+        secaoMeta.descricao,
+        secaoMeta.foco,
+        data.instrucaoExtra ?? "",
+        textoLimpo(textoAtual, 400),
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const vetor = await embedTexto(queryRAG);
+      if (vetor) {
+        const { data: rows } = await admin.rpc("match_documentos_chunks", {
+          p_projeto_id: projetoId,
+          p_query_embedding: vetorToLiteral(vetor),
+          p_match_count: 6,
+          p_categorias: null,
+        });
+        trechos = (rows ?? []) as Trecho[];
+      }
+    } catch (e) {
+      // RAG opcional — se falhar, segue sem citações e registra no retorno.
+    }
+
+    const citacoes = trechos.map((t, i) => ({
+      ref: `Doc ${i + 1}`,
+      titulo: t.titulo,
+      documento_id: t.documento_id,
+      similarity: Math.round(t.similarity * 1000) / 1000,
+    }));
+
+    const trechosMd = trechos.length
+      ? trechos
+          .map(
+            (t, i) =>
+              `[Doc ${i + 1}: ${t.titulo ?? "sem título"} · similaridade ${(t.similarity * 100).toFixed(0)}%]\n${textoLimpo(t.texto, 900)}`,
+          )
+          .join("\n\n")
+      : "_Nenhum documento indexado retornou trechos relevantes para esta seção._";
+
+    // Prompt -----------------------------------------------------------------
+    const system = [
+      "Você redige seções do **Relatório Parcial de Execução do Objeto** para prestação de contas ao SEI/TransfereGov (DEQ_FISCAL Item I).",
+      "Segue o modelo institucional \"2-MODELO_RELATORIO_DO_CUMPRIMENTO_DO_OBJETO\": linguagem formal impessoal, terceira pessoa, foco em execução, sem juízo de valor exagerado.",
+      "REGRAS OBRIGATÓRIAS:",
+      "1. NUNCA invente números, datas, nomes de pessoas, parcerias ou eventos que não estejam no CONTEXTO ESTRUTURADO ou nos TRECHOS DA BASE DE CONHECIMENTO.",
+      "2. Quando referenciar um trecho da base de conhecimento, cite entre colchetes assim: [Doc 1] ou [Doc 3] (mesma numeração dos trechos fornecidos).",
+      "3. Se faltar dado para uma afirmação, escreva entre colchetes: [preencher: descrição do que falta] — melhor deixar lacuna do que inventar.",
+      "4. NÃO inclua saudações, meta-comentários, explicações sobre o processo ou notas ao leitor humano.",
+      "5. Aceita Markdown (títulos ###, listas, tabelas) quando fizer sentido para a seção.",
+      "6. Foque exclusivamente na seção solicitada; não gere as demais.",
+    ].join("\n");
+
+    const user = [
+      `# Projeto e período`,
+      `- Projeto: ${(contexto as any)?.projeto?.nome ?? "—"}`,
+      `- Ciclo: ${((row as any).ciclo as number | null) ?? "—"}`,
+      `- Período: ${((row as any).periodo_inicio as string | null) ?? "?"} a ${((row as any).periodo_fim as string | null) ?? "?"}`,
+      ``,
+      `# Seção a redigir`,
+      `**${secaoMeta.label}** — ${secaoMeta.descricao}`,
+      `Instruções específicas da seção: ${secaoMeta.foco}`,
+      data.instrucaoExtra ? `\nInstrução adicional do revisor humano: ${data.instrucaoExtra}` : ``,
+      ``,
+      `# Contexto estruturado (fonte primária de números — não invente)`,
+      "```json",
+      jsonBloqueado(contexto, 7000),
+      "```",
+      ``,
+      `# Trechos da base de conhecimento (fonte primária qualitativa — cite como [Doc N])`,
+      trechosMd,
+      ``,
+      textoAtual.trim()
+        ? `# Rascunho atual da seção (pode ser aproveitado como ponto de partida)\n${textoAtual}`
+        : `# Rascunho atual da seção\n_(vazio)_`,
+      ``,
+      `# Sua tarefa`,
+      `Escreva o conteúdo final da seção \"${secaoMeta.label}\" pronto para revisão humana. Comece diretamente pelo texto da seção (sem repetir o cabeçalho da seção).`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    // Chama executarAiRouter --------------------------------------------------
+    const { executarAiRouter } = await import("@/lib/ia.functions");
+    const resultado = await executarAiRouter({
+      admin,
+      processo: "relatorio_parcial_objeto",
+      mensagens: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      defaults: { max_tokens: 4096, temperatura: 0.4 },
+    });
+
+    return {
+      ok: true,
+      texto: (resultado as any).texto ?? (resultado as any).content ?? String((resultado as any).mensagem ?? ""),
+      provedor: (resultado as any).provedor ?? null,
+      fallback_de: (resultado as any).fallback_de ?? null,
+      citacoes,
+      aviso: "Gerado por IA — revisar antes de enviar ao SEI/TransfereGov.",
+    };
+  });
