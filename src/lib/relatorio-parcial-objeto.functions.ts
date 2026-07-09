@@ -49,6 +49,11 @@ const AtualizarMetaInput = z.object({
 const ExcluirInput = z.object({ id: z.string().uuid() });
 const IdInput = z.object({ id: z.string().uuid() });
 const RegerarInput = z.object({ id: z.string().uuid() });
+const GerarInput = z.object({
+  id: z.string().uuid(),
+  secao: z.enum(SECOES_KEYS),
+  instrucaoExtra: z.string().max(2000).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
