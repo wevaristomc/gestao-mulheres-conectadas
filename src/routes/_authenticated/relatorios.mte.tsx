@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { AlertCircle, Download, Loader2, FileSpreadsheet } from "lucide-react";
+import { AlertCircle, Download, Loader2, FileSpreadsheet, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { consultarViewMTE, consultarExecucaoFisicoFinanceira } from "@/lib/mte-relatorios.functions";
+import { ComprovacaoTurmaCard } from "@/components/pedagogico/comprovacao-turma-card";
 
 type RelatorioDef = {
   view:
@@ -199,6 +200,9 @@ function RelatoriosMte() {
         title="Relatórios MTE"
         description="Exports XLSX no padrão exigido pela fiscalização MTE / TransfereGov."
       />
+      <div className="mb-6">
+        <ComprovacaoTurmaCard />
+      </div>
       <div className="grid gap-3 md:grid-cols-2">
         {RELATORIOS.map((r) => (
           <div key={r.view} className="rounded-lg border bg-card p-4 space-y-2">
