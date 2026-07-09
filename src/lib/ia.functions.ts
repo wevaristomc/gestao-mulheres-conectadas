@@ -597,7 +597,8 @@ Retorne APENAS JSON válido, sem markdown, no exato formato:
     "conteudo": "conteúdo das aulas do dia",
     "instrutor": "nome do instrutor",
     "horario": "ex: 08:00 às 12:00",
-    "ch_dia": 4
+    "ch_dia": 4,
+    "endereco": "endereço da unidade onde a aula foi ministrada (rua, número, bairro, cidade) ou null se não constar"
   },
   "alunas": [
     {

@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertCircle, CheckCircle2, Download, FileUp, HelpCircle, Loader2, Search } from "lucide-react";
+import {
+  AlertCircle, CheckCircle2, Download, FileUp, HelpCircle, Loader2, Search,
+  FolderOpen, ShieldCheck, RotateCcw, Undo2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -18,8 +21,13 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { turmasMteListOptions } from "@/lib/mte-queries";
 import { lerListaPresenca } from "@/lib/ia.functions";
+import { baixarPdfDoDrive } from "@/lib/leitor-drive.functions";
+import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { ImportarTurmaCsvCard } from "@/components/mte/importar-turma-csv-card";
 import { ImportarMoodleCard } from "@/components/mte/importar-moodle-card";
 import { GerarMatriculasAvaCard } from "@/components/mte/gerar-matriculas-ava-card";
@@ -35,6 +43,11 @@ import {
   baixarTxt,
   listarImportacoes,
   uploadArquivoLista,
+  atualizarEnderecoTurma,
+  atualizarProfessorTurma,
+  marcarRevisaoImportacao,
+  type ImportacaoLista,
+  type RevisaoStatus,
   type CabecalhoExtraido,
   type LinhaConferencia,
   type MatriculaLite,
@@ -51,6 +64,10 @@ function ImportarListaPage() {
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
+  const [origem, setOrigem] = useState<"local" | "drive" | null>(null);
+  const [driveFileName, setDriveFileName] = useState<string | null>(null);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [driveBusy, setDriveBusy] = useState(false);
   const [uploaded, setUploaded] = useState<{ url: string; nome: string } | null>(null);
   const [tipoDoc, setTipoDoc] = useState<
     "lista_presenca" | "ficha_inscricao" | "entrega_beneficios" | "relacao_qualificados"
@@ -63,6 +80,7 @@ function ImportarListaPage() {
   const [leitura, setLeitura] = useState<ResultadoLeitura | null>(null);
 
   const lerFn = useServerFn(lerListaPresenca);
+  const baixarDriveFn = useServerFn(baixarPdfDoDrive);
   const historicoQ = useQuery({
     queryKey: ["mte", "importacoes-presenca", turmaId || null],
     queryFn: () => listarImportacoes(turmaId || null),
@@ -72,6 +90,32 @@ function ImportarListaPage() {
     () => turmas.find((t) => t.id === turmaId) ?? null,
     [turmas, turmaId],
   );
+
+  async function base64ToFile(b64: string, mime: string, nome: string): Promise<File> {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], nome, { type: mime });
+  }
+
+  async function onDrivePick(picked: GDriveFile[]) {
+    const f = picked[0];
+    if (!f) return;
+    setDriveBusy(true);
+    try {
+      const dl = await baixarDriveFn({ data: { fileId: f.id } });
+      const built = await base64ToFile(dl.base64, dl.mime, dl.nome);
+      setFile(built);
+      setOrigem("drive");
+      setDriveFileName(dl.nome);
+      setDrivePickerOpen(false);
+      toast.success(`PDF carregado do Drive · ${dl.nome}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao baixar do Drive");
+    } finally {
+      setDriveBusy(false);
+    }
+  }
 
   const processar = useMutation({
     mutationFn: async () => {
@@ -117,12 +161,52 @@ function ImportarListaPage() {
         `Aula registrada · ${r.presencas_registradas} presenças · ${r.lanches_registrados} lanches`,
       );
       qc.invalidateQueries({ queryKey: ["mte"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+      qc.invalidateQueries({ queryKey: ["administrativo"] });
       // reset
       setFile(null); setUploaded(null); setLeitura(null); setLinhas([]);
+      setOrigem(null); setDriveFileName(null);
       setCabecalho({}); setObservacoes([]);
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao gravar"),
   });
+
+  const salvarEndereco = useMutation({
+    mutationFn: async () => {
+      if (!turmaId) throw new Error("Selecione a turma primeiro.");
+      const end = String(cabecalho.endereco ?? "").trim();
+      if (!end) throw new Error("Endereço vazio.");
+      await atualizarEnderecoTurma(turmaId, end);
+    },
+    onSuccess: () => {
+      toast.success("Endereço da turma atualizado.");
+      qc.invalidateQueries({ queryKey: ["mte", "turmas"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const salvarProfessor = useMutation({
+    mutationFn: async () => {
+      if (!turmaId) throw new Error("Selecione a turma primeiro.");
+      const nome = String(cabecalho.instrutor ?? "").trim();
+      if (!nome) throw new Error("Nome do instrutor vazio.");
+      await atualizarProfessorTurma(turmaId, nome);
+    },
+    onSuccess: () => {
+      toast.success("Professor da turma atualizado.");
+      qc.invalidateQueries({ queryKey: ["mte", "turmas"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const enderecoTurma = String((turmaAtual as any)?.local_endereco ?? "").trim();
+  const enderecoLido = String(cabecalho.endereco ?? "").trim();
+  const professorTurma = String((turmaAtual as any)?.professor_nome ?? "").trim();
+  const professorLido = String(cabecalho.instrutor ?? "").trim();
+  const enderecoDivergente = enderecoLido && enderecoLido.toLowerCase() !== enderecoTurma.toLowerCase();
+  const professorDivergente = professorLido && professorLido.toLowerCase() !== professorTurma.toLowerCase();
 
   function atualizarLinha(idx: number, patch: Partial<LinhaConferencia>) {
     setLinhas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -199,11 +283,41 @@ function ImportarListaPage() {
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">Arquivo (PDF, JPG ou PNG) *</Label>
-            <Input
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setFile(f);
+                    setOrigem(f ? "local" : null);
+                    setDriveFileName(null);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDrivePickerOpen(true)}
+                  disabled={driveBusy}
+                >
+                  {driveBusy
+                    ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    : <FolderOpen className="mr-1.5 h-4 w-4" />}
+                  Escolher do Google Drive
+                </Button>
+              </div>
+              {file ? (
+                <div className="text-xs text-muted-foreground">
+                  Origem: {origem === "drive" ? (
+                    <span className="font-medium text-foreground">Google Drive · {driveFileName ?? file.name}</span>
+                  ) : (
+                    <span className="font-medium text-foreground">Upload local · {file.name}</span>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -250,7 +364,44 @@ function ImportarListaPage() {
               <Field label="Conteúdo">
                 <Input value={cabecalho.conteudo ?? ""} onChange={(e) => setCabecalho({ ...cabecalho, conteudo: e.target.value })} />
               </Field>
+              <Field label="Endereço da unidade">
+                <Input
+                  value={cabecalho.endereco ?? ""}
+                  onChange={(e) => setCabecalho({ ...cabecalho, endereco: e.target.value })}
+                  placeholder="Rua, número, bairro, cidade"
+                />
+              </Field>
             </div>
+            {(enderecoDivergente || professorDivergente) ? (
+              <div className="mt-3 grid gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+                {enderecoDivergente ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">Endereço lido difere do cadastro da turma</div>
+                      <div className="text-muted-foreground">
+                        Cadastro: <em>{enderecoTurma || "—"}</em> · Lido: <strong>{enderecoLido}</strong>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => salvarEndereco.mutate()} disabled={salvarEndereco.isPending}>
+                      Atualizar endereço da turma
+                    </Button>
+                  </div>
+                ) : null}
+                {professorDivergente ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">Professor lido difere do cadastro da turma</div>
+                      <div className="text-muted-foreground">
+                        Cadastro: <em>{professorTurma || "—"}</em> · Lido: <strong>{professorLido}</strong>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => salvarProfessor.mutate()} disabled={salvarProfessor.isPending}>
+                      Atualizar professor da turma
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs">
@@ -362,33 +513,17 @@ function ImportarListaPage() {
               <TableHead>Itens</TableHead>
               <TableHead>Não ident.</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Revisão</TableHead>
               <TableHead>Enviado em</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {historicoQ.isLoading ? (
-              <TableRow><TableCell colSpan={7} className="py-6 text-center text-xs text-muted-foreground">Carregando…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-6 text-center text-xs text-muted-foreground">Carregando…</TableCell></TableRow>
             ) : (historicoQ.data ?? []).length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-6 text-center text-xs text-muted-foreground">Nenhuma importação ainda.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-6 text-center text-xs text-muted-foreground">Nenhuma importação ainda.</TableCell></TableRow>
             ) : (historicoQ.data ?? []).map((h) => (
-              <TableRow key={h.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => {
-                  // Reabre para conferência (somente leitura das linhas gravadas)
-                  setLinhas(h.itens ?? []);
-                  setObservacoes(h.avisos ?? []);
-                  setCabecalho({
-                    turma: h.turma_identificada,
-                    data: h.data_aula,
-                    conteudo: (h as any).conteudo,
-                    instrutor: (h as any).instrutor,
-                    horario: (h as any).horario,
-                    ch_dia: (h as any).ch_dia,
-                  });
-                  setUploaded(h.arquivo_url ? { url: h.arquivo_url, nome: h.arquivo_nome ?? "" } : null);
-                  setLeitura({ cabecalho: {}, alunas: [], observacoes: [], provedor: "histórico", modelo: "", tokens: 0 });
-                }}
-              >
+              <TableRow key={h.id} className="hover:bg-muted/50">
                 <TableCell className="text-xs">{h.data_aula ?? "—"}</TableCell>
                 <TableCell className="text-xs">{h.turma_identificada ?? "—"}</TableCell>
                 <TableCell className="text-xs">
@@ -397,12 +532,28 @@ function ImportarListaPage() {
                 <TableCell className="text-xs">{(h.itens ?? []).length}</TableCell>
                 <TableCell className="text-xs">{(h.nao_identificados ?? []).length}</TableCell>
                 <TableCell className="text-xs capitalize">{h.status}</TableCell>
+                <TableCell className="text-xs">
+                  <RevisaoCell
+                    row={h}
+                    onDone={() => qc.invalidateQueries({ queryKey: ["mte", "importacoes-presenca"] })}
+                  />
+                </TableCell>
                 <TableCell className="text-xs text-muted-foreground">{h.criado_em ? new Date(h.criado_em).toLocaleString("pt-BR") : "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      <GDrivePicker
+        open={drivePickerOpen}
+        onOpenChange={setDrivePickerOpen}
+        onPick={(files) => void onDrivePick(files)}
+        multi={false}
+        title="Escolher lista de presença no Google Drive"
+        description="Navegue pela pasta do projeto ou busque pelo nome do PDF."
+        busy={driveBusy}
+      />
     </div>
   );
 }
@@ -412,6 +563,91 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="grid gap-1.5">
       <Label className="text-xs">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function RevisaoBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "em_analise") as RevisaoStatus;
+  if (s === "verificado") return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Verificado</Badge>;
+  if (s === "reanalise_solicitada") return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Reanálise solicitada</Badge>;
+  return <Badge variant="secondary">Em análise</Badge>;
+}
+
+function RevisaoCell({ row, onDone }: { row: ImportacaoLista; onDone: () => void }) {
+  const [openReanalise, setOpenReanalise] = useState(false);
+  const [obs, setObs] = useState(row.revisao_observacao ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function set(status: RevisaoStatus, observacao?: string | null) {
+    setBusy(true);
+    try {
+      await marcarRevisaoImportacao(row.id, status, observacao ?? null);
+      toast.success(
+        status === "verificado" ? "Marcado como verificado." :
+        status === "reanalise_solicitada" ? "Reanálise solicitada." :
+        "Voltou para em análise.",
+      );
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao atualizar revisão");
+    } finally {
+      setBusy(false);
+      setOpenReanalise(false);
+    }
+  }
+
+  const st = (row.revisao_status ?? "em_analise") as RevisaoStatus;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <RevisaoBadge status={st} />
+      <div className="flex flex-wrap gap-1">
+        {st !== "verificado" ? (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => set("verificado")}>
+            <ShieldCheck className="mr-1 h-3 w-3" /> Verificar
+          </Button>
+        ) : null}
+        {st !== "reanalise_solicitada" ? (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => setOpenReanalise(true)}>
+            <RotateCcw className="mr-1 h-3 w-3" /> Reanálise
+          </Button>
+        ) : null}
+        {st !== "em_analise" ? (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => set("em_analise")}>
+            <Undo2 className="mr-1 h-3 w-3" /> Reabrir
+          </Button>
+        ) : null}
+      </div>
+      {st === "reanalise_solicitada" && row.revisao_observacao ? (
+        <div className="text-[11px] italic text-muted-foreground max-w-[240px] whitespace-normal">
+          "{row.revisao_observacao}"
+        </div>
+      ) : null}
+
+      <Dialog open={openReanalise} onOpenChange={setOpenReanalise}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar reanálise</DialogTitle>
+            <DialogDescription>
+              Descreva o que precisa ser revisto neste PDF (assinaturas ilegíveis, cabeçalho errado, etc.).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea rows={4} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: 3 assinaturas ilegíveis na página 2, refazer OCR." />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpenReanalise(false)} disabled={busy}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!obs.trim()) { toast.error("Informe a observação da reanálise."); return; }
+                void set("reanalise_solicitada", obs.trim());
+              }}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Solicitar reanálise
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

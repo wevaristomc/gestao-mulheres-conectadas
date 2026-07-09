@@ -22,6 +22,7 @@ export type CabecalhoExtraido = {
   instrutor?: string | null;
   horario?: string | null;
   ch_dia?: number | null;
+  endereco?: string | null;
 };
 
 export type ResultadoLeitura = {
@@ -423,6 +424,10 @@ export type ImportacaoLista = {
   instrutor?: string | null;
   horario?: string | null;
   ch_dia?: number | null;
+  revisao_status?: "em_analise" | "verificado" | "reanalise_solicitada" | null;
+  revisao_por?: string | null;
+  revisao_em?: string | null;
+  revisao_observacao?: string | null;
 };
 
 export async function listarImportacoes(turmaId: string | null): Promise<ImportacaoLista[]> {
@@ -431,4 +436,46 @@ export async function listarImportacoes(turmaId: string | null): Promise<Importa
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []) as any as ImportacaoLista[];
+}
+
+// ---------------- Sugestão de turma: endereço + professor ----------------
+
+export async function atualizarEnderecoTurma(turmaId: string, endereco: string): Promise<void> {
+  const { error } = await supabase
+    .from("turmas")
+    .update({ local_endereco: endereco })
+    .eq("id", turmaId);
+  if (error) throw new Error("Falha ao atualizar endereço da turma: " + error.message);
+}
+
+export async function atualizarProfessorTurma(turmaId: string, nome: string): Promise<void> {
+  const { error } = await supabase
+    .from("turmas")
+    .update({ professor_nome: nome })
+    .eq("id", turmaId);
+  if (error) throw new Error("Falha ao atualizar professor da turma: " + error.message);
+}
+
+// ---------------- Revisão do PDF importado ----------------
+
+export type RevisaoStatus = "em_analise" | "verificado" | "reanalise_solicitada";
+
+export async function marcarRevisaoImportacao(
+  importacaoId: string,
+  status: RevisaoStatus,
+  observacao?: string | null,
+): Promise<void> {
+  const { data: sess } = await supabase.auth.getUser();
+  const uid = sess?.user?.id ?? null;
+  const payload: Record<string, unknown> = {
+    revisao_status: status,
+    revisao_em: status === "em_analise" ? null : new Date().toISOString(),
+    revisao_por: status === "em_analise" ? null : uid,
+    revisao_observacao: status === "reanalise_solicitada" ? (observacao ?? null) : null,
+  };
+  const { error } = await supabase
+    .from("importacoes_presenca")
+    .update(payload)
+    .eq("id", importacaoId);
+  if (error) throw new Error("Falha ao atualizar revisão: " + error.message);
 }

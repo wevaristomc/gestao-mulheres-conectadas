@@ -14,7 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      importacoes_presenca: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          atualizado_em: string
+          aula_id: string | null
+          avisos: Json
+          ch_dia: number | null
+          conteudo: string | null
+          criado_em: string
+          data_aula: string | null
+          horario: string | null
+          id: string
+          instrutor: string | null
+          itens: Json
+          nao_identificados: Json
+          revisao_em: string | null
+          revisao_observacao: string | null
+          revisao_por: string | null
+          revisao_status: string
+          status: string
+          turma_id: string | null
+          turma_identificada: string | null
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          atualizado_em?: string
+          aula_id?: string | null
+          avisos?: Json
+          ch_dia?: number | null
+          conteudo?: string | null
+          criado_em?: string
+          data_aula?: string | null
+          horario?: string | null
+          id?: string
+          instrutor?: string | null
+          itens?: Json
+          nao_identificados?: Json
+          revisao_em?: string | null
+          revisao_observacao?: string | null
+          revisao_por?: string | null
+          revisao_status?: string
+          status?: string
+          turma_id?: string | null
+          turma_identificada?: string | null
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          atualizado_em?: string
+          aula_id?: string | null
+          avisos?: Json
+          ch_dia?: number | null
+          conteudo?: string | null
+          criado_em?: string
+          data_aula?: string | null
+          horario?: string | null
+          id?: string
+          instrutor?: string | null
+          itens?: Json
+          nao_identificados?: Json
+          revisao_em?: string | null
+          revisao_observacao?: string | null
+          revisao_por?: string | null
+          revisao_status?: string
+          status?: string
+          turma_id?: string | null
+          turma_identificada?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
