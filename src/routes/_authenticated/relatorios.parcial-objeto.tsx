@@ -272,6 +272,7 @@ function EditorRascunhoInner({
   const [fim, setFim] = useState<string>(row.periodo_fim ?? "");
   const [status, setStatus] = useState<RascunhoParcialObjeto["status"]>(row.status);
   const [regenerando, setRegenerando] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   async function salvarMeta() {
     try {
@@ -316,6 +317,34 @@ function EditorRascunhoInner({
     }
   }
 
+  async function exportarDocx() {
+    setExportando(true);
+    try {
+      const res = await exportarParcialObjetoDocx({ data: { id: row.id } });
+      const base64 = (res as { base64: string }).base64;
+      const filename = (res as { filename: string }).filename;
+      const bin = atob(base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("DOCX exportado. Lembre-se de revisar antes de enviar ao SEI/TransfereGov.");
+      setStatus("exportado");
+      await onInvalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-card p-4 space-y-3">
@@ -355,6 +384,10 @@ function EditorRascunhoInner({
           <Button size="sm" variant="outline" onClick={regenerarContexto} disabled={regenerando} className="gap-1.5">
             {regenerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
             Recalcular contexto (preserva textos editados)
+          </Button>
+          <Button size="sm" variant="default" onClick={exportarDocx} disabled={exportando} className="gap-1.5">
+            {exportando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Exportar DOCX
           </Button>
           <Button size="sm" variant="ghost" className="text-destructive gap-1.5" onClick={excluir}>
             <Trash2 className="h-4 w-4" />
