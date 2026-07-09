@@ -283,11 +283,41 @@ function ImportarListaPage() {
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">Arquivo (PDF, JPG ou PNG) *</Label>
-            <Input
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setFile(f);
+                    setOrigem(f ? "local" : null);
+                    setDriveFileName(null);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDrivePickerOpen(true)}
+                  disabled={driveBusy}
+                >
+                  {driveBusy
+                    ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    : <FolderOpen className="mr-1.5 h-4 w-4" />}
+                  Escolher do Google Drive
+                </Button>
+              </div>
+              {file ? (
+                <div className="text-xs text-muted-foreground">
+                  Origem: {origem === "drive" ? (
+                    <span className="font-medium text-foreground">Google Drive · {driveFileName ?? file.name}</span>
+                  ) : (
+                    <span className="font-medium text-foreground">Upload local · {file.name}</span>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
