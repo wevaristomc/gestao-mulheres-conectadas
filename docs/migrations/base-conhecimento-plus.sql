@@ -13,7 +13,12 @@ alter table public.documentos
   add column if not exists transcricao_status text not null default 'pendente',
   add column if not exists duracao_segundos integer,
   add column if not exists metadata jsonb not null default '{}'::jsonb,
-  add column if not exists tags text[] not null default '{}'::text[];
+  add column if not exists tags text[] not null default '{}'::text[],
+  -- Correção aplicada pelo Cowork (Claude) em 2026-07: RPC match_documentos_chunks
+  -- referenciava d.titulo/d.categoria e essas colunas não existiam no schema real.
+  -- Adicionadas de forma aditiva para manter compatibilidade com base já populada.
+  add column if not exists titulo text,
+  add column if not exists categoria text not null default 'outros';
 
 -- Aceita formatos conhecidos; qualquer outro cai em 'arquivo'.
 do $$
@@ -31,6 +36,16 @@ begin
     alter table public.documentos
       add constraint documentos_transcricao_status_chk
       check (transcricao_status in ('pendente','processando','concluida','erro','nao_aplicavel'));
+  end if;
+  if not exists (
+    select 1 from pg_constraint where conname = 'documentos_categoria_chk'
+  ) then
+    alter table public.documentos
+      add constraint documentos_categoria_chk
+      check (categoria in (
+        'termo_fomento','modelos','normas','comunicacao','pedagogico',
+        'relatorios_externos','anotacoes','audios_whatsapp','outros'
+      ));
   end if;
 end $$;
 
