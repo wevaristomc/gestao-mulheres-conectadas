@@ -5,14 +5,15 @@
 -- Escopo desta migração:
 --   - Tabela `relatorios_parcial_objeto` para rascunhos editáveis por ciclo/período.
 --   - Trigger de updated_at.
---   - RLS + GRANTs no mesmo padrão de documentos_chunks (usuário authenticated
---     com vínculo no projeto via user_roles, aceitando projeto_id NULL como
---     "acesso global").
+--   - RLS + GRANTs seguindo o padrão de `permissoes_papel`/`instrutor_turmas`/
+--     `audit_log`: exige vínculo ATIVO (`user_roles.ativo`) no projeto exato.
+--     NÃO aceita `ur.projeto_id is null` como "acesso global" — evita
+--     escalonamento caso alguém insira uma role sem projeto_id no futuro.
 --
 -- Padrão de verificação (Cowork/Claude 2026-07): antes de sinalizar "pronto
 -- para aplicar", conferido que:
 --   * `projetos`, `turmas` (com projeto_id, ciclo), `user_roles` (com role,
---     projeto_id) já existem no schema real e são referenciadas em código.
+--     projeto_id, ativo) já existem no schema real e são referenciadas em código.
 --   * a função é SELECT/INSERT/UPDATE/DELETE apenas de rows do próprio projeto,
 --     nenhuma referência a coluna d.titulo/d.nome herdada de outras migrações.
 
@@ -89,8 +90,8 @@ do $$ begin
         exists (
           select 1 from public.user_roles ur
           where ur.user_id = auth.uid()
-            and (ur.projeto_id = relatorios_parcial_objeto.projeto_id
-                 or ur.projeto_id is null)
+            and ur.ativo
+            and ur.projeto_id = relatorios_parcial_objeto.projeto_id
         )
       );
   end if;
@@ -105,16 +106,16 @@ do $$ begin
         exists (
           select 1 from public.user_roles ur
           where ur.user_id = auth.uid()
-            and (ur.projeto_id = relatorios_parcial_objeto.projeto_id
-                 or ur.projeto_id is null)
+            and ur.ativo
+            and ur.projeto_id = relatorios_parcial_objeto.projeto_id
         )
       )
       with check (
         exists (
           select 1 from public.user_roles ur
           where ur.user_id = auth.uid()
-            and (ur.projeto_id = relatorios_parcial_objeto.projeto_id
-                 or ur.projeto_id is null)
+            and ur.ativo
+            and ur.projeto_id = relatorios_parcial_objeto.projeto_id
         )
       );
   end if;
