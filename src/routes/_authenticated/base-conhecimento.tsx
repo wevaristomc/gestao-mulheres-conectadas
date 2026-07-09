@@ -326,14 +326,62 @@ function BaseConhecimentoPage() {
         </Select>
       </div>
 
+      {projetoId ? (
+        <div className="mb-6 rounded-lg border bg-muted/30 p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" /> Busca semântica no conteúdo indexado
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ex.: relatório de execução do primeiro ciclo, feedback das oficinas…"
+              value={buscaSemantica}
+              onChange={(e) => setBuscaSemantica(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && buscaSemantica.trim().length >= 2) buscaSem.mutate(buscaSemantica.trim());
+              }}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => buscaSem.mutate(buscaSemantica.trim())}
+              disabled={buscaSemantica.trim().length < 2 || buscaSem.isPending}
+            >
+              {buscaSem.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+              Buscar
+            </Button>
+          </div>
+          {resultadoRag.length > 0 ? (
+            <div className="mt-3 grid gap-2">
+              {resultadoRag.map((t) => (
+                <div key={t.chunk_id} className="rounded border bg-background p-2 text-xs">
+                  <div className="mb-1 flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px]">{t.categoria ?? "—"}</Badge>
+                    <span className="font-medium">{t.titulo ?? "—"}</span>
+                    <span className="ml-auto text-muted-foreground">
+                      similaridade {Math.round(t.similarity * 100)}%
+                    </span>
+                  </div>
+                  <div className="whitespace-pre-wrap text-muted-foreground line-clamp-4">
+                    {t.texto}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : buscaSem.isSuccess ? (
+            <p className="mt-2 text-xs text-muted-foreground">Nenhum trecho indexado corresponde à consulta.</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Documento</TableHead>
+              <TableHead>Formato</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Tamanho</TableHead>
               <TableHead>Enviado em</TableHead>
+              <TableHead>Indexação</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -341,12 +389,12 @@ function BaseConhecimentoPage() {
             {q.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
+                  <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
                 </TableRow>
               ))
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   {rows.length === 0
                     ? "Nenhum documento cadastrado neste projeto."
                     : "Nenhum documento corresponde ao filtro."}
@@ -373,6 +421,9 @@ function BaseConhecimentoPage() {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <FormatoBadge formato={String(pickFirst(r, ["formato"]) ?? "arquivo")} />
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="secondary">{categoriaLabel(String(pickFirst(r, ["categoria", "tipo"]) ?? ""))}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -381,8 +432,20 @@ function BaseConhecimentoPage() {
                   <TableCell className="text-sm text-muted-foreground">
                     {formatarData(pickFirst(r, ["created_at", "criado_em"]))}
                   </TableCell>
+                  <TableCell>
+                    <IndexBadge status={String(pickFirst(r, ["transcricao_status"]) ?? "nao_aplicavel")} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Reindexar conteúdo"
+                        disabled={reindexMut.isPending || !pickFirst(r, ["conteudo_texto"])}
+                        onClick={() => reindexMut.mutate(String(r.id))}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => baixar(r)}>
                         <Download className="h-4 w-4" />
                       </Button>
