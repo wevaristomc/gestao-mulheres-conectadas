@@ -290,16 +290,6 @@ export const buscarConhecimento = createServerFn({ method: "POST" })
 
     const { embedTexto, vetorToLiteral } = await import("@/lib/base-conhecimento-embed.server");
     const vetor = await embedTexto(data.query);
-    if (!vetor) return { trechos: [] as Array<Record<string, unknown>> };
-
-    const { data: rows, error } = await admin.rpc("match_documentos_chunks", {
-      p_projeto_id: data.projetoId,
-      p_query_embedding: vetorToLiteral(vetor),
-      p_match_count: data.k ?? 8,
-      p_categorias: data.categorias && data.categorias.length ? data.categorias : null,
-    });
-    if (error) throw new Error(`Busca falhou: ${error.message}`);
-
     type Trecho = {
       chunk_id: string;
       documento_id: string;
@@ -311,5 +301,15 @@ export const buscarConhecimento = createServerFn({ method: "POST" })
       formato: string | null;
       storage_path: string | null;
     };
+    if (!vetor) return { trechos: [] as Trecho[] };
+
+    const { data: rows, error } = await admin.rpc("match_documentos_chunks", {
+      p_projeto_id: data.projetoId,
+      p_query_embedding: vetorToLiteral(vetor),
+      p_match_count: data.k ?? 8,
+      p_categorias: data.categorias && data.categorias.length ? data.categorias : null,
+    });
+    if (error) throw new Error(`Busca falhou: ${error.message}`);
+
     return { trechos: (rows ?? []) as Trecho[] };
   });
