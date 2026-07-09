@@ -628,3 +628,109 @@ function UploadDialog({
     </DialogContent>
   );
 }
+
+function FormatoBadge({ formato }: { formato: string }) {
+  const label = FORMATO_LABEL[formato as keyof typeof FORMATO_LABEL] ?? "Arquivo";
+  const Icon = formato === "anotacao" ? StickyNote : formato === "audio" ? Mic : FileText;
+  return (
+    <Badge variant="outline" className="gap-1">
+      <Icon className="h-3 w-3" /> {label}
+    </Badge>
+  );
+}
+
+function IndexBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+    pendente: { label: "Pendente", variant: "secondary" },
+    processando: { label: "Processando…", variant: "secondary" },
+    concluida: { label: "Indexado", variant: "default" },
+    erro: { label: "Erro", variant: "destructive" },
+    nao_aplicavel: { label: "—", variant: "outline" },
+  };
+  const info = map[status] ?? map.nao_aplicavel;
+  return <Badge variant={info.variant} className="text-[10px]">{info.label}</Badge>;
+}
+
+function AnotacaoDialog({
+  projetoId, onClose, onSaved,
+}: { projetoId: string; onClose: () => void; onSaved: () => void }) {
+  const [titulo, setTitulo] = useState("");
+  const [categoria, setCategoria] = useState<CategoriaKey>("anotacoes");
+  const [corpo, setCorpo] = useState("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const criar = useServerFn(criarAnotacao);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      if (!titulo.trim()) throw new Error("Informe um título.");
+      if (corpo.trim().length < 10) throw new Error("O corpo da anotação deve ter ao menos 10 caracteres.");
+      const tags = tagsRaw.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 20);
+      await criar({
+        data: {
+          projetoId,
+          titulo: titulo.trim(),
+          categoria,
+          corpo: corpo.trim(),
+          tags,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Anotação salva e indexada");
+      setTitulo(""); setCorpo(""); setTagsRaw(""); setCategoria("anotacoes");
+      onSaved();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Falha ao salvar"),
+  });
+
+  return (
+    <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-[720px] overflow-y-auto p-4 sm:p-6">
+      <DialogHeader>
+        <DialogTitle className="pr-8">Nova anotação</DialogTitle>
+        <DialogDescription className="pr-8">
+          Texto livre que fica pesquisável pelos relatórios e pelo Orbe. Ideal para observações de campo,
+          contexto de reuniões e informações que não estão em documentos formais.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid min-w-0 gap-4">
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-tit">Título</Label>
+          <Input id="an-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Reunião com CATIP em 10/07" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-cat">Categoria</Label>
+          <Select value={categoria} onValueChange={(v) => setCategoria(v as CategoriaKey)}>
+            <SelectTrigger id="an-cat"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CATEGORIAS.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-body">Conteúdo</Label>
+          <Textarea
+            id="an-body"
+            rows={10}
+            value={corpo}
+            onChange={(e) => setCorpo(e.target.value)}
+            placeholder="Escreva livremente. Este texto será indexado para busca semântica e usado como contexto pelos relatórios/IA."
+          />
+          <p className="text-xs text-muted-foreground">{corpo.length} caracteres</p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-tags">Tags (opcional, separadas por vírgula)</Label>
+          <Input id="an-tags" value={tagsRaw} onChange={(e) => setTagsRaw(e.target.value)} placeholder="ex.: reunião, articulação, catip" />
+        </div>
+      </div>
+
+      <DialogFooter className="gap-2 sm:gap-0">
+        <Button variant="ghost" onClick={onClose} disabled={mut.isPending}>Cancelar</Button>
+        <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+          {mut.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <StickyNote className="mr-1.5 h-4 w-4" />}
+          Salvar e indexar
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
