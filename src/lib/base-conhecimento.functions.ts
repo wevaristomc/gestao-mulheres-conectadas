@@ -151,7 +151,7 @@ async function validarAcessoProjeto(supabase: any, userId: string, projetoId: st
   if (!ok) throw new Response("Forbidden: usuário sem vínculo com o projeto.", { status: 403 });
 }
 
-async function indexarDocumentoInterno(admin: any, documentoId: string): Promise<{ chunks: number; status: string }> {
+export async function indexarDocumentoInterno(admin: any, documentoId: string): Promise<{ chunks: number; status: string }> {
   const { data: doc, error: readError } = await admin
     .from("documentos")
     .select("id, projeto_id, conteudo_texto, titulo, nome, descricao")

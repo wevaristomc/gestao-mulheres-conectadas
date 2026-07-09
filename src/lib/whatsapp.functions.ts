@@ -5,8 +5,19 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseChat, tail8 } from "@/lib/whatsapp-parser";
 import { executarAiRouter, executarTranscricaoRouter, executarVisaoRouter } from "@/lib/ia.functions";
+import { indexarDocumentoInterno } from "@/lib/base-conhecimento.functions";
 
 const BUCKET = "whatsapp";
+
+// -------- Tetos hardcoded (Fase 2b) --------
+// Custos de Whisper por minuto — protege o projeto contra faturas surpresa e
+// obriga a coordenação a rodar em lotes curados. Discussão detalhada em
+// docs/migrations/whatsapp-para-base-conhecimento.sql e no chat da Fase 2.
+const MAX_AUDIOS_POR_LOTE = 30;
+// Proxy para "≈ 900s de áudio". WhatsApp voice notes são opus mono ~16 kbps,
+// então 900s ≈ 1,8 MB; mantemos 4 MB para dar folga a MP3/M4A também. Áudios
+// acima disso são pulados com erro claro para revisão manual.
+const MAX_BYTES_POR_AUDIO = 4_000_000;
 
 // ---------- Grupos ----------
 
@@ -289,6 +300,61 @@ function guessContentType(nome: string): string {
   return "application/octet-stream";
 }
 
+// ---------- Preview: quantos áudios pendentes / já transcritos ----------
+
+const StatusAudiosInput = z.object({ importacao_id: z.string().uuid() });
+
+export const statusAudios = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v: unknown) => StatusAudiosInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const sb = context.supabase;
+    const { data: msgs, error } = await sb
+      .from("wa_mensagens")
+      .select("id")
+      .eq("importacao_id", data.importacao_id)
+      .eq("tipo", "audio")
+      .not("midia_path", "is", null);
+    if (error) throw new Error(error.message);
+    const ids = (msgs ?? []).map((m: { id: string }) => m.id);
+    if (!ids.length) {
+      return { total: 0, transcritos: 0, pendentes: 0, publicados: 0, publicaveis: 0 };
+    }
+
+    const { data: analises } = await sb
+      .from("wa_midias_analise")
+      .select("mensagem_id, transcricao, erro")
+      .in("mensagem_id", ids)
+      .eq("tipo_analise", "transcricao");
+    const transcritos = new Set(
+      (analises ?? [])
+        .filter((a: { transcricao?: string | null; erro?: string | null }) => a.transcricao && !a.erro)
+        .map((a: { mensagem_id: string }) => a.mensagem_id),
+    );
+
+    // documentos já publicados que apontam para uma dessas mensagens
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const { data: docs } = await admin
+      .from("documentos")
+      .select("wa_mensagem_id")
+      .in("wa_mensagem_id", ids);
+    const publicados = new Set(
+      (docs ?? [])
+        .map((d: { wa_mensagem_id?: string | null }) => d.wa_mensagem_id)
+        .filter((v: string | null | undefined): v is string => !!v),
+    );
+
+    const publicaveis = Array.from(transcritos).filter((id) => !publicados.has(id)).length;
+    return {
+      total: ids.length,
+      transcritos: transcritos.size,
+      pendentes: ids.length - transcritos.size,
+      publicados: publicados.size,
+      publicaveis,
+    };
+  });
+
 // ---------- Transcrição de áudios ----------
 
 const TranscreverInput = z.object({ importacao_id: z.string().uuid() });
@@ -309,8 +375,9 @@ export const transcreverAudios = createServerFn({ method: "POST" })
       .not("midia_path", "is", null);
     if (error) throw new Error(error.message);
 
-    let ok = 0, fail = 0;
+    let ok = 0, fail = 0, pulados_tamanho = 0, processados = 0;
     for (const m of msgs ?? []) {
+      if (processados >= MAX_AUDIOS_POR_LOTE) break;
       // Pula se já tem análise
       const { data: existente } = await sb
         .from("wa_midias_analise")
@@ -324,6 +391,20 @@ export const transcreverAudios = createServerFn({ method: "POST" })
         const dl = await sb.storage.from(BUCKET).download(m.midia_path as string);
         if (dl.error || !dl.data) throw new Error(`storage: ${dl.error?.message ?? "?"}`);
         const bytes = new Uint8Array(await dl.data.arrayBuffer());
+
+        if (bytes.length > MAX_BYTES_POR_AUDIO) {
+          await sb.from("wa_midias_analise").upsert(
+            {
+              mensagem_id: m.id,
+              tipo_analise: "transcricao",
+              erro: `áudio acima do teto por arquivo (${Math.round(bytes.length / 1024)} KB > ${Math.round(MAX_BYTES_POR_AUDIO / 1024)} KB, ≈ 15 min). Divida antes de transcrever.`,
+            },
+            { onConflict: "mensagem_id,tipo_analise" },
+          );
+          pulados_tamanho++;
+          processados++;
+          continue;
+        }
 
         const nome = m.midia_nome ?? "audio.opus";
         const contentType = guessContentType(nome);
@@ -357,6 +438,7 @@ export const transcreverAudios = createServerFn({ method: "POST" })
             .eq("id", m.id);
         }
         ok++;
+        processados++;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await sb.from("wa_midias_analise").upsert(
@@ -364,9 +446,223 @@ export const transcreverAudios = createServerFn({ method: "POST" })
           { onConflict: "mensagem_id,tipo_analise" },
         );
         fail++;
+        processados++;
       }
     }
-    return { ok, fail, total: (msgs ?? []).length };
+    const total = (msgs ?? []).length;
+    const restantes = Math.max(0, total - ok - fail - pulados_tamanho);
+    return {
+      ok,
+      fail,
+      pulados_tamanho,
+      total,
+      processados,
+      restantes,
+      max_por_lote: MAX_AUDIOS_POR_LOTE,
+    };
+  });
+
+// ---------- Publicar áudios transcritos na Base de Conhecimento ----------
+
+const PublicarAudiosInput = z.object({
+  importacao_id: z.string().uuid(),
+  mensagem_ids: z.array(z.string().uuid()).max(200).optional(),
+});
+
+export const publicarAudiosNaBase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((v: unknown) => PublicarAudiosInput.parse(v))
+  .handler(async ({ data, context }) => {
+    const sb = context.supabase;
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+
+    // 1) importação → grupo → projeto
+    const { data: imp, error: impErr } = await sb
+      .from("wa_importacoes")
+      .select("id, grupo_id, arquivo_zip_nome")
+      .eq("id", data.importacao_id)
+      .maybeSingle();
+    if (impErr) throw new Error(impErr.message);
+    if (!imp) throw new Error("Importação não encontrada.");
+
+    const { data: grupo, error: grErr } = await sb
+      .from("wa_grupos")
+      .select("id, nome, projeto_id")
+      .eq("id", imp.grupo_id as string)
+      .maybeSingle();
+    if (grErr) throw new Error(grErr.message);
+    if (!grupo?.projeto_id) {
+      throw new Error(
+        "Grupo do WhatsApp sem projeto vinculado. Edite o grupo e defina o projeto antes de publicar na Base de Conhecimento.",
+      );
+    }
+    const projetoId = grupo.projeto_id as string;
+
+    // 2) valida acesso ao projeto
+    const { data: roles, error: roleErr } = await sb
+      .from("user_roles")
+      .select("role, projeto_id")
+      .eq("user_id", context.userId);
+    if (roleErr) throw new Error(`Falha ao validar permissões: ${roleErr.message}`);
+    const canUseProject = (roles ?? []).some(
+      (r: { projeto_id?: string | null }) => r.projeto_id === projetoId || r.projeto_id == null,
+    );
+    if (!canUseProject) {
+      throw new Response("Forbidden: usuário sem vínculo com o projeto do grupo.", { status: 403 });
+    }
+
+    // 3) coleta candidatos: áudios com transcrição concluída sem documento publicado
+    let msgsQ = sb
+      .from("wa_mensagens")
+      .select("id, midia_path, midia_nome, remetente_nome, remetente_fone_e164, timestamp")
+      .eq("importacao_id", data.importacao_id)
+      .eq("tipo", "audio")
+      .not("midia_path", "is", null);
+    if (data.mensagem_ids && data.mensagem_ids.length) {
+      msgsQ = msgsQ.in("id", data.mensagem_ids);
+    }
+    const { data: msgs, error: msgErr } = await msgsQ;
+    if (msgErr) throw new Error(msgErr.message);
+    const msgList = (msgs ?? []) as Array<{
+      id: string; midia_path: string | null; midia_nome: string | null;
+      remetente_nome: string | null; remetente_fone_e164: string | null; timestamp: string;
+    }>;
+    if (!msgList.length) {
+      return { publicados: 0, pulados: 0, erros: [] as string[], projeto_id: projetoId };
+    }
+
+    const ids = msgList.map((m) => m.id);
+    const { data: analises } = await sb
+      .from("wa_midias_analise")
+      .select("mensagem_id, transcricao, erro")
+      .in("mensagem_id", ids)
+      .eq("tipo_analise", "transcricao");
+    const transcMap = new Map<string, string>();
+    for (const a of (analises ?? []) as Array<{ mensagem_id: string; transcricao: string | null; erro: string | null }>) {
+      if (a.transcricao && !a.erro) transcMap.set(a.mensagem_id, a.transcricao);
+    }
+
+    // já publicados
+    const { data: docsExist } = await admin
+      .from("documentos")
+      .select("id, wa_mensagem_id")
+      .in("wa_mensagem_id", ids);
+    const jaPublicados = new Set(
+      (docsExist ?? [])
+        .map((d: { wa_mensagem_id?: string | null }) => d.wa_mensagem_id)
+        .filter((v: string | null | undefined): v is string => !!v),
+    );
+
+    // 4) publica cada candidato
+    let publicados = 0;
+    let pulados = 0;
+    const erros: string[] = [];
+    const grupoNome = (grupo.nome as string | null) ?? "Grupo WhatsApp";
+
+    for (const m of msgList) {
+      if (jaPublicados.has(m.id)) { pulados++; continue; }
+      const transcricao = transcMap.get(m.id);
+      if (!transcricao) { pulados++; continue; }
+
+      const data_iso = m.timestamp ? new Date(m.timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+      const remetente = m.remetente_nome ?? m.remetente_fone_e164 ?? "?";
+      const titulo = `Áudio · ${grupoNome} · ${remetente} · ${data_iso || m.timestamp}`.slice(0, 300);
+      const cabecalho = [
+        `Grupo: ${grupoNome}`,
+        `Remetente: ${remetente}${m.remetente_fone_e164 ? ` (${m.remetente_fone_e164})` : ""}`,
+        `Data/hora: ${data_iso || m.timestamp}`,
+        `Arquivo: ${m.midia_nome ?? "—"}`,
+      ].join("\n");
+      const conteudo = `${cabecalho}\n\nTranscrição:\n${transcricao}`;
+
+      const payload: Record<string, unknown> = {
+        projeto_id: projetoId,
+        titulo,
+        nome: titulo,
+        descricao: transcricao.slice(0, 400),
+        categoria: "audios_whatsapp",
+        tipo: "audios_whatsapp",
+        formato: "audio",
+        origem: "whatsapp",
+        conteudo_texto: conteudo,
+        transcricao_status: "concluida",
+        storage_path: m.midia_path,
+        nome_arquivo: m.midia_nome,
+        mime_type: m.midia_nome ? guessContentType(m.midia_nome) : "audio/ogg",
+        tags: ["whatsapp", "audio"],
+        metadata: {
+          wa_mensagem_id: m.id,
+          wa_importacao_id: data.importacao_id,
+          wa_grupo_id: grupo.id,
+          remetente,
+          remetente_fone: m.remetente_fone_e164,
+          timestamp: m.timestamp,
+        },
+        wa_mensagem_id: m.id,
+        created_by: context.userId,
+        autor_id: context.userId,
+      };
+
+      // Descoberta de colunas: mesmo padrão de criarAnotacao. Tolera schemas
+      // que ainda não tenham uma coluna secundária (nome, autor_id, etc.).
+      let inserted: { id: string } | null = null;
+      let lastError: string | null = null;
+      for (let attempt = 0; attempt < 14; attempt += 1) {
+        const res = await admin.from("documentos").insert(payload).select("id").maybeSingle();
+        if (!res.error) { inserted = res.data as { id: string }; break; }
+        lastError = res.error.message;
+        const missing =
+          res.error.message.match(/Could not find the '([^']+)' column/)?.[1] ||
+          res.error.message.match(/column ["']?([^"'\s.]+)["']? does not exist/i)?.[1] ||
+          null;
+        if (missing && missing in payload) { delete payload[missing]; continue; }
+        break;
+      }
+      if (!inserted) {
+        erros.push(`msg ${m.id.slice(0, 8)}: ${lastError ?? "erro desconhecido"}`);
+        continue;
+      }
+
+      try {
+        await indexarDocumentoInterno(admin, inserted.id);
+        publicados++;
+      } catch (e) {
+        // status "erro" já foi gravado; considera publicado (o documento existe) mas registra ruído
+        publicados++;
+        erros.push(`msg ${m.id.slice(0, 8)}: indexação falhou — ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // 5) notificação dedupada por dia
+    if (publicados > 0) {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const chave = `wa_publicar_${data.importacao_id}_${hoje}`;
+      const { data: existente } = await sb
+        .from("notificacoes")
+        .select("id")
+        .eq("tipo", "whatsapp_audios_publicados")
+        .eq("chave_dedup", chave)
+        .limit(1);
+      if (!existente || existente.length === 0) {
+        try {
+          await sb.from("notificacoes").insert({
+            user_id: context.userId,
+            tipo: "whatsapp_audios_publicados",
+            severidade: "info",
+            titulo: `${publicados} áudio(s) publicados na Base de Conhecimento`,
+            corpo: `Grupo ${grupoNome} — importação ${data.importacao_id.slice(0, 8)}. ${pulados > 0 ? `${pulados} já estavam publicados ou sem transcrição.` : ""}`,
+            link_rota: "/base-conhecimento",
+            origem: "whatsapp",
+            chave_dedup: chave,
+          });
+        } catch {
+          // notificação é auxiliar, não bloqueia o retorno
+        }
+      }
+    }
+
+    return { publicados, pulados, erros, projeto_id: projetoId };
   });
 
 // ---------- Análise de imagens ----------

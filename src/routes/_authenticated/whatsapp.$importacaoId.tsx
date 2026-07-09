@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowLeft, Image as ImageIcon, Loader2, Mic, MessageSquare, Sparkles, Trash2, Users,
+  ArrowLeft, BookOpen, Image as ImageIcon, Loader2, Mic, MessageSquare, Sparkles, Trash2, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,8 +20,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  analisarImagens, gerarResumoGrupo, listarRemetentes, purgarImportacao,
-  transcreverAudios, vincularRemetente,
+  analisarImagens, gerarResumoGrupo, listarRemetentes, publicarAudiosNaBase, purgarImportacao,
+  statusAudios, transcreverAudios, vincularRemetente,
 } from "@/lib/whatsapp.functions";
 import {
   importacaoOptions, mensagensOptions, midiaAnalisesOptions, resumosGrupoOptions,
@@ -53,11 +53,22 @@ function ImportacaoDetalhe() {
   const transcFn = useServerFn(transcreverAudios);
   const analisarFn = useServerFn(analisarImagens);
   const purgarFn = useServerFn(purgarImportacao);
+  const statusFn = useServerFn(statusAudios);
+  const publicarFn = useServerFn(publicarAudiosNaBase);
+
+  const statusQ = useQuery({
+    queryKey: ["wa", "status-audios", importacaoId],
+    queryFn: async () => await statusFn({ data: { importacao_id: importacaoId } }),
+  });
 
   const transcMut = useMutation({
     mutationFn: async () => transcFn({ data: { importacao_id: importacaoId } }),
     onSuccess: (r) => {
-      toast.success(`Áudios processados: ${r.ok}/${r.total} (${r.fail} falharam)`);
+      const partes = [`Áudios processados: ${r.ok}/${r.total}`];
+      if (r.fail) partes.push(`${r.fail} falharam`);
+      if (r.pulados_tamanho) partes.push(`${r.pulados_tamanho} acima do teto de ~15min (revise manual)`);
+      if (r.restantes) partes.push(`${r.restantes} pendentes — clique de novo para processar o próximo lote (máx ${r.max_por_lote}/vez)`);
+      toast.success(partes.join(" · "));
       qc.invalidateQueries({ queryKey: ["wa"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -67,6 +78,19 @@ function ImportacaoDetalhe() {
     onSuccess: (r) => {
       toast.success(`Imagens analisadas: ${r.ok}/${r.total} (${r.fail} falharam)`);
       qc.invalidateQueries({ queryKey: ["wa"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const publicarMut = useMutation({
+    mutationFn: async () => publicarFn({ data: { importacao_id: importacaoId } }),
+    onSuccess: (r) => {
+      const partes = [`${r.publicados} publicados`];
+      if (r.pulados) partes.push(`${r.pulados} pulados (sem transcrição ou já publicados)`);
+      if (r.erros?.length) partes.push(`${r.erros.length} com erro`);
+      toast.success(`Base de Conhecimento: ${partes.join(" · ")}`);
+      if (r.erros?.length) console.warn("Publicação — erros:", r.erros);
+      qc.invalidateQueries({ queryKey: ["wa"] });
+      qc.invalidateQueries({ queryKey: ["base-conhecimento"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -118,6 +142,11 @@ function ImportacaoDetalhe() {
             {imgMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
             Analisar imagens
           </Button>
+          <PublicarAudiosBtn
+            status={statusQ.data}
+            pending={publicarMut.isPending}
+            onConfirm={() => publicarMut.mutate()}
+          />
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button size="sm" variant="ghost"><Trash2 className="mr-2 h-4 w-4" /> Purgar</Button>
@@ -164,6 +193,65 @@ function ImportacaoDetalhe() {
 }
 
 function MensagensLista({
+  importacaoId,
+  analisesById,
+}: {
+  importacaoId: string;
+  analisesById: Map<string, { transcricao?: string | null; ocr?: string | null; descricao?: string | null }>;
+}) {
+  return <MensagensListaInner importacaoId={importacaoId} analisesById={analisesById} />;
+}
+
+function PublicarAudiosBtn({
+  status,
+  pending,
+  onConfirm,
+}: {
+  status: { total: number; transcritos: number; pendentes: number; publicados: number; publicaveis: number } | undefined;
+  pending: boolean;
+  onConfirm: () => void;
+}) {
+  const publicaveis = status?.publicaveis ?? 0;
+  const transcritos = status?.transcritos ?? 0;
+  const jaPublicados = status?.publicados ?? 0;
+  const pendentes = status?.pendentes ?? 0;
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="outline" disabled={pending || publicaveis === 0}>
+          {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookOpen className="mr-2 h-4 w-4" />}
+          Publicar na Base {publicaveis > 0 ? `(${publicaveis})` : ""}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Publicar áudios transcritos na Base de Conhecimento?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                Cria um registro em <span className="font-medium">Base de Conhecimento</span> por áudio, com a
+                transcrição consolidada, e indexa para busca semântica e para o Relatório Parcial de Objeto.
+                Não roda transcrição — só publica o que já foi transcrito.
+              </p>
+              <ul className="ml-4 list-disc text-xs text-muted-foreground">
+                <li><span className="font-medium text-foreground">{publicaveis}</span> áudio(s) prontos para publicar</li>
+                <li>{transcritos} transcritos ao todo · {jaPublicados} já publicados · {pendentes} sem transcrição</li>
+                <li>O grupo do WhatsApp precisa estar vinculado a um projeto (senão a publicação é rejeitada).</li>
+              </ul>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Publicar {publicaveis}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function MensagensListaInner({
   importacaoId,
   analisesById,
 }: {
