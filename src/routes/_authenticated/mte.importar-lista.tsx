@@ -513,33 +513,17 @@ function ImportarListaPage() {
               <TableHead>Itens</TableHead>
               <TableHead>Não ident.</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Revisão</TableHead>
               <TableHead>Enviado em</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {historicoQ.isLoading ? (
-              <TableRow><TableCell colSpan={7} className="py-6 text-center text-xs text-muted-foreground">Carregando…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-6 text-center text-xs text-muted-foreground">Carregando…</TableCell></TableRow>
             ) : (historicoQ.data ?? []).length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="py-6 text-center text-xs text-muted-foreground">Nenhuma importação ainda.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="py-6 text-center text-xs text-muted-foreground">Nenhuma importação ainda.</TableCell></TableRow>
             ) : (historicoQ.data ?? []).map((h) => (
-              <TableRow key={h.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => {
-                  // Reabre para conferência (somente leitura das linhas gravadas)
-                  setLinhas(h.itens ?? []);
-                  setObservacoes(h.avisos ?? []);
-                  setCabecalho({
-                    turma: h.turma_identificada,
-                    data: h.data_aula,
-                    conteudo: (h as any).conteudo,
-                    instrutor: (h as any).instrutor,
-                    horario: (h as any).horario,
-                    ch_dia: (h as any).ch_dia,
-                  });
-                  setUploaded(h.arquivo_url ? { url: h.arquivo_url, nome: h.arquivo_nome ?? "" } : null);
-                  setLeitura({ cabecalho: {}, alunas: [], observacoes: [], provedor: "histórico", modelo: "", tokens: 0 });
-                }}
-              >
+              <TableRow key={h.id} className="hover:bg-muted/50">
                 <TableCell className="text-xs">{h.data_aula ?? "—"}</TableCell>
                 <TableCell className="text-xs">{h.turma_identificada ?? "—"}</TableCell>
                 <TableCell className="text-xs">
@@ -548,12 +532,28 @@ function ImportarListaPage() {
                 <TableCell className="text-xs">{(h.itens ?? []).length}</TableCell>
                 <TableCell className="text-xs">{(h.nao_identificados ?? []).length}</TableCell>
                 <TableCell className="text-xs capitalize">{h.status}</TableCell>
+                <TableCell className="text-xs">
+                  <RevisaoCell
+                    row={h}
+                    onDone={() => qc.invalidateQueries({ queryKey: ["mte", "importacoes-presenca"] })}
+                  />
+                </TableCell>
                 <TableCell className="text-xs text-muted-foreground">{h.criado_em ? new Date(h.criado_em).toLocaleString("pt-BR") : "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      <GDrivePicker
+        open={drivePickerOpen}
+        onOpenChange={setDrivePickerOpen}
+        onPick={(files) => void onDrivePick(files)}
+        multi={false}
+        title="Escolher lista de presença no Google Drive"
+        description="Navegue pela pasta do projeto ou busque pelo nome do PDF."
+        busy={driveBusy}
+      />
     </div>
   );
 }
@@ -563,6 +563,91 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="grid gap-1.5">
       <Label className="text-xs">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function RevisaoBadge({ status }: { status?: string | null }) {
+  const s = (status ?? "em_analise") as RevisaoStatus;
+  if (s === "verificado") return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Verificado</Badge>;
+  if (s === "reanalise_solicitada") return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Reanálise solicitada</Badge>;
+  return <Badge variant="secondary">Em análise</Badge>;
+}
+
+function RevisaoCell({ row, onDone }: { row: ImportacaoLista; onDone: () => void }) {
+  const [openReanalise, setOpenReanalise] = useState(false);
+  const [obs, setObs] = useState(row.revisao_observacao ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function set(status: RevisaoStatus, observacao?: string | null) {
+    setBusy(true);
+    try {
+      await marcarRevisaoImportacao(row.id, status, observacao ?? null);
+      toast.success(
+        status === "verificado" ? "Marcado como verificado." :
+        status === "reanalise_solicitada" ? "Reanálise solicitada." :
+        "Voltou para em análise.",
+      );
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao atualizar revisão");
+    } finally {
+      setBusy(false);
+      setOpenReanalise(false);
+    }
+  }
+
+  const st = (row.revisao_status ?? "em_analise") as RevisaoStatus;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <RevisaoBadge status={st} />
+      <div className="flex flex-wrap gap-1">
+        {st !== "verificado" ? (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => set("verificado")}>
+            <ShieldCheck className="mr-1 h-3 w-3" /> Verificar
+          </Button>
+        ) : null}
+        {st !== "reanalise_solicitada" ? (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => setOpenReanalise(true)}>
+            <RotateCcw className="mr-1 h-3 w-3" /> Reanálise
+          </Button>
+        ) : null}
+        {st !== "em_analise" ? (
+          <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={() => set("em_analise")}>
+            <Undo2 className="mr-1 h-3 w-3" /> Reabrir
+          </Button>
+        ) : null}
+      </div>
+      {st === "reanalise_solicitada" && row.revisao_observacao ? (
+        <div className="text-[11px] italic text-muted-foreground max-w-[240px] whitespace-normal">
+          "{row.revisao_observacao}"
+        </div>
+      ) : null}
+
+      <Dialog open={openReanalise} onOpenChange={setOpenReanalise}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar reanálise</DialogTitle>
+            <DialogDescription>
+              Descreva o que precisa ser revisto neste PDF (assinaturas ilegíveis, cabeçalho errado, etc.).
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea rows={4} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: 3 assinaturas ilegíveis na página 2, refazer OCR." />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpenReanalise(false)} disabled={busy}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!obs.trim()) { toast.error("Informe a observação da reanálise."); return; }
+                void set("reanalise_solicitada", obs.trim());
+              }}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Solicitar reanálise
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
