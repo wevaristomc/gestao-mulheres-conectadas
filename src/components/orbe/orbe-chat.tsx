@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import ReactMarkdown from "react-markdown";
-import { Bell, Loader2, MessageSquarePlus, Send, Sparkles, Trash2 } from "lucide-react";
+import { Bell, Loader2, MessageSquarePlus, Mic, MicOff, Send, Sparkles, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
-  orbeApagarConversa, orbeCarregarConversa, orbeChat, orbeListarConversas,
-  orbeMarcarLida, orbeNotificacoes,
+  orbeApagarConversa, orbeBriefingDiario, orbeCarregarConversa, orbeChat, orbeListarConversas,
+  orbeMarcarLida, orbeNotificacoes, orbeTranscrever,
 } from "@/lib/orbe.functions";
 
 type Mensagem = { id?: string; role: string; content: string; tool_name?: string | null; criado_em?: string };
@@ -24,17 +25,27 @@ const ATALHOS = [
   "Riscos da meta ciclo 1",
 ];
 
+const BRIEFING_KEY = "orbe.briefing.ultimo_dia";
+
 export function OrbeChat({
-  open, onOpenChange, onThinkingChange,
+  open, onOpenChange, onThinkingChange, onRecordingChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onThinkingChange?: (v: boolean) => void;
+  onRecordingChange?: (v: boolean) => void;
 }) {
   const [aba, setAba] = useState<"chat" | "notif">("chat");
   const [conversaId, setConversaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [input, setInput] = useState("");
+  const [gravando, setGravando] = useState(false);
+  const [transcrevendo, setTranscrevendo] = useState(false);
+  const [briefing, setBriefing] = useState<any | null>(null);
+  const [briefingVisivel, setBriefingVisivel] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const qc = useQueryClient();
@@ -44,6 +55,8 @@ export function OrbeChat({
   const apagar = useServerFn(orbeApagarConversa);
   const listarNotif = useServerFn(orbeNotificacoes);
   const marcarLida = useServerFn(orbeMarcarLida);
+  const transcrever = useServerFn(orbeTranscrever);
+  const briefingFn = useServerFn(orbeBriefingDiario);
 
   const convQ = useQuery({
     queryKey: ["orbe", "conversas"],
@@ -76,11 +89,116 @@ export function OrbeChat({
     },
   });
 
+  // Briefing diário: mostra 1x por dia ao abrir o painel.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const ultimo = window.localStorage.getItem(BRIEFING_KEY);
+      if (ultimo === hoje) return;
+      briefingFn({ data: {} as never })
+        .then((b) => {
+          setBriefing(b);
+          setBriefingVisivel(true);
+          window.localStorage.setItem(BRIEFING_KEY, hoje);
+        })
+        .catch(() => undefined);
+    } catch { /* noop */ }
+  }, [open, briefingFn]);
+
+  // Propaga estado de gravação para o orbe flutuante.
+  useEffect(() => {
+    onRecordingChange?.(gravando);
+  }, [gravando, onRecordingChange]);
+
+  // Propaga transcrevendo como "thinking".
+  useEffect(() => {
+    if (transcrevendo) onThinkingChange?.(true);
+    else if (!enviarMut.isPending) onThinkingChange?.(false);
+  }, [transcrevendo, enviarMut.isPending, onThinkingChange]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [mensagens, enviarMut.isPending]);
+
+  async function iniciarGravacao() {
+    if (gravando || transcrevendo) return;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      toast.error("Este navegador não suporta gravação de áudio.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      const mime = mimeCandidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) ?? "";
+      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        setGravando(false);
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        const type = mr.mimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type });
+        if (blob.size < 500) {
+          toast.error("Gravação muito curta.");
+          return;
+        }
+        setTranscrevendo(true);
+        try {
+          const buf = await blob.arrayBuffer();
+          // btoa em chunks para evitar estouro de stack em áudios longos.
+          let binary = "";
+          const bytes = new Uint8Array(buf);
+          const CHUNK = 0x8000;
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
+          }
+          const b64 = window.btoa(binary);
+          const ext = type.includes("mp4") ? "m4a" : "webm";
+          const r = await transcrever({
+            data: { audio_base64: b64, mime_type: type, filename: `gravacao.${ext}` },
+          });
+          const texto = (r.texto ?? "").trim();
+          if (!texto) {
+            toast.error("Não foi possível transcrever o áudio.");
+          } else {
+            setInput((prev) => (prev ? `${prev} ${texto}` : texto));
+          }
+        } catch (e: any) {
+          toast.error(`Falha ao transcrever: ${e?.message ?? "erro desconhecido"}`);
+        } finally {
+          setTranscrevendo(false);
+        }
+      };
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setGravando(true);
+    } catch (e: any) {
+      const nome = e?.name ?? "";
+      if (nome === "NotAllowedError" || nome === "SecurityError") {
+        toast.error("Permissão de microfone negada. Habilite nas configurações do navegador.");
+      } else if (nome === "NotFoundError") {
+        toast.error("Nenhum microfone encontrado.");
+      } else {
+        toast.error(`Não foi possível acessar o microfone: ${e?.message ?? nome}`);
+      }
+    }
+  }
+
+  function pararGravacao() {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      mr.stop();
+    } else {
+      setGravando(false);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }
 
   async function abrirConversa(id: string) {
     setConversaId(id);
