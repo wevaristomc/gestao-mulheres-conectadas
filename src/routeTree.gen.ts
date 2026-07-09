@@ -34,6 +34,7 @@ import { Route as AuthenticatedConfiguracoesIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedAdministrativoIndexRouteImport } from './routes/_authenticated/administrativo.index'
 import { Route as AuthenticatedWhatsappImportacaoIdRouteImport } from './routes/_authenticated/whatsapp.$importacaoId'
 import { Route as AuthenticatedRelatoriosPedagogicoRouteImport } from './routes/_authenticated/relatorios.pedagogico'
+import { Route as AuthenticatedRelatoriosParcialObjetoRouteImport } from './routes/_authenticated/relatorios.parcial-objeto'
 import { Route as AuthenticatedRelatoriosOrcamentarioRouteImport } from './routes/_authenticated/relatorios.orcamentario'
 import { Route as AuthenticatedRelatoriosMteRouteImport } from './routes/_authenticated/relatorios.mte'
 import { Route as AuthenticatedRelatoriosMetasRouteImport } from './routes/_authenticated/relatorios.metas'
@@ -201,6 +202,12 @@ const AuthenticatedRelatoriosPedagogicoRoute =
   AuthenticatedRelatoriosPedagogicoRouteImport.update({
     id: '/pedagogico',
     path: '/pedagogico',
+    getParentRoute: () => AuthenticatedRelatoriosRoute,
+  } as any)
+const AuthenticatedRelatoriosParcialObjetoRoute =
+  AuthenticatedRelatoriosParcialObjetoRouteImport.update({
+    id: '/parcial-objeto',
+    path: '/parcial-objeto',
     getParentRoute: () => AuthenticatedRelatoriosRoute,
   } as any)
 const AuthenticatedRelatoriosOrcamentarioRoute =
@@ -435,6 +442,7 @@ export interface FileRoutesByFullPath {
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
+  '/relatorios/parcial-objeto': typeof AuthenticatedRelatoriosParcialObjetoRoute
   '/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
   '/whatsapp/$importacaoId': typeof AuthenticatedWhatsappImportacaoIdRoute
   '/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
@@ -486,6 +494,7 @@ export interface FileRoutesByTo {
   '/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
+  '/relatorios/parcial-objeto': typeof AuthenticatedRelatoriosParcialObjetoRoute
   '/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
   '/whatsapp/$importacaoId': typeof AuthenticatedWhatsappImportacaoIdRoute
   '/administrativo': typeof AuthenticatedAdministrativoIndexRoute
@@ -545,6 +554,7 @@ export interface FileRoutesById {
   '/_authenticated/relatorios/metas': typeof AuthenticatedRelatoriosMetasRoute
   '/_authenticated/relatorios/mte': typeof AuthenticatedRelatoriosMteRoute
   '/_authenticated/relatorios/orcamentario': typeof AuthenticatedRelatoriosOrcamentarioRoute
+  '/_authenticated/relatorios/parcial-objeto': typeof AuthenticatedRelatoriosParcialObjetoRoute
   '/_authenticated/relatorios/pedagogico': typeof AuthenticatedRelatoriosPedagogicoRoute
   '/_authenticated/whatsapp/$importacaoId': typeof AuthenticatedWhatsappImportacaoIdRoute
   '/_authenticated/administrativo/': typeof AuthenticatedAdministrativoIndexRoute
@@ -605,6 +615,7 @@ export interface FileRouteTypes {
     | '/relatorios/metas'
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
+    | '/relatorios/parcial-objeto'
     | '/relatorios/pedagogico'
     | '/whatsapp/$importacaoId'
     | '/administrativo/'
@@ -656,6 +667,7 @@ export interface FileRouteTypes {
     | '/relatorios/metas'
     | '/relatorios/mte'
     | '/relatorios/orcamentario'
+    | '/relatorios/parcial-objeto'
     | '/relatorios/pedagogico'
     | '/whatsapp/$importacaoId'
     | '/administrativo'
@@ -714,6 +726,7 @@ export interface FileRouteTypes {
     | '/_authenticated/relatorios/metas'
     | '/_authenticated/relatorios/mte'
     | '/_authenticated/relatorios/orcamentario'
+    | '/_authenticated/relatorios/parcial-objeto'
     | '/_authenticated/relatorios/pedagogico'
     | '/_authenticated/whatsapp/$importacaoId'
     | '/_authenticated/administrativo/'
@@ -912,6 +925,13 @@ declare module '@tanstack/react-router' {
       path: '/pedagogico'
       fullPath: '/relatorios/pedagogico'
       preLoaderRoute: typeof AuthenticatedRelatoriosPedagogicoRouteImport
+      parentRoute: typeof AuthenticatedRelatoriosRoute
+    }
+    '/_authenticated/relatorios/parcial-objeto': {
+      id: '/_authenticated/relatorios/parcial-objeto'
+      path: '/parcial-objeto'
+      fullPath: '/relatorios/parcial-objeto'
+      preLoaderRoute: typeof AuthenticatedRelatoriosParcialObjetoRouteImport
       parentRoute: typeof AuthenticatedRelatoriosRoute
     }
     '/_authenticated/relatorios/orcamentario': {
@@ -1295,6 +1315,7 @@ interface AuthenticatedRelatoriosRouteChildren {
   AuthenticatedRelatoriosMetasRoute: typeof AuthenticatedRelatoriosMetasRoute
   AuthenticatedRelatoriosMteRoute: typeof AuthenticatedRelatoriosMteRoute
   AuthenticatedRelatoriosOrcamentarioRoute: typeof AuthenticatedRelatoriosOrcamentarioRoute
+  AuthenticatedRelatoriosParcialObjetoRoute: typeof AuthenticatedRelatoriosParcialObjetoRoute
   AuthenticatedRelatoriosPedagogicoRoute: typeof AuthenticatedRelatoriosPedagogicoRoute
   AuthenticatedRelatoriosIndexRoute: typeof AuthenticatedRelatoriosIndexRoute
 }
@@ -1309,6 +1330,8 @@ const AuthenticatedRelatoriosRouteChildren: AuthenticatedRelatoriosRouteChildren
     AuthenticatedRelatoriosMteRoute: AuthenticatedRelatoriosMteRoute,
     AuthenticatedRelatoriosOrcamentarioRoute:
       AuthenticatedRelatoriosOrcamentarioRoute,
+    AuthenticatedRelatoriosParcialObjetoRoute:
+      AuthenticatedRelatoriosParcialObjetoRoute,
     AuthenticatedRelatoriosPedagogicoRoute:
       AuthenticatedRelatoriosPedagogicoRoute,
     AuthenticatedRelatoriosIndexRoute: AuthenticatedRelatoriosIndexRoute,

@@ -14,6 +14,7 @@ const TABS = [
   { key: "metas", label: "Metas do Projeto", to: "/relatorios/metas" as const },
   { key: "indicadores", label: "Metas & Indicadores", to: "/relatorios/indicadores" as const },
   { key: "mte", label: "MTE (XLSX)", to: "/relatorios/mte" as const },
+  { key: "parcial-objeto", label: "Parcial do Objeto", to: "/relatorios/parcial-objeto" as const },
 ];
 
 function RelatoriosLayout() {
