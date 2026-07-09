@@ -965,11 +965,9 @@ export const exportarParcialObjetoDocx = createServerFn({ method: "POST" })
                   shading: idx === 0 ? { fill: "E8EEF5", type: ShadingType.CLEAR } : undefined,
                   children: [
                     new Paragraph({
-                      children: runFromChunks(parseInline(conteudo)).map((r) => {
-                        // negrito no cabeçalho
-                        if (idx === 0) return new TextRun({ text: r.text, bold: true });
-                        return r;
-                      }),
+                      children: runFromChunks(
+                        parseInline(conteudo).map((c) => (idx === 0 ? { ...c, bold: true } : c)),
+                      ),
                     }),
                   ],
                 });
