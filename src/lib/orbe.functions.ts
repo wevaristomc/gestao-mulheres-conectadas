@@ -176,6 +176,37 @@ async function toolDeqResumo(admin: any) {
   return { deq_chunks: count ?? 0 };
 }
 
+async function toolBuscarConhecimento(admin: any, args: { query?: string; k?: number; projeto_id?: string }) {
+  const query = String(args?.query ?? "").trim();
+  if (query.length < 2) return { erro: "informe uma consulta" };
+  try {
+    const { embedTexto, vetorToLiteral } = await import("@/lib/base-conhecimento-embed.server");
+    const vetor = await embedTexto(query);
+    if (!vetor) return { trechos: [] };
+    // Descobre projeto: se informado, usa; senão pega o primeiro projeto do usuário (contexto padrão).
+    let projetoId = args?.projeto_id ?? null;
+    if (!projetoId) {
+      const { data: p } = await admin.from("projetos").select("id").limit(1).maybeSingle();
+      projetoId = (p as { id?: string } | null)?.id ?? null;
+    }
+    if (!projetoId) return { trechos: [] };
+    const { data, error } = await admin.rpc("match_documentos_chunks", {
+      p_projeto_id: projetoId,
+      p_query_embedding: vetorToLiteral(vetor),
+      p_match_count: Math.min(Math.max(args?.k ?? 6, 1), 12),
+      p_categorias: null,
+    });
+    if (error) return { erro: error.message };
+    return { trechos: (data ?? []).map((r: any) => ({
+      titulo: r.titulo, categoria: r.categoria, formato: r.formato,
+      similaridade: Math.round((r.similarity ?? 0) * 100),
+      texto: String(r.texto ?? "").slice(0, 700),
+    })) };
+  } catch (e) {
+    return { erro: e instanceof Error ? e.message : "falha na busca semântica" };
+  }
+}
+
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   listar_turmas: (a) => toolListarTurmas(a),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
@@ -188,6 +219,7 @@ const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   metas_status: (a) => toolMetasStatus(a),
   aulas_da_turma: (a, x) => toolAulasDaTurma(a, x),
   relatorio_deq_resumo: (a) => toolDeqResumo(a),
+  buscar_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
 };
 
 const TOOL_DESCRICOES = `
@@ -201,7 +233,8 @@ const TOOL_DESCRICOES = `
 - financeiro_resumo: previsto, executado, saldo, % (papel financeiro/coordenador_geral).
 - metas_status: indicadores/metas cadastradas.
 - aulas_da_turma({codigo}): aulas realizadas da turma.
-- relatorio_deq_resumo: contagem de chunks DEQ indexados.`.trim();
+- relatorio_deq_resumo: contagem de chunks DEQ indexados.
+- buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).`.trim();
 
 async function snapshotContexto(admin: any) {
   const nTurmas = await safe(async () => (await admin.from("turmas").select("id", { count: "exact", head: true })).count ?? 0, 0);

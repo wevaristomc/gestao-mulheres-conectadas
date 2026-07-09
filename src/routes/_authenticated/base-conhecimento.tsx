@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, Download, FileText, HardDrive, Loader2, Plus, Search, Trash2, Upload,
+  AlertCircle, Download, FileText, HardDrive, Loader2, Mic, NotebookPen, Plus,
+  RefreshCw, Search, Sparkles, StickyNote, Trash2, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -31,11 +32,15 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
   CATEGORIAS, categoriaLabel, documentosListOptions,
-  formatBytes, formatarData, getSignedUrl, pickFirst, removeDocumentoFile, uploadDocumentoFile,
+  formatBytes, formatarData, FORMATO_LABEL, getSignedUrl, pickFirst,
+  removeDocumentoFile, uploadDocumentoFile,
   type CategoriaKey, type DocRow,
 } from "@/lib/base-conhecimento-queries";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
-import { registerUploadedDocumento, deleteDocumentoById } from "@/lib/base-conhecimento.functions";
+import {
+  registerUploadedDocumento, deleteDocumentoById,
+  criarAnotacao, indexarDocumento, buscarConhecimento,
+} from "@/lib/base-conhecimento.functions";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 
 export const Route = createFileRoute("/_authenticated/base-conhecimento")({
@@ -71,6 +76,11 @@ function BaseConhecimentoPage() {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState<string>("todas");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [anotacaoOpen, setAnotacaoOpen] = useState(false);
+  const [buscaSemantica, setBuscaSemantica] = useState("");
+  const [resultadoRag, setResultadoRag] = useState<
+    Array<{ chunk_id: string; documento_id: string; texto: string; similarity: number; titulo: string | null; categoria: string | null; formato: string | null }>
+  >([]);
   const [confirmDel, setConfirmDel] = useState<DocRow | null>(null);
   const [tab, setTab] = useState<"biblioteca" | "drive">("biblioteca");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -78,6 +88,27 @@ function BaseConhecimentoPage() {
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const importGdrive = useServerFn(importGdriveToBucket);
   const deleteDocumento = useServerFn(deleteDocumentoById);
+  const reindexar = useServerFn(indexarDocumento);
+  const buscarRag = useServerFn(buscarConhecimento);
+
+  const buscaSem = useMutation({
+    mutationFn: async (q: string) => {
+      if (!projetoId) throw new Error("Selecione um projeto ativo.");
+      const r = await buscarRag({ data: { projetoId, query: q, k: 8 } });
+      return r.trechos;
+    },
+    onSuccess: (rows) => setResultadoRag(rows),
+    onError: (e: Error) => toast.error(e.message || "Falha na busca semântica"),
+  });
+
+  const reindexMut = useMutation({
+    mutationFn: (id: string) => reindexar({ data: { documentoId: id } }),
+    onSuccess: () => {
+      toast.success("Reindexação concluída");
+      qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha ao reindexar"),
+  });
 
   const importFromDrive = useMutation({
     mutationFn: async (files: GDriveFile[]) => {
@@ -197,6 +228,23 @@ function BaseConhecimentoPage() {
             <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!projetoId}>
               <HardDrive className="mr-1.5 h-4 w-4" /> Importar do Drive
             </Button>
+            <Dialog open={anotacaoOpen} onOpenChange={setAnotacaoOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" disabled={!projetoId}>
+                  <NotebookPen className="mr-1.5 h-4 w-4" /> Nova anotação
+                </Button>
+              </DialogTrigger>
+              {projetoId ? (
+                <AnotacaoDialog
+                  projetoId={projetoId}
+                  onClose={() => setAnotacaoOpen(false)}
+                  onSaved={() => {
+                    qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
+                    setAnotacaoOpen(false);
+                  }}
+                />
+              ) : null}
+            </Dialog>
           <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
             <DialogTrigger asChild>
               <Button size="sm" disabled={!projetoId}>
@@ -278,14 +326,62 @@ function BaseConhecimentoPage() {
         </Select>
       </div>
 
+      {projetoId ? (
+        <div className="mb-6 rounded-lg border bg-muted/30 p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" /> Busca semântica no conteúdo indexado
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ex.: relatório de execução do primeiro ciclo, feedback das oficinas…"
+              value={buscaSemantica}
+              onChange={(e) => setBuscaSemantica(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && buscaSemantica.trim().length >= 2) buscaSem.mutate(buscaSemantica.trim());
+              }}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => buscaSem.mutate(buscaSemantica.trim())}
+              disabled={buscaSemantica.trim().length < 2 || buscaSem.isPending}
+            >
+              {buscaSem.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+              Buscar
+            </Button>
+          </div>
+          {resultadoRag.length > 0 ? (
+            <div className="mt-3 grid gap-2">
+              {resultadoRag.map((t) => (
+                <div key={t.chunk_id} className="rounded border bg-background p-2 text-xs">
+                  <div className="mb-1 flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px]">{t.categoria ?? "—"}</Badge>
+                    <span className="font-medium">{t.titulo ?? "—"}</span>
+                    <span className="ml-auto text-muted-foreground">
+                      similaridade {Math.round(t.similarity * 100)}%
+                    </span>
+                  </div>
+                  <div className="whitespace-pre-wrap text-muted-foreground line-clamp-4">
+                    {t.texto}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : buscaSem.isSuccess ? (
+            <p className="mt-2 text-xs text-muted-foreground">Nenhum trecho indexado corresponde à consulta.</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Documento</TableHead>
+              <TableHead>Formato</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Tamanho</TableHead>
               <TableHead>Enviado em</TableHead>
+              <TableHead>Indexação</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -293,12 +389,12 @@ function BaseConhecimentoPage() {
             {q.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
+                  <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
                 </TableRow>
               ))
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   {rows.length === 0
                     ? "Nenhum documento cadastrado neste projeto."
                     : "Nenhum documento corresponde ao filtro."}
@@ -325,6 +421,9 @@ function BaseConhecimentoPage() {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <FormatoBadge formato={String(pickFirst(r, ["formato"]) ?? "arquivo")} />
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="secondary">{categoriaLabel(String(pickFirst(r, ["categoria", "tipo"]) ?? ""))}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -333,8 +432,20 @@ function BaseConhecimentoPage() {
                   <TableCell className="text-sm text-muted-foreground">
                     {formatarData(pickFirst(r, ["created_at", "criado_em"]))}
                   </TableCell>
+                  <TableCell>
+                    <IndexBadge status={String(pickFirst(r, ["transcricao_status"]) ?? "nao_aplicavel")} />
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Reindexar conteúdo"
+                        disabled={reindexMut.isPending || !pickFirst(r, ["conteudo_texto"])}
+                        onClick={() => reindexMut.mutate(String(r.id))}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => baixar(r)}>
                         <Download className="h-4 w-4" />
                       </Button>
@@ -512,6 +623,112 @@ function UploadDialog({
         <Button onClick={() => up.mutate()} disabled={up.isPending || !file}>
           {up.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Upload className="mr-1.5 h-4 w-4" />}
           Enviar
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
+function FormatoBadge({ formato }: { formato: string }) {
+  const label = FORMATO_LABEL[formato as keyof typeof FORMATO_LABEL] ?? "Arquivo";
+  const Icon = formato === "anotacao" ? StickyNote : formato === "audio" ? Mic : FileText;
+  return (
+    <Badge variant="outline" className="gap-1">
+      <Icon className="h-3 w-3" /> {label}
+    </Badge>
+  );
+}
+
+function IndexBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+    pendente: { label: "Pendente", variant: "secondary" },
+    processando: { label: "Processando…", variant: "secondary" },
+    concluida: { label: "Indexado", variant: "default" },
+    erro: { label: "Erro", variant: "destructive" },
+    nao_aplicavel: { label: "—", variant: "outline" },
+  };
+  const info = map[status] ?? map.nao_aplicavel;
+  return <Badge variant={info.variant} className="text-[10px]">{info.label}</Badge>;
+}
+
+function AnotacaoDialog({
+  projetoId, onClose, onSaved,
+}: { projetoId: string; onClose: () => void; onSaved: () => void }) {
+  const [titulo, setTitulo] = useState("");
+  const [categoria, setCategoria] = useState<CategoriaKey>("anotacoes");
+  const [corpo, setCorpo] = useState("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const criar = useServerFn(criarAnotacao);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      if (!titulo.trim()) throw new Error("Informe um título.");
+      if (corpo.trim().length < 10) throw new Error("O corpo da anotação deve ter ao menos 10 caracteres.");
+      const tags = tagsRaw.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 20);
+      await criar({
+        data: {
+          projetoId,
+          titulo: titulo.trim(),
+          categoria,
+          corpo: corpo.trim(),
+          tags,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Anotação salva e indexada");
+      setTitulo(""); setCorpo(""); setTagsRaw(""); setCategoria("anotacoes");
+      onSaved();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Falha ao salvar"),
+  });
+
+  return (
+    <DialogContent className="max-h-[92svh] w-[calc(100vw-2rem)] max-w-[720px] overflow-y-auto p-4 sm:p-6">
+      <DialogHeader>
+        <DialogTitle className="pr-8">Nova anotação</DialogTitle>
+        <DialogDescription className="pr-8">
+          Texto livre que fica pesquisável pelos relatórios e pelo Orbe. Ideal para observações de campo,
+          contexto de reuniões e informações que não estão em documentos formais.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid min-w-0 gap-4">
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-tit">Título</Label>
+          <Input id="an-tit" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Reunião com CATIP em 10/07" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-cat">Categoria</Label>
+          <Select value={categoria} onValueChange={(v) => setCategoria(v as CategoriaKey)}>
+            <SelectTrigger id="an-cat"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CATEGORIAS.map((c) => (<SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-body">Conteúdo</Label>
+          <Textarea
+            id="an-body"
+            rows={10}
+            value={corpo}
+            onChange={(e) => setCorpo(e.target.value)}
+            placeholder="Escreva livremente. Este texto será indexado para busca semântica e usado como contexto pelos relatórios/IA."
+          />
+          <p className="text-xs text-muted-foreground">{corpo.length} caracteres</p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="an-tags">Tags (opcional, separadas por vírgula)</Label>
+          <Input id="an-tags" value={tagsRaw} onChange={(e) => setTagsRaw(e.target.value)} placeholder="ex.: reunião, articulação, catip" />
+        </div>
+      </div>
+
+      <DialogFooter className="gap-2 sm:gap-0">
+        <Button variant="ghost" onClick={onClose} disabled={mut.isPending}>Cancelar</Button>
+        <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+          {mut.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <StickyNote className="mr-1.5 h-4 w-4" />}
+          Salvar e indexar
         </Button>
       </DialogFooter>
     </DialogContent>

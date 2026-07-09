@@ -14,10 +14,23 @@ export const CATEGORIAS = [
   { key: "normas", label: "Normas e legislação" },
   { key: "comunicacao", label: "Comunicação" },
   { key: "pedagogico", label: "Material pedagógico" },
+  { key: "relatorios_externos", label: "Relatórios externos" },
+  { key: "anotacoes", label: "Anotações" },
+  { key: "audios_whatsapp", label: "Áudios / WhatsApp" },
   { key: "outros", label: "Outros" },
 ] as const;
 
 export type CategoriaKey = (typeof CATEGORIAS)[number]["key"];
+
+export type FormatoDoc = "arquivo" | "anotacao" | "audio" | "link_externo";
+export type IndexStatus = "pendente" | "processando" | "concluida" | "erro" | "nao_aplicavel";
+
+export const FORMATO_LABEL: Record<FormatoDoc, string> = {
+  arquivo: "Arquivo",
+  anotacao: "Anotação",
+  audio: "Áudio",
+  link_externo: "Link",
+};
 
 export function categoriaLabel(k: string | null | undefined): string {
   return CATEGORIAS.find((c) => c.key === k)?.label ?? String(k ?? "—");

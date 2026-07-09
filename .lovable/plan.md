@@ -1,70 +1,123 @@
-## Diagnóstico
 
-Vasculhei o import do dump Moodle (`src/lib/moodle-import.functions.ts` + `moodle-import.server.ts`) e o modelo de dados do app. Achei dois motivos claros para os e-mails "sumirem":
+# Base de Conhecimento Expandida — Relatórios externos, anotações e áudios
 
-### 1) Alunas com e-mail vazio
-O dump gera duas coisas separadas:
-- `ava_users` — espelho fiel do Moodle, **com e-mail preenchido** (a coluna `email` é lida do `pmc_user`).
-- `beneficiarias` — cadastro do projeto, com o próprio campo `email`.
+Objetivo: transformar a Base de Conhecimento em um repositório multi‑formato (PDF, DOCX, imagens, anotações livres, áudios de WhatsApp) que alimenta os relatórios gerados pelo app e o Orbe Neural via RAG (busca semântica).
 
-O cruzamento pós-import (`beneficiarias ← ava_users` por CPF) só faz:
-```ts
-admin.from("ava_users").update({ beneficiaria_id: bid }).eq("moodle_id", u.moodle_id)
-```
-Ou seja: liga a AVA à beneficiária existente, **mas nunca copia o e-mail (nem telefone) do AVA para a beneficiária**. Só quando a beneficiária é CRIADA a partir do fluxo "Sugestões AVA" (`gerarBeneficiariasAvaFromMoodle`) o e-mail é copiado no INSERT. Toda beneficiária que veio antes por CSV / cadastro manual / lista de presença fica com `email = null` mesmo depois do vínculo com o AVA.
+Ponto de partida: já existem tabela `documentos`, bucket privado `documentos`, upload/import Drive, e o Orbe com ferramentas de IA (`executarAiRouter`).
 
-### 2) Professores sem e-mail
-Professores no app **não vêm do dump Moodle**. Eles são registros da tabela `usuarios` com `role in ('professor','auxiliar_pedagogico')`, criados na aba Configurações → Usuários. O import Moodle atual:
-- não parseia `pmc_role_assignments` / `pmc_context` para identificar `editingteacher` / `teacher`;
-- não sincroniza professores com `usuarios` nem com `ava_users`.
-Além disso, o campo `instrutor` em `aulas` é só texto livre digitado na hora de gerar a lista — nunca teve e-mail associado.
+---
 
-## Plano da correção
+## 1. Modelo de dados (migração `docs/migrations/base-conhecimento-plus.sql`, idempotente)
 
-### A. Alunas — propagar e-mail (e telefone) do AVA para beneficiárias existentes
+Aditivo à tabela `documentos` — sem quebrar UI atual:
 
-Em `src/lib/moodle-import.functions.ts`, no bloco de cruzamento pós-import por CPF, **antes** de fazer o `update({ beneficiaria_id })`, também sincronizar campos de contato da beneficiária, sem sobrescrever o que já existe:
+- `formato text` — `arquivo` | `anotacao` | `audio` | `link_externo` (default `arquivo`).
+- `origem text` — `upload` | `gdrive` | `whatsapp` | `manual` (default `upload`).
+- `conteudo_texto text` — corpo da anotação OU transcrição do áudio OU texto extraído de PDF/DOCX.
+- `transcricao_status text` — `pendente` | `processando` | `concluida` | `erro`.
+- `duracao_segundos int` — quando áudio.
+- `metadata jsonb default '{}'` — chats WhatsApp (contato, data mensagem, importacao_id), páginas, autor, etc.
+- `tags text[] default '{}'` — livre.
 
-```ts
-// para cada u de ava_users com CPF que mapeia para beneficiaria bid:
-const patch: Record<string, string> = {};
-if (u.email)    patch.email    = u.email;     // só se AVA tem
-// (opcional) telefone se decidirmos
-if (Object.keys(patch).length) {
-  await admin.from("beneficiarias")
-    .update(patch)
-    .eq("id", bid)
-    .or("email.is.null,email.eq."); // só quando estiver vazio
-}
-await admin.from("ava_users").update({ beneficiaria_id: bid })...
-```
+Nova categoria no enum do frontend (`CATEGORIAS`): `anotacoes`, `audios_whatsapp`, `relatorios_externos`.
 
-E o mesmo tratamento em `gerarBeneficiariasAvaFromMoodle` (fluxo manual "Sugestões AVA"), para casos em que a beneficiária já existia mas sem e-mail.
+Nova tabela `documentos_chunks` (RAG):
+- `id uuid pk`, `documento_id uuid ref documentos(id) on delete cascade`
+- `projeto_id uuid` (herda; usado por RLS)
+- `ordem int`, `texto text`, `tokens int`
+- `embedding vector(1536)` (usa `openai/text-embedding-3-small` para caber em índice HNSW direto)
+- índice HNSW `vector_cosine_ops`
+- RLS: SELECT/INSERT/DELETE por membro do projeto (mesma política de `documentos`).
 
-Contabilizar em `resumo.emails_preenchidos` para o usuário ver no relatório da importação.
+Função RPC `match_documentos_chunks(projeto_id uuid, query_embedding vector(1536), match_count int)` retornando top‑k com `similarity`, join em `documentos` para título/categoria/link.
 
-### B. Retro-preenchimento das alunas já importadas
+GRANTs padrão (`authenticated`, `service_role`) e políticas RLS espelhando `documentos`.
 
-Como o dump já foi processado e as beneficiárias ficaram sem e-mail, criar uma **server function `sincronizarEmailsBeneficiariasFromAva`** (coordenação geral) que roda uma vez para preencher e-mails que hoje estão em `ava_users` mas faltando em `beneficiarias`, respeitando "não sobrescrever". Botão discreto na tela de import Moodle: "Sincronizar e-mails com o AVA".
+---
 
-### C. Professores — dois caminhos
+## 2. Servidor — ingestão e enriquecimento (`src/lib/base-conhecimento.functions.ts`)
 
-Como professores hoje não têm ponte com o AVA, proponho:
+Novas server functions (todas com `requireSupabaseAuth`):
 
-1. **Estender o parser** para incluir `pmc_role_assignments`, `pmc_role`, `pmc_context` — o suficiente para identificar quais `pmc_user` são professores (shortname `editingteacher`/`teacher`) em quais cursos. Registrar isso numa tabela nova `ava_instrutores_curso` (aluno/professor id, ava_course_id, role_shortname).
-2. **Ao final do import**, para cada professor identificado, procurar em `usuarios` por CPF **ou e-mail**. Se achar, preencher `usuarios.email` quando estiver vazio (nunca sobrescrever). Se não achar, listar em `resumo.professores_sem_vinculo` para a coordenação criar manualmente — não crio usuário no `auth.users` automaticamente porque cria sessão sem senha e envolve política de acesso.
+- `criarAnotacao({ projetoId, titulo, categoria, corpo, tags })` — insere `documentos` com `formato='anotacao'`, `conteudo_texto=corpo`, dispara indexação.
+- `uploadAudioWhatsapp({ projetoId, storagePath, nomeArquivo, mimeType, tamanhoBytes, duracao, metadata })` — registra `formato='audio'`, `transcricao_status='pendente'`, enfileira transcrição.
+- `transcreverDocumento({ documentoId })` — baixa arquivo do bucket, chama `openai/gpt-4o-mini-transcribe` via `ai.gateway.lovable.dev/v1/audio/transcriptions` (áudio) OU extrai texto de PDF/DOCX/TXT (Node via `pdf-parse` já usado no projeto, ou parser textual simples). Grava `conteudo_texto` + status.
+- `indexarDocumento({ documentoId })` — chunking (≈1200 chars, overlap 150), embeddings via `google/gemini-embedding-001` **ou** `openai/text-embedding-3-small` (escolho o `-small` p/ manter 1536 dim e permitir HNSW direto), grava em `documentos_chunks`.
+- `reindexarProjeto({ projetoId })` — utilidade admin.
+- `buscarConhecimento({ projetoId, query, k=8, categorias? })` — embed da query, chama RPC `match_documentos_chunks`, retorna trechos + refs (id, título, link assinado).
 
-Se você preferir, dá pra pular o passo 1 (não guardar `ava_instrutores_curso`) e só usar o role_assignments em memória durante o import, apenas para produzir o mapa "moodle_id → é professor" e sincronizar `usuarios.email` na hora. Mais leve; perde o histórico de quais professores lecionam onde no AVA.
+Pipeline automático: após `registerUploadedDocumento`/`criarAnotacao`/`uploadAudioWhatsapp`, chama `transcreverDocumento` (se aplicável) → `indexarDocumento`, sequencialmente. Falhas marcam status e não bloqueiam o upload.
 
-### D. Escopo do que NÃO vou tocar
+Importador WhatsApp (`src/lib/whatsapp.functions.ts` já existe): estender o processamento do ZIP para, quando `metadata.enviar_para_base=true`, criar `documentos formato='audio'` para cada `.opus/.mp3/.m4a` e `formato='anotacao'` consolidada com o texto da conversa (opcional, via checkbox na tela de import).
 
-- Não altero a UI de cadastro de alunas/usuários — só o pipeline de import e o cruzamento pós-import.
-- Não crio usuário no `auth.users` automaticamente para professor novo (isso continua manual em Configurações → Usuários).
-- Não mexo em `instrutor` (texto livre) das aulas — é um campo de exibição, não é ligado a usuário.
+---
 
-## Perguntas antes de implementar
+## 3. Frontend — Base de Conhecimento (`src/routes/_authenticated/base-conhecimento.tsx`)
 
-1. **Sobrescrever ou não?** Para alunas que já têm `email` cadastrado (do CSV) mas o AVA tem outro e-mail, mantenho o do CSV (recomendado, para não perder o dado do formulário) ou sobrescrevo pelo do AVA?
-2. **Telefone**: aproveito para propagar também? O `pmc_user` do Moodle tem `phone1`/`phone2` mas nem sempre está preenchido.
-3. **Professores — nível de sincronia**: opção (C.1) mais completa (tabela `ava_instrutores_curso`) ou (C.2) só sincronizar e-mail de `usuarios` sem persistir vínculo curso↔professor?
-4. **Botão de retro-preenchimento (B)**: coloco na mesma página do "Importar Moodle" como ação separada, ou disparo automaticamente sempre que um novo dump termina?
+Tabs / ações novas, sem mudar o layout atual:
+
+- Botão **"Nova anotação"** → dialog com título, categoria, textarea (markdown simples), tags.
+- Botão **"Áudio/gravação"** → dialog com dois modos:
+  - Upload de arquivo de áudio.
+  - Gravação in‑app (reaproveitar `MediaRecorder` do Orbe).
+- Coluna **Formato** (ícone: 📄 arquivo · 📝 anotação · 🎧 áudio · 🔗 link).
+- Coluna **Indexação**: badge `pendente/processando/pronto/erro`; botão "Reindexar" na linha.
+- Filtro por formato além de categoria; busca já existente (`titulo/descricao`) passa a incluir `conteudo_texto` (server‑side ILIKE).
+- Painel lateral "Buscar no conteúdo" (semântico): input livre → chama `buscarConhecimento` e mostra trechos com destaque + link para o documento.
+- No importador WhatsApp existente: checkbox "Enviar áudios e conversa para a Base de Conhecimento" na tela `/whatsapp/*`.
+
+---
+
+## 4. Uso nos relatórios (`src/lib/relatorios.functions.ts` + tela `/relatorios/*`)
+
+Cada geração de relatório (pedagógico, MTE, orçamentário, indicadores):
+
+- Antes de montar o prompt do LLM, chama `buscarConhecimento({ projetoId, query: <resumo do relatório + período>, k: 10, categorias: [...] })`.
+- Trechos recuperados vão para o prompt como bloco `## Contexto adicional (Base de Conhecimento)` com citações `[Doc: titulo]`.
+- No output do relatório, incluir seção "Fontes complementares" listando os documentos usados (link assinado, formato, data).
+- Nova opção na UI do gerador de relatório: "Incluir contexto da Base de Conhecimento" (default: ligado), com multiselect de categorias e filtro por tags.
+- O Orbe (`orbe.functions.ts`) ganha ferramenta `buscar_conhecimento(query, categorias?)` que chama o mesmo endpoint — Jarvis passa a citar anotações/áudios/relatórios externos.
+
+---
+
+## 5. Infra e segurança
+
+- Bucket `documentos` permanece privado; áudios reutilizam o mesmo bucket com prefixo `<projeto>/audios/`.
+- Chamadas ao AI Gateway feitas server‑side com `LOVABLE_API_KEY` (já configurado). Nunca do cliente.
+- Áudios acima de 25 MB: dividir server‑side em janelas de ~10 min antes de transcrever, concatenando texto.
+- Custos: transcrição e embeddings sujeitas ao gateway; expor toggle "IA desligada" (fallback: apenas texto/ILIKE, sem RAG).
+- Logs: novo tipo em `notificacoes` (`base_conhecimento_erro`) quando transcrição/indexação falhar.
+
+---
+
+## 6. Entregáveis por fase
+
+Fase 1 — Fundação (bloqueia demais):
+1. Migração `base-conhecimento-plus.sql` (colunas + tabela `documentos_chunks` + RPC + RLS).
+2. Server functions `criarAnotacao`, `transcreverDocumento`, `indexarDocumento`, `buscarConhecimento`.
+3. UI: "Nova anotação" e coluna formato/indexação.
+
+Fase 2 — Áudios:
+4. Server function `uploadAudioWhatsapp` + integração `MediaRecorder` no dialog.
+5. Extensão do importador WhatsApp (checkbox + criação em lote).
+
+Fase 3 — Relatórios & Orbe:
+6. Injeção de RAG nas server functions de relatórios + toggle na UI.
+7. Ferramenta `buscar_conhecimento` no Orbe.
+
+---
+
+## Detalhes técnicos
+
+- Modelo de embedding: `openai/text-embedding-3-small` (1536 dims) para permitir índice HNSW direto (`vector(1536)`); caso mude para Gemini 3072 depois, ajustar coluna para `halfvec(3072)`.
+- Chunking: parágrafo/sentença, 800–1500 chars, overlap ~150; áudios chunk por segmentos de fala quando disponível.
+- Extração de PDF: usar `pdf-parse` (server-only) via `*.server.ts`; DOCX via `mammoth`.
+- Todas as server functions retornam DTOs planos, sem `Response`/streams.
+- Splitting: manter regra do projeto — imports de `client.server` só dentro de `.handler()`.
+- Não alterar `src/integrations/supabase/*` gerados.
+
+Aceite:
+- Anotação criada aparece na busca semântica e em relatório gerado logo em seguida.
+- Áudio enviado (upload ou gravado) fica com status `pronto` e sua transcrição é citada num relatório de teste.
+- Importador WhatsApp, com o toggle ligado, popula a base com áudios da conversa selecionada.
+- Nenhuma rota/tela existente muda visualmente além dos pontos listados.
