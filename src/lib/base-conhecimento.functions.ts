@@ -300,5 +300,16 @@ export const buscarConhecimento = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(`Busca falhou: ${error.message}`);
 
-    return { trechos: (rows ?? []) as Array<Record<string, unknown>> };
+    type Trecho = {
+      chunk_id: string;
+      documento_id: string;
+      ordem: number;
+      texto: string;
+      similarity: number;
+      titulo: string | null;
+      categoria: string | null;
+      formato: string | null;
+      storage_path: string | null;
+    };
+    return { trechos: (rows ?? []) as Trecho[] };
   });
