@@ -18,7 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { cronogramaGeralOptions, turmasMteListOptions } from "@/lib/mte-queries";
-import { downloadCSV, toCSV } from "@/lib/csv";
+import { downloadCSV } from "@/lib/csv";
 import {
   criarTurmasCiclo2Previstas,
   type ResumoCiclo2,
