@@ -77,23 +77,66 @@ function CronogramaIndex() {
     return { prev, min, count: rows.length };
   }, [rows]);
 
+  // Exporta o cronograma no formato oficial MTE (uma linha por turma).
+  // Cabeçalho contém "Tipo de instrumento/parceria" e "Exercício" antes das colunas.
   const onExport = () => {
-    const csv = toCSV(
-      rows.map((r) => ({
-        data: r.data ?? "",
-        turma: (r.turma?.codigo_turma ?? "") + " - " + (r.turma?.nome_curso ?? ""),
-        municipio: r.turma?.municipio ?? "",
-        turno: r.turma?.turno ?? "",
-        hora_inicio: r.hora_inicio ?? "",
-        hora_fim: r.hora_fim ?? "",
-        ch_prevista: r.ch_prevista ?? "",
-        ch_ministrada: r.ch_ministrada ?? "",
-        tipo_ch: r.tipo_ch ?? "",
-        conteudo: r.conteudo_programatico ?? "",
-        instrutor: r.instrutor ?? "",
-      })),
-      ["data", "turma", "municipio", "turno", "hora_inicio", "hora_fim", "ch_prevista", "ch_ministrada", "tipo_ch", "conteudo", "instrutor"],
-    );
+    const turmas = turmasQ.data?.rows ?? [];
+    const turmasFiltradas =
+      turmaFiltro === "__all__" ? turmas : turmas.filter((t) => t.id === turmaFiltro);
+    const exercicio = String(new Date().getFullYear());
+    const linhasMeta: string[][] = [
+      ["Tipo de instrumento/parceria:", "Termo de Fomento — MROSC"],
+      ["Exercício:", exercicio],
+      [],
+    ];
+    const colunas = [
+      "Executora",
+      "Nome do Curso",
+      "Código da Turma",
+      "Turno",
+      "Horário de Realização",
+      "CH Conhecimentos Gerais",
+      "CH Conhecimentos Específicos",
+      "CH Total",
+      "Quantidade de Dias de Curso",
+      "Dias da Semana",
+      "Nº Educ. Inscritos",
+      "Período de Realização - Início",
+      "Período de Realização - Fim",
+      "Município",
+      "Local / Endereço completo",
+      "Contato Local - Nome",
+      "Contato Local - Telefone",
+    ];
+    const dados = turmasFiltradas.map((t) => [
+      t.executora ?? "QUINTA ARTE",
+      t.nome_curso ?? "",
+      t.codigo_turma ?? "",
+      t.turno ?? "",
+      t.horario_realizacao ?? "",
+      String(t.ch_conhecimentos_gerais ?? ""),
+      String(t.ch_conhecimentos_especificos ?? ""),
+      String(t.ch_total ?? ""),
+      String(t.qtd_dias_curso ?? ""),
+      t.dias_semana ?? "",
+      String(t.vagas ?? ""),
+      t.data_inicio ? new Date(t.data_inicio + "T00:00:00").toLocaleDateString("pt-BR") : "",
+      t.data_fim ? new Date(t.data_fim + "T00:00:00").toLocaleDateString("pt-BR") : "",
+      t.municipio ?? "",
+      t.local_endereco ?? "",
+      t.contato_local_nome ?? "",
+      t.contato_local_telefone ?? "",
+    ]);
+
+    const escapa = (v: string) => {
+      const s = String(v ?? "");
+      return /[";,\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [
+      ...linhasMeta.map((l) => l.map(escapa).join(";")),
+      colunas.map(escapa).join(";"),
+      ...dados.map((l) => l.map(escapa).join(";")),
+    ].join("\n");
     downloadCSV(`cronograma-mte-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   };
 
