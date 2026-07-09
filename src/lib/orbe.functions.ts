@@ -5,10 +5,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { executarAiRouter } from "@/lib/ia.functions";
+import { executarAiRouter, executarTranscricaoRouter } from "@/lib/ia.functions";
 
 const PROCESSO = "orbe_assistente";
+const PROCESSO_TRANSCRICAO = "orbe_transcricao";
 const MAX_LINHAS = 100;
+const MAX_TOOL_RESULT = 6000;
+
+function extrairToolCall(conteudo: string): { tool?: string; args?: any } | null {
+  const tentativas: string[] = [];
+  const trimmed = conteudo.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) tentativas.push(trimmed);
+  const fence = conteudo.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (fence?.[1]) tentativas.push(fence[1]);
+  const inline = conteudo.match(/\{[\s\S]*?"tool"\s*:\s*"[^"]+"[\s\S]*?\}/);
+  if (inline?.[0]) tentativas.push(inline[0]);
+  for (const raw of tentativas) {
+    try {
+      const p = JSON.parse(raw);
+      if (p && typeof p.tool === "string") return p;
+    } catch { /* tenta próximo */ }
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Ferramentas (somente leitura). Cada uma retorna JSON compacto.
@@ -327,11 +346,24 @@ REGRAS DE TOOL-CALLING:
       const conteudo = String(r.content ?? "").trim();
 
       // Tenta detectar chamada de ferramenta (JSON)
-      const jsonMatch = conteudo.match(/^\s*\{[\s\S]*\}\s*$/) || conteudo.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-      const raw = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : null;
-      let toolCall: { tool?: string; args?: any } | null = null;
-      if (raw) {
-        try { toolCall = JSON.parse(raw); } catch { toolCall = null; }
+      const toolCall = extrairToolCall(conteudo);
+
+      if (toolCall && typeof toolCall.tool === "string" && !TOOLS[toolCall.tool]) {
+        // Ferramenta desconhecida: instrui o modelo em vez de falhar.
+        const aviso = {
+          erro: `ferramenta "${toolCall.tool}" não existe`,
+          ferramentas_validas: ferramentasPermitidas,
+        };
+        await admin.from("orbe_mensagens").insert({
+          conversa_id: conversaId, role: "tool", tool_name: toolCall.tool,
+          content: JSON.stringify(aviso),
+        });
+        mensagensLoop.push({ role: "assistant", content: conteudo });
+        mensagensLoop.push({
+          role: "user",
+          content: `Ferramenta inválida. Use apenas uma destas: ${ferramentasPermitidas.join(", ")}. Ou responda direto em markdown.`,
+        });
+        continue;
       }
 
       if (toolCall && typeof toolCall.tool === "string" && TOOLS[toolCall.tool]) {
@@ -345,14 +377,15 @@ REGRAS DE TOOL-CALLING:
           continue;
         }
         const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, toolCall!.args ?? {}), { erro: "falha na ferramenta" });
+        const resultadoStr = JSON.stringify(resultado).slice(0, MAX_TOOL_RESULT);
         await admin.from("orbe_mensagens").insert({
           conversa_id: conversaId, role: "tool", tool_name: toolCall.tool,
-          content: JSON.stringify(resultado).slice(0, 8000),
+          content: resultadoStr,
         });
         mensagensLoop.push({ role: "assistant", content: conteudo });
         mensagensLoop.push({
           role: "user",
-          content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(resultado).slice(0, 8000)}`,
+          content: `Resultado da ferramenta ${toolCall.tool}:\n${resultadoStr}`,
         });
         continue;
       }
@@ -527,4 +560,102 @@ export const orbeVerificarAlertas = createServerFn({ method: "POST" })
     }, undefined);
 
     return { gerados: gerados.length, tipos: gerados };
+  });
+
+// ---------------------------------------------------------------------------
+// Transcrição (entrada por voz)
+// ---------------------------------------------------------------------------
+
+export const orbeTranscrever = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      audio_base64: z.string().min(1),
+      mime_type: z.string().min(1).default("audio/webm"),
+      filename: z.string().min(1).default("gravacao.webm"),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    // Decodifica base64 → Uint8Array → Blob (evita depender de atob no worker).
+    const b64 = data.audio_base64.replace(/^data:[^;]+;base64,/, "");
+    const bin = Buffer.from(b64, "base64");
+    const blob = new Blob([bin], { type: data.mime_type });
+    try {
+      const r = await executarTranscricaoRouter({
+        admin,
+        processo: PROCESSO_TRANSCRICAO,
+        file: blob,
+        filename: data.filename,
+        contentType: data.mime_type,
+      });
+      return { texto: r.text, provedor: r.provedor, modelo: r.modelo };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(msg);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Briefing diário — apenas dados (sem IA)
+// ---------------------------------------------------------------------------
+
+export const orbeBriefingDiario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const hoje = new Date();
+    const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).toISOString();
+    const fimAmanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 2).toISOString();
+
+    const pendenciasCriticas = await safe(async () => {
+      const { data } = await admin.from("pendencias")
+        .select("id, titulo, prioridade, vencimento, status")
+        .eq("status", "aberta")
+        .in("prioridade", ["critico", "critica"])
+        .order("vencimento", { ascending: true }).limit(10);
+      return (data ?? []) as any[];
+    }, []);
+
+    const prazosHojeAmanha = await safe(async () => {
+      const { data } = await admin.from("pendencias")
+        .select("id, titulo, prioridade, vencimento, status")
+        .eq("status", "aberta")
+        .gte("vencimento", inicioHoje).lt("vencimento", fimAmanha)
+        .order("vencimento", { ascending: true }).limit(20);
+      return (data ?? []) as any[];
+    }, []);
+
+    const turmasDivergentes = await safe(async () => {
+      const { data: turmas } = await admin.from("turmas").select("id, codigo_turma, vagas").limit(200);
+      const out: any[] = [];
+      for (const t of ((turmas ?? []) as any[])) {
+        const esperado = Number(t.vagas ?? 0);
+        if (!esperado) continue;
+        const { count } = await admin.from("matriculas")
+          .select("id", { count: "exact", head: true }).eq("turma_id", t.id);
+        if ((count ?? 0) !== esperado) {
+          out.push({ codigo_turma: t.codigo_turma, matriculas: count ?? 0, vagas: esperado });
+        }
+      }
+      return out.slice(0, 10);
+    }, []);
+
+    const naoLidas = await safe(async () => {
+      const { count } = await admin.from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .or(`user_id.eq.${context.userId},user_id.is.null`)
+        .eq("lida", false);
+      return count ?? 0;
+    }, 0);
+
+    return {
+      data: hoje.toISOString().slice(0, 10),
+      pendencias_criticas: pendenciasCriticas,
+      prazos_hoje_amanha: prazosHojeAmanha,
+      turmas_divergentes: turmasDivergentes,
+      notificacoes_nao_lidas: naoLidas,
+    };
   });

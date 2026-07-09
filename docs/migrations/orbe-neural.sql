@@ -86,6 +86,9 @@ DO $$ BEGIN
     INSERT INTO public.ia_politicas (processo, max_tokens, temperatura, usar_fallback)
     VALUES ('orbe_assistente', 2048, 0.4, true)
     ON CONFLICT (processo) DO NOTHING;
+    INSERT INTO public.ia_politicas (processo, max_tokens, temperatura, usar_fallback)
+    VALUES ('orbe_transcricao', 1024, 0.0, true)
+    ON CONFLICT (processo) DO NOTHING;
   END IF;
 END $$;
 

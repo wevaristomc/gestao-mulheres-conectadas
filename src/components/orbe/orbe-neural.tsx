@@ -9,7 +9,7 @@ import { orbeNotificacoes, orbeVerificarAlertas } from "@/lib/orbe.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveContext } from "@/hooks/use-active-context";
 
-type Estado = "idle" | "thinking" | "alerta";
+type Estado = "idle" | "thinking" | "alerta" | "recording";
 
 // Canvas neural: ~40 pontos + sinapses por distância. Cor primária via CSS var.
 function usePrimaryColor() {
@@ -84,6 +84,15 @@ function NeuralCanvas({ estado }: { estado: Estado }) {
         ctx.arc(size / 2, size / 2, raio, 0, Math.PI * 2);
         ctx.fill();
       }
+      // halo vermelho pulsante se gravando
+      if (estado === "recording") {
+        const t = (Date.now() % 900) / 900;
+        const alpha = 0.35 + Math.sin(t * Math.PI * 2) * 0.25;
+        ctx.fillStyle = `rgba(239, 68, 68, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, raio, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // clip circular
       ctx.save();
@@ -148,6 +157,7 @@ export function OrbeNeural() {
   const { user } = useActiveContext();
   const [open, setOpen] = useState(false);
   const [thinking, setThinking] = useState(false);
+  const [recording, setRecording] = useState(false);
   const listar = useServerFn(orbeNotificacoes);
   const verificar = useServerFn(orbeVerificarAlertas);
 
@@ -184,7 +194,9 @@ export function OrbeNeural() {
 
   if (!user) return null;
 
-  const estado: Estado = thinking ? "thinking" : naoLidas > 0 ? "alerta" : "idle";
+  const estado: Estado = recording
+    ? "recording"
+    : thinking ? "thinking" : naoLidas > 0 ? "alerta" : "idle";
 
   return (
     <>
@@ -206,7 +218,12 @@ export function OrbeNeural() {
           </span>
         )}
       </button>
-      <OrbeChat open={open} onOpenChange={setOpen} onThinkingChange={setThinking} />
+      <OrbeChat
+        open={open}
+        onOpenChange={setOpen}
+        onThinkingChange={setThinking}
+        onRecordingChange={setRecording}
+      />
     </>
   );
 }
