@@ -1,53 +1,33 @@
+# Corrigir rótulos: turmas mostram UUID, documentos mostram caminho de storage
+
 ## Diagnóstico
 
-A importação consolidada QAJBC hoje só popula o MTE porque:
+**Turmas (Pedagógico / Administrativo / Relatórios).** Nas telas, o nome da turma é lido por uma função `pickFirst(row, ["nome", "titulo", "descricao"]) ?? row.id`. As turmas importadas pelo "Consolidado QAJBC" gravam `codigo_turma` (ex.: `JBT-MC-01`) e `nome_curso` (ex.: `Mulheres Conectadas`), mas **não** `nome`/`titulo`/`descricao`. Por isso o fallback cai no `row.id` e o UUID aparece na coluna Turma, no cabeçalho da turma e nos relatórios.
 
-1. **Turmas ficam sem `projeto_id`.** Pedagógico, Administrativo e Relatórios filtram todas as leituras por `turmas.projeto_id = <projeto ativo>`. Sem essa coluna preenchida, as turmas importadas ficam invisíveis fora do MTE.
-2. **`matriculas` só apontam para `beneficiarias`.** As telas fora do MTE fazem embed `matriculas → cursistas (*)`. Como não escrevemos `cursista_id`, o nome/CPF/e-mail das alunas nunca aparecem no Pedagógico nem na aba de Certificados do Administrativo.
-3. **Nenhuma `aula` é criada.** Frequência média e Relatórios pedagógicos dependem de linhas em `aulas`. Hoje as 6 turmas ficam com 0 aulas, então frequência = 0 e "aulas previstas" = 0.
-4. **Professor titular fica só em `turmas.professor_nome/email`.** Nenhuma tela do Pedagógico/Administrativo lê essas colunas — o dado importado existe mas é invisível.
+**Base de Conhecimento.** A lista renderiza `pickFirst(r, ["titulo", "nome", "nome_arquivo", "storage_path"])`. Quando o registro não tem título/nome/nome_arquivo (documentos antigos ou importados em lote), cai em `storage_path`, que segue o formato `<projeto_id>/<uuid>-<nome_original>`. Isso produz o texto longo `d91d2e5a…/aa31fb33…-Documento.pdf`.
 
-## O que vou fazer (uma rodada, idempotente)
+## Correções (só apresentação, sem migração)
 
-### 1. Enriquecer o importador consolidado (`src/lib/consolidado-qajbc.functions.ts`)
+1. **Rótulo unificado de turma.** Estender a lista de fallback para incluir `codigo_turma` e `nome_curso` antes de recorrer ao id, e nunca exibir o UUID cru — trocar por `"Turma sem nome"`. Locais:
+   - `src/lib/pedagogico-queries.ts` — ordenação da listagem (linhas 21-22).
+   - `src/routes/_authenticated/pedagogico.index.tsx` — coluna Turma da tabela.
+   - `src/routes/_authenticated/pedagogico.turmas.$id.tsx` — cabeçalho do detalhe.
+   - `src/routes/_authenticated/administrativo.qualificacao.tsx` — selector de turma e título da aba.
+   - `src/lib/relatorios-queries.ts` — `turmaNome` em Frequência (linha 304) e Pedagógico (linha 386).
 
-- Receber `projeto_id` do contexto ativo (input validado) e gravar em cada turma criada/atualizada.
-- Para cada beneficiária importada, fazer upsert equivalente em `cursistas` (chave: CPF) copiando nome/CPF/e-mail/telefone. Guardar `cursista_id` retornado.
-- Ao gravar `matriculas`, preencher tanto `beneficiaria_id` (MTE) quanto `cursista_id` (Pedagógico/Administrativo). Se a coluna `cursista_id` não existir, degradar silenciosamente e reportar em `inconsistencias`.
-- Gerar esqueleto de **30 aulas de 5h** (150h de carga horária, seg–sex conforme `horario_realizacao`) por turma, começando em `data_inicio = 2026-05-09`. Idempotente: se já houver aulas para a turma, pular.
-- Somar ao `ResumoConsolidado`: `cursistas_criados`, `cursistas_atualizados`, `aulas_criadas`, `turmas_com_projeto`.
+   Ordem final do fallback: `nome → titulo → descricao → codigo_turma → nome_curso → "Turma sem nome"`.
 
-### 2. Migração adicional (`docs/migrations/consolidado-pedagogico.sql`)
+2. **Rótulo do documento na Base de Conhecimento.** Em `src/routes/_authenticated/base-conhecimento.tsx`, criar um helper local `labelDocumento(row)`:
+   - Se houver `titulo`/`nome`/`nome_arquivo`, usa esse valor.
+   - Senão, pega `storage_path`, mantém só o trecho depois da última `/` (remove o `projeto_id`) e retira o prefixo `uuid-` (regex `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-`), devolvendo apenas o nome original do arquivo.
+   - Fallback final: `"Documento sem título"`.
+   Usar `labelDocumento` na célula principal e na filtragem de busca (linhas 122 e 298); o subtítulo (`nome_arquivo` abaixo) continua igual quando houver título distinto.
 
-- Garantir que `matriculas.cursista_id uuid REFERENCES public.cursistas(id)` exista (idempotente com `ADD COLUMN IF NOT EXISTS`).
-- Garantir índice único parcial em `cursistas (upper(cpf))` para permitir upsert por CPF.
-- Nenhuma alteração de RLS além do que já existe.
+## Fora do escopo
 
-### 3. Exibir professor titular no Pedagógico
+- Nenhuma mudança de schema, migração ou reimportação. Turmas antigas não recebem `nome`; a UI passa a mostrar o `codigo_turma` que já existe.
+- Documentos antigos continuam sem `titulo` no banco; a UI apenas apresenta um rótulo limpo. Um backfill opcional pode ser feito depois se o usuário quiser gravar títulos definitivos.
 
-- Em `src/routes/_authenticated/pedagogico.turmas.$id.tsx` (cabeçalho da turma) mostrar "Professor(a): {professor_nome} · {professor_email}" lido de `turmas`.
-- Em `src/routes/_authenticated/pedagogico.index.tsx` adicionar coluna "Professor(a)" na listagem.
+## Verificação
 
-### 4. Botão "Reprocessar vínculos" no card existente
-
-- No `src/components/mte/importar-consolidado-card.tsx`, adicionar uma segunda ação que roda o importador sobre dados já existentes (mesmo endpoint — é idempotente). O texto explicativo passa a mencionar que a importação alimenta Pedagógico, Administrativo e Relatórios além do MTE.
-
-## O que NÃO vou mexer
-
-- Card "Importação Consolidada QAJBC" e o botão original ficam intactos (mesma UX, ganham só o botão de reprocessamento).
-- Cronograma do MTE, tela de fiscalização do Ofício 49148/2026 e Ciclo 2 previsto — sem mudanças.
-- Nenhuma alteração de RLS, buckets ou schemas de auth.
-
-## Detalhes técnicos
-
-- Projeto ativo vem de `useActiveContext().projetoId` no cliente e é enviado como argumento validado da server-fn (Zod-style manual, mesmo padrão dos outros importadores).
-- Se `projeto_id` vier nulo, a server-fn falha com mensagem clara "Selecione o projeto Manuel Querino / Mulheres Conectadas antes de importar."
-- Reexecução é segura: turmas por `codigo_turma`, cursistas por CPF, matrículas por `(turma_id, beneficiaria_id)`, aulas por `(turma_id, ordem)`.
-- Após rodar a migração `consolidado-pedagogico.sql`, o mesmo botão faz backfill total das 6 turmas + 270 alunas + 180 matrículas + ~180 aulas.
-
-## Passos que o coordenador executa
-
-1. Rodar `docs/migrations/consolidado-pedagogico.sql` no SQL Editor.
-2. Selecionar o projeto ativo "Manuel Querino / Mulheres Conectadas" no topbar.
-3. Em MTE → Importar Documento, clicar **"Rodar importação consolidada"** (ou o novo **"Reprocessar vínculos"** se já rodou antes).
-4. Conferir em Pedagógico, Administrativo → Certificados e Relatórios se as 6 turmas e as alunas aparecem.
+Após implementar, abrir Pedagógico, Administrativo → Qualificação e Relatórios → Pedagógico/Frequência: as turmas devem aparecer como `JBT-MC-01`, `BET-MC-02`, etc. Em Base de Conhecimento, os documentos devem mostrar só o nome do arquivo (sem o `projeto_id/uuid-` na frente).

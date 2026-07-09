@@ -18,8 +18,8 @@ export function turmasListOptions(projetoId: string | null) {
         .eq("projeto_id", projetoId);
       if (error) return { rows: [], error: error.message };
       const rows = ((data ?? []) as Row[]).slice().sort((a, b) => {
-        const an = pickFirst(a, ["nome", "titulo", "descricao"]) ?? "";
-        const bn = pickFirst(b, ["nome", "titulo", "descricao"]) ?? "";
+        const an = nomeTurma(a);
+        const bn = nomeTurma(b);
         return an.localeCompare(bn, "pt-BR");
       });
       return { rows };
@@ -235,6 +235,16 @@ export function pickFirst(row: Row | null | undefined, keys: string[]): string |
     if (typeof v === "number") return String(v);
   }
   return null;
+}
+
+// Rótulo humano de uma turma. Usa nome/titulo/descricao quando existirem;
+// caso contrário cai no codigo_turma (ex.: JBT-MC-01) ou nome_curso — nunca
+// exibe o UUID cru.
+export function nomeTurma(row: Row | null | undefined): string {
+  return (
+    pickFirst(row, ["nome", "titulo", "descricao", "codigo_turma", "nome_curso"]) ??
+    "Turma sem nome"
+  );
 }
 
 export function formatarData(iso: string | null | undefined): string {

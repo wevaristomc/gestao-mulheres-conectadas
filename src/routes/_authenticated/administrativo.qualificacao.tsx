@@ -47,11 +47,11 @@ import {
   cursistasComStatusOptions,
   emitirCertificado,
   formatarData,
-  pickFirst,
   revogarCertificado,
   turmasDoProjetoOptions,
   type CursistaLinha,
 } from "@/lib/administrativo-queries";
+import { nomeTurma } from "@/lib/pedagogico-queries";
 
 export const Route = createFileRoute("/_authenticated/administrativo/qualificacao")({
   component: QualificacaoTab,
@@ -65,8 +65,7 @@ function QualificacaoTab() {
   const [turmaId, setTurmaId] = useState<string | null>(null);
   const turmaIdAtiva = turmaId ?? turmas[0]?.id ?? null;
   const turmaAtiva = turmas.find((t) => t.id === turmaIdAtiva) ?? null;
-  const turmaNomeAtiva =
-    (pickFirst(turmaAtiva, ["nome", "titulo"]) as string | null) ?? "Turma";
+  const turmaNomeAtiva = nomeTurma(turmaAtiva as never);
 
   const cursistasQ = useQuery(cursistasComStatusOptions(turmaIdAtiva));
   const linhas = cursistasQ.data?.rows ?? [];
@@ -131,8 +130,8 @@ function QualificacaoTab() {
   const turmasOrdenadas = useMemo(
     () =>
       [...turmas].sort((a, b) => {
-        const na = pickFirst(a, ["nome", "titulo"]) ?? "";
-        const nb = pickFirst(b, ["nome", "titulo"]) ?? "";
+        const na = nomeTurma(a as never);
+        const nb = nomeTurma(b as never);
         return na.localeCompare(nb, "pt-BR");
       }),
     [turmas],
@@ -154,7 +153,7 @@ function QualificacaoTab() {
             <SelectContent>
               {turmasOrdenadas.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
-                  {pickFirst(t, ["nome", "titulo"]) ?? t.id}
+                  {nomeTurma(t as never)}
                 </SelectItem>
               ))}
             </SelectContent>
