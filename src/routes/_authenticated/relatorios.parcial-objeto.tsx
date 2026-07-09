@@ -75,8 +75,7 @@ function RelatorioParcialObjetoPage() {
         <div className="flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            <strong>Rascunho estruturado (Fase 3a).</strong> As seções são pré-preenchidas com resumos dos dados do banco (turmas, indicadores, evidências).
-            A geração assistida por IA e a exportação DOCX vêm nas próximas rodadas. Revise sempre antes de enviar ao SEI/TransfereGov.
+            <strong>Fase 3b — geração assistida por IA.</strong> Cada seção pode ser regerada com IA usando os dados estruturados do projeto e os trechos indexados na Base de Conhecimento. Todo texto gerado é rascunho — <strong>revisar sempre antes de enviar ao SEI/TransfereGov.</strong> Exportação DOCX vem na Fase 3c.
           </div>
         </div>
       </div>
