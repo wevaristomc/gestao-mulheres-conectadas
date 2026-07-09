@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertCircle, CheckCircle2, Download, FileUp, HelpCircle, Loader2, Search } from "lucide-react";
+import {
+  AlertCircle, CheckCircle2, Download, FileUp, HelpCircle, Loader2, Search,
+  FolderOpen, ShieldCheck, RotateCcw, Undo2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -18,8 +21,13 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { turmasMteListOptions } from "@/lib/mte-queries";
 import { lerListaPresenca } from "@/lib/ia.functions";
+import { baixarPdfDoDrive } from "@/lib/leitor-drive.functions";
+import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { ImportarTurmaCsvCard } from "@/components/mte/importar-turma-csv-card";
 import { ImportarMoodleCard } from "@/components/mte/importar-moodle-card";
 import { GerarMatriculasAvaCard } from "@/components/mte/gerar-matriculas-ava-card";
@@ -35,6 +43,11 @@ import {
   baixarTxt,
   listarImportacoes,
   uploadArquivoLista,
+  atualizarEnderecoTurma,
+  atualizarProfessorTurma,
+  marcarRevisaoImportacao,
+  type ImportacaoLista,
+  type RevisaoStatus,
   type CabecalhoExtraido,
   type LinhaConferencia,
   type MatriculaLite,
@@ -51,6 +64,10 @@ function ImportarListaPage() {
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
+  const [origem, setOrigem] = useState<"local" | "drive" | null>(null);
+  const [driveFileName, setDriveFileName] = useState<string | null>(null);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [driveBusy, setDriveBusy] = useState(false);
   const [uploaded, setUploaded] = useState<{ url: string; nome: string } | null>(null);
   const [tipoDoc, setTipoDoc] = useState<
     "lista_presenca" | "ficha_inscricao" | "entrega_beneficios" | "relacao_qualificados"
@@ -63,6 +80,7 @@ function ImportarListaPage() {
   const [leitura, setLeitura] = useState<ResultadoLeitura | null>(null);
 
   const lerFn = useServerFn(lerListaPresenca);
+  const baixarDriveFn = useServerFn(baixarPdfDoDrive);
   const historicoQ = useQuery({
     queryKey: ["mte", "importacoes-presenca", turmaId || null],
     queryFn: () => listarImportacoes(turmaId || null),
@@ -72,6 +90,32 @@ function ImportarListaPage() {
     () => turmas.find((t) => t.id === turmaId) ?? null,
     [turmas, turmaId],
   );
+
+  async function base64ToFile(b64: string, mime: string, nome: string): Promise<File> {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], nome, { type: mime });
+  }
+
+  async function onDrivePick(picked: GDriveFile[]) {
+    const f = picked[0];
+    if (!f) return;
+    setDriveBusy(true);
+    try {
+      const dl = await baixarDriveFn({ data: { fileId: f.id } });
+      const built = await base64ToFile(dl.base64, dl.mime, dl.nome);
+      setFile(built);
+      setOrigem("drive");
+      setDriveFileName(dl.nome);
+      setDrivePickerOpen(false);
+      toast.success(`PDF carregado do Drive · ${dl.nome}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao baixar do Drive");
+    } finally {
+      setDriveBusy(false);
+    }
+  }
 
   const processar = useMutation({
     mutationFn: async () => {
@@ -117,12 +161,52 @@ function ImportarListaPage() {
         `Aula registrada · ${r.presencas_registradas} presenças · ${r.lanches_registrados} lanches`,
       );
       qc.invalidateQueries({ queryKey: ["mte"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+      qc.invalidateQueries({ queryKey: ["administrativo"] });
       // reset
       setFile(null); setUploaded(null); setLeitura(null); setLinhas([]);
+      setOrigem(null); setDriveFileName(null);
       setCabecalho({}); setObservacoes([]);
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao gravar"),
   });
+
+  const salvarEndereco = useMutation({
+    mutationFn: async () => {
+      if (!turmaId) throw new Error("Selecione a turma primeiro.");
+      const end = String(cabecalho.endereco ?? "").trim();
+      if (!end) throw new Error("Endereço vazio.");
+      await atualizarEnderecoTurma(turmaId, end);
+    },
+    onSuccess: () => {
+      toast.success("Endereço da turma atualizado.");
+      qc.invalidateQueries({ queryKey: ["mte", "turmas"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const salvarProfessor = useMutation({
+    mutationFn: async () => {
+      if (!turmaId) throw new Error("Selecione a turma primeiro.");
+      const nome = String(cabecalho.instrutor ?? "").trim();
+      if (!nome) throw new Error("Nome do instrutor vazio.");
+      await atualizarProfessorTurma(turmaId, nome);
+    },
+    onSuccess: () => {
+      toast.success("Professor da turma atualizado.");
+      qc.invalidateQueries({ queryKey: ["mte", "turmas"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const enderecoTurma = String((turmaAtual as any)?.local_endereco ?? "").trim();
+  const enderecoLido = String(cabecalho.endereco ?? "").trim();
+  const professorTurma = String((turmaAtual as any)?.professor_nome ?? "").trim();
+  const professorLido = String(cabecalho.instrutor ?? "").trim();
+  const enderecoDivergente = enderecoLido && enderecoLido.toLowerCase() !== enderecoTurma.toLowerCase();
+  const professorDivergente = professorLido && professorLido.toLowerCase() !== professorTurma.toLowerCase();
 
   function atualizarLinha(idx: number, patch: Partial<LinhaConferencia>) {
     setLinhas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
