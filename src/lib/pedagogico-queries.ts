@@ -263,3 +263,192 @@ export function formatarData(iso: string | null | undefined): string {
     return String(iso);
   }
 }
+
+// ============================================================================
+// Comprovação por aula — evidências vinculadas (lista_presenca / foto)
+// ============================================================================
+
+export type EvidenciaAula = {
+  id: string;
+  turma_id: string | null;
+  aula_id: string | null;
+  tipo: string;
+  descricao: string | null;
+  arquivo_url: string;
+  arquivo_nome: string | null;
+  enviado_por: string | null;
+  created_at?: string | null;
+};
+
+export const TIPOS_COMPROVACAO_AULA = [
+  { value: "lista_presenca", label: "Lista de presença" },
+  { value: "registro_fotografico", label: "Registro fotográfico" },
+] as const;
+
+/** Lista evidências de uma aula específica. */
+export function evidenciasByAulaOptions(aulaId: string | null) {
+  return queryOptions({
+    queryKey: ["pedagogico", "evidencias-aula", aulaId],
+    enabled: !!aulaId,
+    queryFn: async (): Promise<{ rows: EvidenciaAula[]; error?: string }> => {
+      if (!aulaId) return { rows: [] };
+      const { data, error } = await supabase
+        .from("evidencias")
+        .select("*")
+        .eq("aula_id", aulaId)
+        .order("created_at", { ascending: false });
+      if (error) return { rows: [], error: error.message };
+      return { rows: (data ?? []) as EvidenciaAula[] };
+    },
+  });
+}
+
+/** Mapa `aula_id -> quantidade de listas_presenca` para uma turma. */
+export function evidenciasCountByTurmaOptions(turmaId: string) {
+  return queryOptions({
+    queryKey: ["pedagogico", "evidencias-count-turma", turmaId],
+    queryFn: async (): Promise<{ byAula: Record<string, number>; total: number; error?: string }> => {
+      const { data, error } = await supabase
+        .from("evidencias")
+        .select("id, aula_id, tipo")
+        .eq("turma_id", turmaId)
+        .eq("tipo", "lista_presenca");
+      if (error) return { byAula: {}, total: 0, error: error.message };
+      const byAula: Record<string, number> = {};
+      for (const r of (data ?? []) as { aula_id: string | null }[]) {
+        if (!r.aula_id) continue;
+        byAula[r.aula_id] = (byAula[r.aula_id] ?? 0) + 1;
+      }
+      return { byAula, total: (data ?? []).length };
+    },
+  });
+}
+
+function slugSafe(s: string | null | undefined, fallback = "SC"): string {
+  return String(s ?? fallback)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w.-]+/g, "_")
+    .toUpperCase();
+}
+
+export function nomeArquivoComprovacao(input: {
+  codigo_turma: string | null;
+  data_aula: string | null;
+  tipo: string;
+  index: number;
+  ext: string;
+}): string {
+  const cod = slugSafe(input.codigo_turma);
+  const data = (input.data_aula ?? new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const tipoLabel = input.tipo === "lista_presenca" ? "lista-presenca" : "registro";
+  return `${cod}_${data}_${tipoLabel}-${input.index}.${input.ext.toLowerCase()}`;
+}
+
+export type UploadComprovacaoInput = {
+  turma_id: string;
+  aula_id: string;
+  codigo_turma: string | null;
+  data_aula: string | null;
+  tipo: "lista_presenca" | "registro_fotografico" | string;
+  contem_pmq: boolean;
+  files: File[];
+};
+
+const MAX_BYTES = 10 * 1024 * 1024;
+const OK_TYPES = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+
+export async function uploadEvidenciasAula(input: UploadComprovacaoInput): Promise<{ inserted: number }> {
+  if (!input.files.length) return { inserted: 0 };
+  const { data: sess } = await supabase.auth.getUser();
+  const uid = sess?.user?.id ?? null;
+
+  const dataLabel = (input.data_aula ?? new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const codigo = slugSafe(input.codigo_turma);
+  let inserted = 0;
+
+  for (let i = 0; i < input.files.length; i += 1) {
+    const f = input.files[i];
+    if (f.size > MAX_BYTES) {
+      throw new Error(`"${f.name}" excede 10 MB.`);
+    }
+    const mime = f.type || "";
+    if (mime && !OK_TYPES.includes(mime)) {
+      // aceitar mesmo assim se extensão for válida
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!["pdf", "jpg", "jpeg", "png"].includes(ext)) {
+        throw new Error(`"${f.name}" tem formato não suportado. Use PDF, JPG ou PNG.`);
+      }
+    }
+    const ext = (f.name.split(".").pop() || "bin").toLowerCase();
+    const nomePadronizado = nomeArquivoComprovacao({
+      codigo_turma: input.codigo_turma,
+      data_aula: dataLabel,
+      tipo: input.tipo,
+      index: i + 1,
+      ext,
+    });
+    const path = `${codigo}/${dataLabel}/${nomePadronizado}`;
+
+    const up = await supabase.storage
+      .from("evidencias")
+      .upload(path, f, { upsert: false, contentType: f.type || `application/${ext}` });
+    if (up.error) throw new Error(`Falha ao enviar "${f.name}": ${up.error.message}`);
+    const pub = supabase.storage.from("evidencias").getPublicUrl(path);
+
+    const tipoLabel = input.tipo === "lista_presenca" ? "Lista de presença" : "Registro fotográfico";
+    const descricao =
+      `${tipoLabel} ${input.codigo_turma ?? ""} ${dataLabel}`.trim() +
+      (input.contem_pmq ? " | PMQ:sim" : " | PMQ:nao");
+
+    const payload: Record<string, unknown> = {
+      turma_id: input.turma_id,
+      aula_id: input.aula_id,
+      tipo: input.tipo,
+      descricao,
+      arquivo_url: pub.data.publicUrl,
+      arquivo_nome: nomePadronizado,
+    };
+    if (uid) payload.enviado_por = uid;
+
+    let res = await supabase.from("evidencias").insert(payload);
+    // Retry sem enviado_por caso a coluna ainda não exista.
+    if (res.error && /enviado_por/i.test(res.error.message)) {
+      delete payload.enviado_por;
+      res = await supabase.from("evidencias").insert(payload);
+    }
+    if (res.error) throw new Error(`Falha ao registrar evidência: ${res.error.message}`);
+    inserted += 1;
+  }
+  return { inserted };
+}
+
+/** Deriva o storage path a partir de uma URL pública do bucket evidencias. */
+export function pathFromEvidenciaUrl(url: string): string | null {
+  const m = url.match(/\/storage\/v1\/object\/(?:public|sign)\/evidencias\/([^?]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  return null;
+}
+
+/** Abre a evidência via URL assinada (bucket privado). */
+export async function abrirEvidencia(ev: { arquivo_url: string }): Promise<string> {
+  const path = pathFromEvidenciaUrl(ev.arquivo_url);
+  if (!path) return ev.arquivo_url;
+  const { data, error } = await supabase.storage.from("evidencias").createSignedUrl(path, 60 * 10);
+  if (error || !data?.signedUrl) return ev.arquivo_url;
+  return data.signedUrl;
+}
+
+export async function excluirEvidenciaAula(ev: { id: string; arquivo_url: string }): Promise<void> {
+  const path = pathFromEvidenciaUrl(ev.arquivo_url);
+  if (path) {
+    await supabase.storage.from("evidencias").remove([path]);
+  }
+  const { error } = await supabase.from("evidencias").delete().eq("id", ev.id);
+  if (error) throw new Error(error.message);
+}
+
+/** Contém identificação PMQ codificada no descricao pelo uploader. */
+export function evidenciaTemPmq(descricao: string | null | undefined): boolean {
+  return /PMQ\s*:\s*sim/i.test(String(descricao ?? ""));
+}
