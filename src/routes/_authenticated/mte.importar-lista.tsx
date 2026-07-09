@@ -34,6 +34,8 @@ import { GerarMatriculasAvaCard } from "@/components/mte/gerar-matriculas-ava-ca
 import { SugestoesBeneficiariasAvaCard } from "@/components/mte/sugestoes-beneficiarias-ava-card";
 import { CursosSemTurmaAvaCard } from "@/components/mte/cursos-sem-turma-ava-card";
 import { ImportarConsolidadoCard } from "@/components/mte/importar-consolidado-card";
+import { uploadEvidenciasAula } from "@/lib/pedagogico-queries";
+import { ImageDown, Camera } from "lucide-react";
 import {
   arquivoParaImagensBase64,
   carregarMatriculasDaTurma,
@@ -78,6 +80,8 @@ function ImportarListaPage() {
   const [observacoes, setObservacoes] = useState<string[]>([]);
   const [matriculas, setMatriculas] = useState<MatriculaLite[]>([]);
   const [leitura, setLeitura] = useState<ResultadoLeitura | null>(null);
+  const [imagensCapturadas, setImagensCapturadas] = useState<{ mime: string; base64: string }[]>([]);
+  const [aulaComprovada, setAulaComprovada] = useState<{ aula_id: string; data: string | null } | null>(null);
 
   const lerFn = useServerFn(lerListaPresenca);
   const baixarDriveFn = useServerFn(baixarPdfDoDrive);
@@ -126,6 +130,7 @@ function ImportarListaPage() {
       setUploaded({ url: up.url, nome: file.name });
       // 2. pdf -> imagens
       const imagens = await arquivoParaImagensBase64(file);
+      setImagensCapturadas(imagens);
       // 3. IA
       const res = (await lerFn({ data: { imagens } })) as ResultadoLeitura;
       setLeitura(res);
@@ -160,16 +165,56 @@ function ImportarListaPage() {
       toast.success(
         `Aula registrada · ${r.presencas_registradas} presenças · ${r.lanches_registrados} lanches`,
       );
+      setAulaComprovada({ aula_id: r.aula_id, data: cabecalho.data ?? null });
       qc.invalidateQueries({ queryKey: ["mte"] });
       qc.invalidateQueries({ queryKey: ["pedagogico"] });
       qc.invalidateQueries({ queryKey: ["administrativo"] });
-      // reset
-      setFile(null); setUploaded(null); setLeitura(null); setLinhas([]);
-      setOrigem(null); setDriveFileName(null);
-      setCabecalho({}); setObservacoes([]);
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao gravar"),
   });
+
+  const salvarImagensComoEvidencia = useMutation({
+    mutationFn: async () => {
+      if (!aulaComprovada) throw new Error("Aula não identificada.");
+      if (!imagensCapturadas.length) throw new Error("Nenhuma imagem em memória.");
+      // Converte base64 PNG -> File
+      const files: File[] = imagensCapturadas.map((img, idx) => {
+        const bin = atob(img.base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+        const ext = img.mime.includes("png") ? "png" : "jpg";
+        return new File([bytes], `pagina-${idx + 1}.${ext}`, { type: img.mime });
+      });
+      return uploadEvidenciasAula({
+        turma_id: turmaId,
+        aula_id: aulaComprovada.aula_id,
+        codigo_turma: turmaAtual?.codigo_turma ?? null,
+        data_aula: aulaComprovada.data,
+        tipo: "registro_fotografico",
+        contem_pmq: true,
+        files,
+      });
+    },
+    onSuccess: (r) => {
+      toast.success(`${r.inserted} imagem(ns) anexada(s) à aula.`);
+      qc.invalidateQueries({ queryKey: ["pedagogico", "evidencias-aula"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico", "evidencias-count-turma", turmaId] });
+      qc.invalidateQueries({ queryKey: ["mte", "evidencias"] });
+      // limpa estado do fluxo
+      setFile(null); setUploaded(null); setLeitura(null); setLinhas([]);
+      setOrigem(null); setDriveFileName(null);
+      setCabecalho({}); setObservacoes([]);
+      setImagensCapturadas([]); setAulaComprovada(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function finalizarSemAnexar() {
+    setFile(null); setUploaded(null); setLeitura(null); setLinhas([]);
+    setOrigem(null); setDriveFileName(null);
+    setCabecalho({}); setObservacoes([]);
+    setImagensCapturadas([]); setAulaComprovada(null);
+  }
 
   const salvarEndereco = useMutation({
     mutationFn: async () => {
@@ -497,6 +542,35 @@ function ImportarListaPage() {
           {confirmar.data ? (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-50 px-3 py-2 text-xs">
               Aula gravada · <strong>{confirmar.data.presencas_registradas}</strong> presenças · <strong>{confirmar.data.lanches_registrados}</strong> lanches · <strong>{confirmar.data.nao_identificadas.length}</strong> item(ns) não identificado(s).
+            </div>
+          ) : null}
+          {aulaComprovada && imagensCapturadas.length ? (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-start gap-2 text-xs">
+                <Camera className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <div className="font-medium">Salvar imagens como comprovação adicional?</div>
+                  <div className="text-muted-foreground">
+                    As {imagensCapturadas.length} página(s) processadas pela IA podem ser anexadas
+                    à aula como <em>registro fotográfico</em> (útil quando o PDF original não fica em pasta acessível).
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => salvarImagensComoEvidencia.mutate()}
+                  disabled={salvarImagensComoEvidencia.isPending}
+                >
+                  {salvarImagensComoEvidencia.isPending
+                    ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    : <ImageDown className="mr-1.5 h-4 w-4" />}
+                  Anexar imagens à aula
+                </Button>
+                <Button size="sm" variant="ghost" onClick={finalizarSemAnexar}>
+                  Não, prosseguir
+                </Button>
+              </div>
             </div>
           ) : null}
         </>
