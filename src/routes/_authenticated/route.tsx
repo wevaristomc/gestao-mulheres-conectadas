@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopbar } from "@/components/app-topbar";
+import { OrbeNeural } from "@/components/orbe/orbe-neural";
 import { ActiveContextProvider, useActiveContext } from "@/hooks/use-active-context";
 import { requireSession } from "@/lib/auth-guard";
 
@@ -28,6 +29,7 @@ function AuthenticatedLayout() {
           <main className="flex-1 px-6 py-6">
             <Outlet />
           </main>
+          <OrbeNeural />
         </SidebarInset>
       </SidebarProvider>
     </ActiveContextProvider>
