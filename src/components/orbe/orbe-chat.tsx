@@ -311,6 +311,67 @@ export function OrbeChat({
               </div>
             )}
 
+            {/* Briefing diário */}
+            {briefingVisivel && briefing && (
+              <div className="px-4 py-3 border-b bg-primary/5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <p className="text-sm font-semibold">Bom dia — briefing de {briefing.data}</p>
+                    </div>
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      <li>
+                        <strong className="text-foreground">
+                          {(briefing.pendencias_criticas ?? []).length}
+                        </strong>{" "}
+                        pendência(s) crítica(s) aberta(s).
+                      </li>
+                      <li>
+                        <strong className="text-foreground">
+                          {(briefing.prazos_hoje_amanha ?? []).length}
+                        </strong>{" "}
+                        prazo(s) hoje/amanhã.
+                      </li>
+                      <li>
+                        <strong className="text-foreground">
+                          {(briefing.turmas_divergentes ?? []).length}
+                        </strong>{" "}
+                        turma(s) com divergência de matrículas.
+                      </li>
+                      <li>
+                        <strong className="text-foreground">
+                          {briefing.notificacoes_nao_lidas ?? 0}
+                        </strong>{" "}
+                        notificação(ões) não lida(s).
+                      </li>
+                    </ul>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setBriefingVisivel(false);
+                          submeter("Analise a situação atual do projeto e priorize as 3 ações mais urgentes.");
+                        }}
+                      >
+                        <Sparkles className="h-3 w-3 mr-1" /> Analisar com IA
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => setBriefingVisivel(false)}
+                      >
+                        Fechar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Mensagens */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {mensagens.length === 0 && (
@@ -349,9 +410,10 @@ export function OrbeChat({
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Fale com o Orbe…"
+                placeholder={gravando ? "Gravando… fale agora" : transcrevendo ? "Transcrevendo áudio…" : "Fale com o Orbe…"}
                 rows={2}
                 className="resize-none text-sm"
+                disabled={transcrevendo}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -360,8 +422,24 @@ export function OrbeChat({
                 }}
               />
               <Button
+                onClick={gravando ? pararGravacao : iniciarGravacao}
+                disabled={transcrevendo || enviarMut.isPending}
+                size="icon"
+                variant={gravando ? "destructive" : "outline"}
+                aria-label={gravando ? "Parar gravação" : "Gravar áudio"}
+                title={gravando ? "Parar gravação" : "Gravar áudio"}
+              >
+                {transcrevendo ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : gravando ? (
+                  <MicOff className="h-4 w-4" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
                 onClick={() => submeter()}
-                disabled={!input.trim() || enviarMut.isPending}
+                disabled={!input.trim() || enviarMut.isPending || gravando || transcrevendo}
                 size="icon"
                 aria-label="Enviar"
               >
