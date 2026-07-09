@@ -638,19 +638,28 @@ export const publicarAudiosNaBase = createServerFn({ method: "POST" })
     if (publicados > 0) {
       const hoje = new Date().toISOString().slice(0, 10);
       const chave = `wa_publicar_${data.importacao_id}_${hoje}`;
-      await sb.from("notificacoes").upsert(
-        {
-          user_id: context.userId,
-          tipo: "whatsapp_audios_publicados",
-          severidade: "info",
-          titulo: `${publicados} áudio(s) publicados na Base de Conhecimento`,
-          corpo: `Grupo ${grupoNome} — importação ${data.importacao_id.slice(0, 8)}. ${pulados > 0 ? `${pulados} já estavam publicados ou sem transcrição.` : ""}`,
-          link_rota: "/base-conhecimento",
-          origem: "whatsapp",
-          chave_dedup: chave,
-        },
-        { onConflict: "chave_dedup" },
-      );
+      const { data: existente } = await sb
+        .from("notificacoes")
+        .select("id")
+        .eq("tipo", "whatsapp_audios_publicados")
+        .eq("chave_dedup", chave)
+        .limit(1);
+      if (!existente || existente.length === 0) {
+        try {
+          await sb.from("notificacoes").insert({
+            user_id: context.userId,
+            tipo: "whatsapp_audios_publicados",
+            severidade: "info",
+            titulo: `${publicados} áudio(s) publicados na Base de Conhecimento`,
+            corpo: `Grupo ${grupoNome} — importação ${data.importacao_id.slice(0, 8)}. ${pulados > 0 ? `${pulados} já estavam publicados ou sem transcrição.` : ""}`,
+            link_rota: "/base-conhecimento",
+            origem: "whatsapp",
+            chave_dedup: chave,
+          });
+        } catch {
+          // notificação é auxiliar, não bloqueia o retorno
+        }
+      }
     }
 
     return { publicados, pulados, erros, projeto_id: projetoId };
