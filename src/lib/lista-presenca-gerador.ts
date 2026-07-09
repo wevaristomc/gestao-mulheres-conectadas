@@ -344,7 +344,7 @@ export async function gerarListaXLSX(listas: ListaData[]): Promise<Blob> {
     for (let i = 0; i < total; i += 1) {
       const r = headerRow + 1 + i;
       const nome = i < cursistas.length ? cursistas[i].nome : "";
-      const cpf = i < cursistas.length ? mascararCPF(cursistas[i].cpf) : "";
+      const cpf = i < cursistas.length ? formatarCPF(cursistas[i].cpf) : "";
       ws.getCell(r, 1).value = i + 1;
       ws.getCell(r, 2).value = nome;
       ws.getCell(r, 3).value = cpf;
@@ -394,7 +394,7 @@ export async function gerarListaDOCX(listas: ListaData[]): Promise<Blob> {
     const linhas: TableRow[] = [];
     for (let i = 0; i < total; i += 1) {
       const nome = i < cursistas.length ? cursistas[i].nome : "";
-      const cpf = i < cursistas.length ? mascararCPF(cursistas[i].cpf) : "";
+      const cpf = i < cursistas.length ? formatarCPF(cursistas[i].cpf) : "";
       linhas.push(new TableRow({
         children: [
           cellBody(String(i + 1), 700, "center"),
