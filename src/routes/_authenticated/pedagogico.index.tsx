@@ -15,7 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useActiveContext, useHasRole } from "@/hooks/use-active-context";
-import { turmasListOptions, pickFirst, formatarData, deleteTurma, type Row } from "@/lib/pedagogico-queries";
+import { turmasListOptions, pickFirst, formatarData, deleteTurma, nomeTurma, type Row } from "@/lib/pedagogico-queries";
 import { TurmaDialog } from "@/components/turma-dialog";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/")({
@@ -109,7 +109,7 @@ function PedagogicoIndex() {
                 </TableRow>
               ) : (
                 rows.map((r: Row) => {
-                  const nome = pickFirst(r, ["nome", "titulo", "descricao"]) ?? r.id;
+                  const nome = nomeTurma(r);
                   const turno = pickFirst(r, ["turno", "periodo"]);
                   const inicio = pickFirst(r, ["data_inicio", "inicio", "data_de_inicio"]);
                   const fim = pickFirst(r, ["data_fim", "fim", "data_de_fim"]);

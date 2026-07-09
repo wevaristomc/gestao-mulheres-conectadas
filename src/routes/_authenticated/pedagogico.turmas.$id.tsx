@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireModuleAccess } from "@/lib/auth-guard";
-import { turmaByIdOptions, pickFirst, formatarData } from "@/lib/pedagogico-queries";
+import { turmaByIdOptions, pickFirst, formatarData, nomeTurma } from "@/lib/pedagogico-queries";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id")({
   head: () => ({ meta: [{ title: "Turma · Pedagógico" }] }),
@@ -25,7 +25,7 @@ function TurmaLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const q = useQuery(turmaByIdOptions(id));
   const row = q.data?.row;
-  const nome = pickFirst(row, ["nome", "titulo"]) ?? "Turma";
+  const nome = nomeTurma(row);
   const turno = pickFirst(row, ["turno", "periodo"]);
   const inicio = pickFirst(row, ["data_inicio", "inicio"]);
   const fim = pickFirst(row, ["data_fim", "fim"]);
