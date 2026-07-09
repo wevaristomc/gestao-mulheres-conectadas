@@ -11,6 +11,8 @@ export type AulaInfo = {
   tema: string | null;
   cargaHoraria: string | null;
   instrutor: string | null;
+  horaInicio?: string | null;
+  horaFim?: string | null;
 };
 export type TurmaInfo = {
   codigo: string | null;
@@ -18,6 +20,7 @@ export type TurmaInfo = {
   municipio: string | null;
   turno: string | null;
   local: string | null;
+  entidade?: string | null;
 };
 export type ListaData = {
   turma: TurmaInfo;
@@ -26,11 +29,14 @@ export type ListaData = {
   extras: number;
 };
 
-function mascararCPF(cpf: string | null): string {
-  if (!cpf) return "—";
+// Modelo oficial DEQ exige CPF digitalizado do/a cursista na lista de
+// frequência (o documento é impresso e assinado; não há PII adicional
+// que não seja de posse da entidade). Formatamos como 000.000.000-00.
+function formatarCPF(cpf: string | null): string {
+  if (!cpf) return "";
   const d = cpf.replace(/\D/g, "");
-  if (d.length < 4) return "***.***.***-**";
-  return `***.***.***-${d.slice(-2)}`;
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
 function formatarDataBR(iso: string | null): string {
@@ -51,6 +57,22 @@ function ordenarCursistas(rows: Cursista[]): Cursista[] {
   return [...rows].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
 }
 
+const LINHAS_POR_PAGINA = 25;
+
+function paginarCursistas(cursistas: Cursista[], extras: number): Cursista[][] {
+  const rows: Cursista[] = [...cursistas];
+  for (let i = 0; i < extras; i += 1) rows.push({ nome: "", cpf: null });
+  // sempre ao menos uma página com 25 linhas
+  const total = Math.max(rows.length, LINHAS_POR_PAGINA);
+  const paginas: Cursista[][] = [];
+  for (let i = 0; i < total; i += LINHAS_POR_PAGINA) {
+    const slice = rows.slice(i, i + LINHAS_POR_PAGINA);
+    while (slice.length < LINHAS_POR_PAGINA) slice.push({ nome: "", cpf: null });
+    paginas.push(slice);
+  }
+  return paginas;
+}
+
 // -------------------------------- PDF --------------------------------
 
 export function gerarListaPDF(listas: ListaData[]): Blob {
@@ -58,132 +80,207 @@ export function gerarListaPDF(listas: ListaData[]): Blob {
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
 
-  listas.forEach((lista, idx) => {
-    if (idx > 0) doc.addPage();
-    renderPaginaPDF(doc, lista, W, H, idx + 1, listas.length);
+  const paginasPorLista = listas.map((l) => paginarCursistas(ordenarCursistas(l.cursistas), l.extras));
+  const totalPag = paginasPorLista.reduce((a, p) => a + p.length, 0);
+  let pageNo = 0;
+  listas.forEach((lista, i) => {
+    const paginas = paginasPorLista[i];
+    paginas.forEach((linhas, pi) => {
+      pageNo += 1;
+      if (pageNo > 1) doc.addPage();
+      renderPaginaPDF(doc, lista, linhas, W, H, pageNo, totalPag, pi + 1, paginas.length);
+    });
   });
 
   return doc.output("blob");
 }
 
+/**
+ * Renderiza uma página da lista de frequência no formato oficial DEQ/PMQ.
+ * Cabeçalho institucional + bloco de metadados + tabela com colunas exatas
+ * (Nº | Nome | CPF | Data + Frequência | Entrega do Lanche | Assinatura).
+ */
 function renderPaginaPDF(
-  doc: jsPDF, lista: ListaData, W: number, H: number, pageNo: number, total: number,
+  doc: jsPDF,
+  lista: ListaData,
+  linhas: Cursista[],
+  W: number,
+  H: number,
+  pageNo: number,
+  totalDocPag: number,
+  paginaLista: number,
+  totalPaginasLista: number,
 ) {
-  const marginX = 36;
-  let y = 40;
+  const AZUL: [number, number, number] = [27, 42, 74];
+  const marginX = 28;
+  let y = 34;
 
-  // Cabeçalho institucional
-  doc.setDrawColor(26, 43, 82);
-  doc.setLineWidth(1);
-  doc.rect(marginX, y, W - marginX * 2, 54);
+  // ————— Cabeçalho institucional (bloco em caixa) —————
+  doc.setDrawColor(...AZUL);
+  doc.setLineWidth(0.8);
 
+  // Título principal
+  doc.setFillColor(...AZUL);
+  doc.rect(marginX, y, W - marginX * 2, 22, "F");
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(26, 43, 82);
-  doc.setFontSize(12);
-  doc.text("PROGRAMA MANUEL QUERINO — MULHERES CONECTADAS", W / 2, y + 20, { align: "center" });
-  doc.setFontSize(10);
-  doc.setTextColor(60, 60, 60);
-  doc.text(
-    "LISTA DE FREQUÊNCIA DOS CURSISTAS ÀS AULAS TEÓRICAS E PRÁTICAS",
-    W / 2, y + 40, { align: "center" },
-  );
-  y += 70;
-
-  // Metadados
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(9);
-  const col1X = marginX;
-  const col2X = W / 2 + 6;
-  const linhaH = 14;
-
-  const meta: [string, string][] = [
-    ["Turma:", `${lista.turma.codigo ?? "—"}${lista.turma.nomeCurso ? " · " + lista.turma.nomeCurso : ""}`],
-    ["Município:", lista.turma.municipio ?? "—"],
-    ["Turno:", lista.turma.turno ?? "—"],
-    ["Local:", lista.turma.local ?? "—"],
-    ["Data da aula:", formatarDataBR(lista.aula.data)],
-    ["Carga horária:", lista.aula.cargaHoraria ?? "—"],
-    ["Tema/Conteúdo:", lista.aula.tema ?? "—"],
-    ["Instrutor(a):", lista.aula.instrutor ?? "________________________"],
-  ];
-  for (let i = 0; i < meta.length; i += 2) {
-    doc.setFont("helvetica", "bold");
-    doc.text(meta[i][0], col1X, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(String(meta[i][1]).slice(0, 60), col1X + 78, y);
-    if (meta[i + 1]) {
-      doc.setFont("helvetica", "bold");
-      doc.text(meta[i + 1][0], col2X, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(String(meta[i + 1][1]).slice(0, 55), col2X + 78, y);
-    }
-    y += linhaH;
-  }
-  y += 4;
-
-  // Tabela
-  const rows: Array<{ n: number; nome: string; cpf: string }> = [];
-  const cursistas = ordenarCursistas(lista.cursistas);
-  cursistas.forEach((c, i) => rows.push({ n: i + 1, nome: c.nome, cpf: mascararCPF(c.cpf) }));
-  for (let i = 0; i < lista.extras; i += 1) {
-    rows.push({ n: cursistas.length + i + 1, nome: "", cpf: "" });
-  }
-
-  const colNo = 32;
-  const colNome = 220;
-  const colCPF = 100;
-  const tableX = marginX;
-  const tableW = W - marginX * 2;
-  const colAss = tableW - colNo - colNome - colCPF;
-
-  // Cabeçalho da tabela
-  doc.setFillColor(26, 43, 82);
   doc.setTextColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.text(
+    "LISTA DE FREQUÊNCIA DOS CURSISTAS AS AULAS TEÓRICAS E PRÁTICAS",
+    W / 2, y + 15, { align: "center" },
+  );
+  y += 22;
+
+  doc.setTextColor(...AZUL);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.rect(tableX, y, tableW, 18, "F");
-  doc.text("Nº", tableX + 6, y + 12);
-  doc.text("Nome completo", tableX + colNo + 6, y + 12);
-  doc.text("CPF", tableX + colNo + colNome + 6, y + 12);
-  doc.text("Assinatura", tableX + colNo + colNome + colCPF + 6, y + 12);
+  doc.setFontSize(8.5);
+  doc.rect(marginX, y, W - marginX * 2, 18);
+  doc.text(
+    "Programa Manuel Querino de Qualificação Social e Profissional — PMQ / DEQ / SEMP / MTE",
+    W / 2, y + 12, { align: "center" },
+  );
   y += 18;
 
-  doc.setTextColor(30, 30, 30);
-  doc.setFont("helvetica", "normal");
-  const rowH = 22;
-  const maxY = H - 90;
+  // Bloco de metadados
+  const entidade = (lista.turma.entidade ?? "QUINTA ARTE").toUpperCase();
+  const local = lista.turma.local ?? "";
+  const identTurma = `${lista.turma.codigo ?? ""}${lista.turma.nomeCurso ? " · " + lista.turma.nomeCurso : ""}`;
+  const conteudo = lista.aula.tema ?? "";
+  const instrutor = lista.aula.instrutor ?? "";
+  const horaIni = lista.aula.horaInicio ?? "____";
+  const horaFim = lista.aula.horaFim ?? "____";
+  const ch = lista.aula.cargaHoraria ?? "____";
 
-  rows.forEach((r) => {
-    if (y + rowH > maxY) return; // corta para caber em uma folha
-    doc.setDrawColor(190, 190, 190);
-    doc.setLineWidth(0.5);
-    doc.rect(tableX, y, tableW, rowH);
-    doc.line(tableX + colNo, y, tableX + colNo, y + rowH);
-    doc.line(tableX + colNo + colNome, y, tableX + colNo + colNome, y + rowH);
-    doc.line(tableX + colNo + colNome + colCPF, y, tableX + colNo + colNome + colCPF, y + rowH);
-    doc.text(String(r.n), tableX + 6, y + 14);
-    doc.text(r.nome.slice(0, 42), tableX + colNo + 6, y + 14);
-    doc.text(r.cpf, tableX + colNo + colNome + 6, y + 14);
-    y += rowH;
+  const campos: [string, string][] = [
+    ["Nome da Entidade Executora:", entidade],
+    ["Local de Realização da Qualificação:", local],
+    ["Identificação da Turma:", identTurma],
+    ["Conteúdo das Aulas:", conteudo],
+    ["Instrutor/a:", instrutor],
+    [
+      "Horário de Início e Fim das Aulas:",
+      `${horaIni} às ${horaFim}`,
+    ],
+    [
+      "Carga Horária Total/Dia:",
+      `${ch} horas    Quantidade de Cursistas Presentes na Aula: ____`,
+    ],
+  ];
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(20, 20, 20);
+  const linhaAlt = 16;
+  campos.forEach(([label, valor]) => {
+    doc.rect(marginX, y, W - marginX * 2, linhaAlt);
+    doc.setFont("helvetica", "bold");
+    doc.text(label, marginX + 6, y + 11);
+    doc.setFont("helvetica", "normal");
+    const labelW = doc.getTextWidth(label) + 12;
+    const disponivel = W - marginX * 2 - labelW - 12;
+    doc.text(String(valor).slice(0, 200), marginX + 6 + labelW, y + 11, { maxWidth: disponivel });
+    y += linhaAlt;
   });
+  y += 4;
 
-  // Rodapé
-  const footerY = H - 70;
+  // ————— Tabela de cursistas —————
+  const tableX = marginX;
+  const tableW = W - marginX * 2;
+  // colunas: Nº | Nome | CPF | Data/Frequência | Lanche | Assinatura
+  const wNo = 22;
+  const wNome = 170;
+  const wCPF = 76;
+  const wFreq = 74;
+  const wLanche = 74;
+  const wAss = tableW - (wNo + wNome + wCPF + wFreq + wLanche);
+  const xs = [
+    tableX,
+    tableX + wNo,
+    tableX + wNo + wNome,
+    tableX + wNo + wNome + wCPF,
+    tableX + wNo + wNome + wCPF + wFreq,
+    tableX + wNo + wNome + wCPF + wFreq + wLanche,
+    tableX + tableW,
+  ];
+
+  const headerH = 30;
+  doc.setFillColor(...AZUL);
+  doc.rect(tableX, y, tableW, headerH, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+
+  const dataLabel = formatarDataBR(lista.aula.data);
+  const headers = [
+    "Nº",
+    "NOME COMPLETO DO/A CURSISTA\n(digitalizado)",
+    "CPF\n(digitalizado)",
+    `Data ${dataLabel}\nFrequência`,
+    "ENTREGA DO LANCHE\n(QUANDO FOR DIÁRIO)",
+    "ASSINATURA DO/A\nCURSISTA",
+  ];
+  headers.forEach((h, i) => {
+    const cx = xs[i] + (xs[i + 1] - xs[i]) / 2;
+    const partes = h.split("\n");
+    partes.forEach((p, j) => {
+      doc.text(p, cx, y + 12 + j * 9, { align: "center" });
+    });
+  });
+  // grade do header
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.4);
+  for (let i = 1; i < xs.length - 1; i += 1) {
+    doc.line(xs[i], y, xs[i], y + headerH);
+  }
+  y += headerH;
+
+  // linhas
   doc.setDrawColor(120, 120, 120);
-  doc.setLineWidth(0.5);
-  doc.line(marginX, footerY, marginX + 220, footerY);
-  doc.line(W - marginX - 220, footerY, W - marginX, footerY);
+  doc.setLineWidth(0.4);
+  doc.setTextColor(20, 20, 20);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(60, 60, 60);
-  doc.text("Assinatura do(a) Instrutor(a)", marginX, footerY + 12);
-  doc.text("Coordenação Pedagógica", W - marginX - 220, footerY + 12);
-  doc.text(
-    `Data de referência: ${dataPorExtenso(lista.aula.data)}`,
-    W / 2, footerY + 30, { align: "center" },
+  doc.setFontSize(8.5);
+  const linhaTabH = Math.min(
+    24,
+    Math.floor((H - y - 60) / linhas.length),
   );
-  doc.text(`Página ${pageNo}/${total}`, W - marginX, H - 24, { align: "right" });
+  const rowH = Math.max(18, linhaTabH);
+  const numeroInicial = (paginaLista - 1) * LINHAS_POR_PAGINA + 1;
+  linhas.forEach((c, i) => {
+    const rowY = y + i * rowH;
+    doc.rect(tableX, rowY, tableW, rowH);
+    for (let j = 1; j < xs.length - 1; j += 1) {
+      doc.line(xs[j], rowY, xs[j], rowY + rowH);
+    }
+    const numero = String(numeroInicial + i).padStart(2, "0");
+    doc.text(numero, xs[0] + wNo / 2, rowY + rowH / 2 + 3, { align: "center" });
+    if (c.nome) {
+      doc.text(c.nome.slice(0, 44), xs[1] + 4, rowY + rowH / 2 + 3);
+    }
+    if (c.cpf) {
+      doc.text(formatarCPF(c.cpf), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
+    }
+  });
+  y += rowH * linhas.length;
+
+  // ————— Rodapé: assinatura do instrutor —————
+  y += 18;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(20, 20, 20);
+  doc.text("ASSINATURA DO/A INSTRUTOR/A:", marginX, y);
+  doc.setLineWidth(0.6);
+  doc.line(marginX + doc.getTextWidth("ASSINATURA DO/A INSTRUTOR/A:") + 8, y + 2, W - marginX, y + 2);
+
+  // Página X/Y
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    `Página ${pageNo}/${totalDocPag}${totalPaginasLista > 1 ? ` — folha ${paginaLista}/${totalPaginasLista}` : ""}`,
+    W - marginX, H - 16, { align: "right" },
+  );
+  doc.text(`Data de referência: ${dataPorExtenso(lista.aula.data)}`, marginX, H - 16);
 }
 
 // -------------------------------- XLSX --------------------------------
