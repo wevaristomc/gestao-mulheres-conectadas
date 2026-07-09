@@ -77,6 +77,10 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
       grades: 0,
       matched_users: 0,
       matched_courses: 0,
+      emails_beneficiarias: 0,
+      telefones_beneficiarias: 0,
+      professores_no_dump: 0,
+      professores_sem_conta: 0,
     };
 
     // Caches locais (não usam module scope — sobrevivem ao splitter)
@@ -87,10 +91,20 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
       { courseid: number | null; itemname: string | null; itemtype: string | null; grademax: number | null }
     > = new Map();
 
+    // Contatos e papéis capturados durante o parse — usados no cruzamento pós-import
+    const phoneByMoodleId = new Map<number, string>();
+    const emailByMoodleId = new Map<number, string>();
+    const contactByMoodleId = new Map<number, { firstname: string | null; lastname: string | null; email: string | null; cpf: string | null }>();
+    const teacherRoleIds = new Set<number>(); // pmc_role.id cujo shortname é (editing)teacher
+    const contextIdToCourseId = new Map<number, number>(); // pmc_context.id → instanceid (courseid) quando contextlevel = 50
+    const teacherMoodleIds = new Set<number>();
+    const teachersByCourse = new Map<number, Set<number>>();
+
     // Parseia todos os INSERTs de uma vez (o parser filtra tabelas de interesse)
     const inserts = parseInserts(text);
 
-    // Passada 1: dependências (pmc_enrol, pmc_modules, pmc_grade_items)
+    // Passada 1: dependências (pmc_enrol, pmc_modules, pmc_grade_items,
+    // além de pmc_user/pmc_role/pmc_context/pmc_role_assignments para email/telefone/professores)
     for (const ins of inserts) {
       const idx = colIdx(ins.columns);
       if (ins.table === "pmc_enrol") {
@@ -117,6 +131,60 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
               grademax: toNum(r[idx.grademax ?? -1] ?? null),
             });
           }
+        }
+      } else if (ins.table === "pmc_user") {
+        for (const r of ins.rows) {
+          const id = toNum(r[idx.id ?? -1] ?? null);
+          if (id == null) continue;
+          const email = r[idx.email ?? -1] ?? null;
+          const p1 = r[idx.phone1 ?? -1] ?? null;
+          const p2 = r[idx.phone2 ?? -1] ?? null;
+          const phone = (p1 && p1.trim()) || (p2 && p2.trim()) || null;
+          if (email && email.includes("@")) emailByMoodleId.set(id, email);
+          if (phone) phoneByMoodleId.set(id, phone);
+          const username = r[idx.username ?? -1] ?? null;
+          const idnumber = r[idx.idnumber ?? -1] ?? null;
+          contactByMoodleId.set(id, {
+            firstname: r[idx.firstname ?? -1] ?? null,
+            lastname: r[idx.lastname ?? -1] ?? null,
+            email: email && email.includes("@") ? email : null,
+            cpf: pickCpf(idnumber, username),
+          });
+        }
+      } else if (ins.table === "pmc_role") {
+        for (const r of ins.rows) {
+          const id = toNum(r[idx.id ?? -1] ?? null);
+          const shortname = (r[idx.shortname ?? -1] ?? "").toLowerCase();
+          if (id != null && (shortname === "teacher" || shortname === "editingteacher")) {
+            teacherRoleIds.add(id);
+          }
+        }
+      } else if (ins.table === "pmc_context") {
+        for (const r of ins.rows) {
+          const id = toNum(r[idx.id ?? -1] ?? null);
+          const level = toNum(r[idx.contextlevel ?? -1] ?? null);
+          const inst = toNum(r[idx.instanceid ?? -1] ?? null);
+          if (id != null && level === 50 && inst != null) contextIdToCourseId.set(id, inst);
+        }
+      }
+    }
+
+    // Passada 1b: role_assignments depende dos maps acima
+    for (const ins of inserts) {
+      if (ins.table !== "pmc_role_assignments") continue;
+      const idx = colIdx(ins.columns);
+      for (const r of ins.rows) {
+        const roleid = toNum(r[idx.roleid ?? -1] ?? null);
+        const userid = toNum(r[idx.userid ?? -1] ?? null);
+        const ctxid = toNum(r[idx.contextid ?? -1] ?? null);
+        if (roleid == null || userid == null) continue;
+        if (!teacherRoleIds.has(roleid)) continue;
+        teacherMoodleIds.add(userid);
+        const cid = ctxid != null ? contextIdToCourseId.get(ctxid) ?? null : null;
+        if (cid != null) {
+          let set = teachersByCourse.get(cid);
+          if (!set) { set = new Set(); teachersByCourse.set(cid, set); }
+          set.add(userid);
         }
       }
     }
@@ -252,20 +320,35 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
     // Cruzamento pós-import: users ← beneficiarias (por CPF)
     const { data: benef } = await admin
       .from("beneficiarias")
-      .select("id, cpf")
+      .select("id, cpf, email, telefone")
       .not("cpf", "is", null);
     if (benef) {
-      const mapa = new Map<string, string>();
-      for (const b of benef as { id: string; cpf: string }[]) mapa.set(b.cpf, b.id);
+      const mapa = new Map<string, { id: string; email: string | null; telefone: string | null }>();
+      for (const b of benef as { id: string; cpf: string; email: string | null; telefone: string | null }[]) {
+        mapa.set(b.cpf, { id: b.id, email: b.email, telefone: b.telefone });
+      }
       const { data: users } = await admin
         .from("ava_users")
         .select("moodle_id, cpf")
         .not("cpf", "is", null)
         .is("beneficiaria_id", null);
       for (const u of (users ?? []) as { moodle_id: number; cpf: string }[]) {
-        const bid = mapa.get(u.cpf);
-        if (!bid) continue;
-        await admin.from("ava_users").update({ beneficiaria_id: bid }).eq("moodle_id", u.moodle_id);
+        const found = mapa.get(u.cpf);
+        if (!found) continue;
+        // Preenche email/telefone da beneficiária APENAS quando estiverem vazios
+        const patch: Record<string, string> = {};
+        const avaEmail = emailByMoodleId.get(u.moodle_id);
+        const avaPhone = phoneByMoodleId.get(u.moodle_id);
+        if (avaEmail && (!found.email || !found.email.trim())) patch.email = avaEmail;
+        if (avaPhone && (!found.telefone || !found.telefone.trim())) patch.telefone = avaPhone;
+        if (Object.keys(patch).length > 0) {
+          const { error: upErr } = await admin.from("beneficiarias").update(patch).eq("id", found.id);
+          if (!upErr) {
+            if (patch.email) resumo.emails_beneficiarias += 1;
+            if (patch.telefone) resumo.telefones_beneficiarias += 1;
+          }
+        }
+        await admin.from("ava_users").update({ beneficiaria_id: found.id }).eq("moodle_id", u.moodle_id);
         resumo.matched_users += 1;
       }
     }
@@ -304,14 +387,46 @@ export const importarDumpMoodle = createServerFn({ method: "POST" })
       }
     }
 
+    // Professores identificados no dump — só relatório, não cria auth.users
+    resumo.professores_no_dump = teacherMoodleIds.size;
+    const professores: Array<{ moodle_id: number; nome: string; email: string | null; cpf: string | null; sem_conta: boolean }> = [];
+    if (teacherMoodleIds.size > 0) {
+      const emailsProf = new Set<string>();
+      for (const mid of teacherMoodleIds) {
+        const c = contactByMoodleId.get(mid);
+        if (!c) continue;
+        const nome = `${c.firstname ?? ""} ${c.lastname ?? ""}`.trim();
+        professores.push({ moodle_id: mid, nome: nome || `#${mid}`, email: c.email, cpf: c.cpf, sem_conta: false });
+        if (c.email) emailsProf.add(c.email.toLowerCase());
+      }
+      // Verifica quais e-mails já têm conta no auth
+      if (emailsProf.size > 0) {
+        const jaCadastrados = new Set<string>();
+        let page = 1;
+        while (page < 50) {
+          const { data: list, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+          if (error) break;
+          for (const u of list.users) if (u.email) jaCadastrados.add(u.email.toLowerCase());
+          if (list.users.length < 200) break;
+          page += 1;
+        }
+        for (const p of professores) {
+          if (p.email && !jaCadastrados.has(p.email.toLowerCase())) {
+            p.sem_conta = true;
+            resumo.professores_sem_conta += 1;
+          }
+        }
+      }
+    }
+
     await admin
       .from("ava_importacoes")
       .update({
         status: "concluido",
         terminado_em: new Date().toISOString(),
-        resumo,
+        resumo: { ...resumo, professores },
       })
       .eq("id", importacaoId);
 
-    return { importacao_id: importacaoId, resumo };
+    return { importacao_id: importacaoId, resumo, professores };
   });
