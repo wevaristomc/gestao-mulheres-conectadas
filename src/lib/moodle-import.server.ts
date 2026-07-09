@@ -12,6 +12,9 @@ export const TABELAS_ALVO = new Set<string>([
   "pmc_course_modules_completion",
   "pmc_grade_items",
   "pmc_grade_grades",
+  "pmc_role_assignments",
+  "pmc_role",
+  "pmc_context",
 ]);
 
 export type ParsedInsert = {
