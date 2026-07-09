@@ -385,7 +385,9 @@ export function pedagogicoResumoOptions(projetoId: string | null) {
         totCert += certCount;
         result.push({
           turmaId: t.id,
-          turmaNome: pickStr(t, ["nome", "titulo", "descricao"]) ?? t.id,
+          turmaNome:
+            pickStr(t, ["nome", "titulo", "descricao", "codigo_turma", "nome_curso"]) ??
+            "Turma sem nome",
           matriculados,
           qualificados: qualCount,
           certificados: certCount,
