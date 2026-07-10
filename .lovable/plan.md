@@ -1,35 +1,35 @@
-## Objetivo
+## Problema
 
-No diálogo de Nova/Editar aula (aba Aulas do Pedagógico), preencher automaticamente **Instrutor/a**, **Hora início** e **Hora fim** a partir dos dados já cadastrados na turma, quando a própria aula ainda não tiver esses campos.
+Ao gerar listas de presença (diálogo "Gerar listas"), dois sintomas:
 
-Hoje esses campos ficam vazios mesmo com a turma tendo professor titular e horário definidos — o usuário precisa redigitar em cada aula.
+1. **Na tela**: para aulas antigas cadastradas antes do MTE, a coluna do tema mostra "(sem tema)" porque só lê `conteudo_programatico` — dados legados vivem em `titulo` / `tema` / `assunto` / `descricao`.
+2. **No PDF gerado**: campos Instrutor/a, Hora início, Hora fim e Carga horária vêm em branco quando a aula não os tem preenchidos, mesmo com a turma já tendo esses dados cadastrados. O gerador só usa `aula.*` — não faz fallback para a turma como a tela de "editar aula" já faz.
 
-## Regra de preenchimento
+## Solução
 
-Para cada campo, usar a primeira fonte não-vazia:
-
-- **Instrutor/a**: `aula.instrutor` → `turma.professor_nome`
-- **Hora início**: `aula.hora_inicio` → `turma.hora_inicio` → parse de `turma.horario_realizacao` (padrão "HH:MM às HH:MM", "HH:MM-HH:MM", "HH:MMh às HH:MMh")
-- **Hora fim**: `aula.hora_fim` → `turma.hora_fim` → parse de `turma.horario_realizacao`
-
-Vale tanto no modo **Nova aula** (todos os campos vêm da turma) quanto **Editar aula** (só preenche o que estiver vazio na aula; se o usuário já digitou algo diferente, mantém).
-
-O usuário continua podendo editar/sobrescrever qualquer campo antes de salvar — o pré-preenchimento é só um default visível no formulário.
+Aplicar no diálogo o mesmo padrão de fallback já usado no `AulaFormDialog`: cada campo puxa da aula quando existir, senão da turma, senão do parse de `turma.horario_realizacao`. Sem tocar em migrations, gerador de PDF/XLSX/DOCX, `upsertAula`, ou outras rotas.
 
 ## Mudanças
 
-### `src/routes/_authenticated/pedagogico.turmas.$id.aulas.tsx`
+### `src/components/pedagogico/dialog-gerar-listas.tsx`
 
-1. A rota já carrega `turmaByIdOptions(turmaId)` para o card de comprovação — reaproveitar essa query e passar `turma` como prop para `AulaFormDialog` (evita segunda requisição).
-2. Em `AulaFormDialog`:
-   - Adicionar helper local `parseHorario(horario)` que extrai `{ inicio, fim }` no formato `HH:MM` de strings tipo "08:00 às 12:00", "8h às 12h", "08:00-12:00". Retorna `{ null, null }` se não casar.
-   - Nos `useState` iniciais, aplicar o fallback descrito acima usando `turma.professor_nome`, `turma.hora_inicio`, `turma.hora_fim` e `parseHorario(turma.horario_realizacao)`.
-   - Nada muda no submit — `salvar` já grava os cinco campos MTE via `upsertAula`.
+1. Carregar também a linha bruta da turma (`turmaByIdOptions(turmaId)` de `@/lib/pedagogico-queries`) além de `turmasMteListOptions`. A primeira já tem `professor_nome`, `hora_inicio`, `hora_fim`, `horario_realizacao` que a versão MTE não expõe.
 
-Nenhuma outra rota, o gerador de PDF, `upsertAula`, migrations ou schema mudam. Só UI de formulário.
+2. Adicionar helper local `parseHorario(horario)` idêntico ao do `AulaFormDialog` — extrai `{ inicio, fim }` no formato `HH:MM` de strings como "08:00 às 12:00", "8h às 12h", "08:00-12:00".
+
+3. Renderização da lista de aulas (`<ul>` com checkboxes): mudar `a.conteudo_programatico ?? "(sem tema)"` para usar `pickFirst(a, ["conteudo_programatico", "titulo", "tema", "assunto", "descricao"])`, e a CH para `pickFirst(a, ["ch_prevista", "duracao", "carga_horaria"])`. Assim aulas antigas mostram o tema real na tela.
+
+4. `construirLista(turma, aula, cursistas, extras)`: aceitar também o `turmaRow` bruto e aplicar fallback por campo:
+   - `tema`: `aula.conteudo_programatico` → `aula.titulo` → `aula.tema`.
+   - `cargaHoraria`: `aula.ch_prevista` → `aula.duracao` → `turma.ch_total / turma.qtd_dias_curso` quando ambos existirem, formatado com `h`.
+   - `instrutor`: `aula.instrutor` → `turmaRow.professor_nome` → `turmaRow.instrutor`.
+   - `horaInicio`: `aula.hora_inicio` → `turmaRow.hora_inicio` → `parseHorario(turmaRow.horario_realizacao).inicio`.
+   - `horaFim`: análogo para o fim.
+
+Nenhuma alteração no gerador (`src/lib/lista-presenca-gerador.ts`) — ele já respeita os campos que receber; o problema é só o preenchimento upstream.
 
 ## Verificação
 
-- Abrir uma aula existente sem instrutor/horário → os três campos aparecem preenchidos com dados da turma; salvar persiste na aula (o gerador de lista de presença passa a ler direto de `aulas.instrutor` / `hora_inicio` / `hora_fim`).
-- Abrir aula que já tem instrutor próprio (diferente do da turma) → mantém o valor da aula.
-- "Nova aula" numa turma com horário/professor definidos → campos já vêm preenchidos.
+- Abrir o diálogo numa turma com aulas antigas (só `titulo`/`duracao` preenchidos) → coluna de tema mostra o texto real e CH aparece na lateral direita.
+- Gerar PDF de aula sem instrutor/horário próprios, mas com turma que tem `professor_nome` e `horario_realizacao` "08:00 às 12:00" → cabeçalho institucional mostra o instrutor da turma e "08:00 às 12:00" no campo "Horário de Início e Fim das Aulas".
+- Aula que já tem instrutor/horário próprios → mantém os valores da aula (fallback só entra em branco).
