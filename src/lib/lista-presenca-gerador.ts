@@ -331,9 +331,12 @@ function renderPrimeiraPaginaPDF(
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  const reservaRodape = ehUltima ? 60 : 26;
-  const linhaTabH = Math.floor((H - y - reservaRodape) / linhas.length);
-  const rowH = Math.max(18, Math.min(24, linhaTabH));
+  // Área útil: até H − 28 (28pt reservados para o rodapé de controle).
+  const bottomLimite = H - 28;
+  const reservaAssinatura = ehUltima ? 52 : 0;
+  const disponivel = bottomLimite - y - reservaAssinatura;
+  const linhaTabH = Math.floor(disponivel / linhas.length);
+  const rowH = Math.max(16, Math.min(22, linhaTabH));
   const numeroInicial = 1;
   linhas.forEach((c, i) => {
     const rowY = y + i * rowH;
@@ -385,8 +388,12 @@ function renderContinuacaoPDF(
   const wCPF = xs[3] - xs[2];
 
   const yTop = 34;
-  const reservaRodape = ehUltima ? 66 : 26;
-  const rowH = Math.max(18, Math.min(24, Math.floor((H - yTop - reservaRodape) / linhas.length)));
+  const bottomLimite = H - 28;
+  const reservaAssinatura = ehUltima ? 52 : 0;
+  const rowH = Math.max(
+    16,
+    Math.min(22, Math.floor((bottomLimite - yTop - reservaAssinatura) / linhas.length)),
+  );
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
