@@ -71,9 +71,15 @@ function ordenarCursistas(rows: Cursista[]): Cursista[] {
 // - Última folha (que também é uma folha de continuação, exceto quando a
 //   turma cabe toda na primeira): reserva espaço para o bloco de assinatura
 //   do/a instrutor/a no rodapé, dentro de uma caixa.
-const LINHAS_PRIMEIRA_PAGINA = 22;
-const LINHAS_CONTINUACAO = 40;
-const LINHAS_ULTIMA = 33;
+// Recalculado para as novas medidas fixas:
+// - Cabeçalho institucional: 290pt (marginTop 34 + 290 + 4 gap = 328)
+// - Cabeçalho da tabela: 36pt → tabela começa em ~364
+// - Rodapé de controle absoluto em H−10; área útil termina em H−28 = 814
+// - Assinatura: caixa 42pt + 10pt gap = 52pt (só na última folha)
+//   rowH ~20pt.
+const LINHAS_PRIMEIRA_PAGINA = 20;
+const LINHAS_CONTINUACAO = 38;
+const LINHAS_ULTIMA = 35;
 
 type FolhaLista = { linhas: Cursista[]; tipo: "primeira" | "continuacao" | "ultima" };
 
@@ -197,12 +203,12 @@ function calcularXs(marginX: number, tableW: number): number[] {
 // Rodapé de controle interno (cinza), impresso em todas as folhas.
 function rodapeControle(doc: jsPDF, W: number, H: number, marginX: number, dataAula: string | null, pageNo: number, totalDocPag: number, paginaLista: number, totalPaginasLista: number) {
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(160, 160, 160);
+  doc.setFontSize(6.5);
+  doc.setTextColor(170, 170, 170);
   doc.text(
     `Data de referência ${dataPorExtenso(dataAula)} — Página ${pageNo}/${totalDocPag}` +
       (totalPaginasLista > 1 ? ` — folha ${paginaLista}/${totalPaginasLista}` : ""),
-    W - marginX, H - 12, { align: "right" },
+    W - marginX, H - 10, { align: "right" },
   );
 }
 
