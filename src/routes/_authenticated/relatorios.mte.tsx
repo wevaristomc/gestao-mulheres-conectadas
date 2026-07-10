@@ -313,6 +313,110 @@ function exportarXLSX(
     ]);
     ws2["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, cols.length - 1) } }];
     XLSX.utils.book_append_sheet(wb, ws2, sheetName.slice(0, 31));
+  } else if (opts.variant === "cursos_executados") {
+    const nc = CURSOS_EXECUTADOS_COLS.length;
+    // Linha 1: título; linha 2: grupos (CH / Período mesclado); linha 3: rótulos
+    const linhaGrupos: string[] = [];
+    CURSOS_EXECUTADOS_COLS.forEach((c) => {
+      if (c.group === "CH") linhaGrupos.push(linhaGrupos.length && linhaGrupos[linhaGrupos.length - 1] === "Carga Horária" ? "" : "Carga Horária");
+      else if (c.group === "PERIODO") linhaGrupos.push(linhaGrupos.length && linhaGrupos[linhaGrupos.length - 1] === "Período de Realização" ? "" : "Período de Realização");
+      else linhaGrupos.push("");
+    });
+    const cabecalho = [
+      [CABECALHO_CURSOS_EXECUTADOS, ...Array(nc - 1).fill("")],
+      linhaGrupos,
+      CURSOS_EXECUTADOS_COLS.map((c) => c.label),
+      ...rows.map((r) =>
+        CURSOS_EXECUTADOS_COLS.map((c) => pegar(r as Record<string, unknown>, c.key)),
+      ),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(cabecalho);
+    const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: nc - 1 } }];
+    // Merge grupos CH / PERIODO
+    const chStart = CURSOS_EXECUTADOS_COLS.findIndex((c) => c.group === "CH");
+    const chEnd = CURSOS_EXECUTADOS_COLS.map((c, i) => (c.group === "CH" ? i : -1)).filter((i) => i >= 0).pop() ?? -1;
+    if (chStart >= 0 && chEnd > chStart) merges.push({ s: { r: 1, c: chStart }, e: { r: 1, c: chEnd } });
+    const pStart = CURSOS_EXECUTADOS_COLS.findIndex((c) => c.group === "PERIODO");
+    const pEnd = CURSOS_EXECUTADOS_COLS.map((c, i) => (c.group === "PERIODO" ? i : -1)).filter((i) => i >= 0).pop() ?? -1;
+    if (pStart >= 0 && pEnd > pStart) merges.push({ s: { r: 1, c: pStart }, e: { r: 1, c: pEnd } });
+    ws["!merges"] = merges;
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  } else if (opts.variant === "relacao_final_qualificados") {
+    const allCols = REL_FINAL_GROUPS.flatMap((g) => g.cols);
+    const nc = allCols.length;
+    const linhaCab = [
+      "RELAÇÃO FINAL DE QUALIFICADOS",
+      ...Array(nc - 1).fill(""),
+    ];
+    const info = [
+      [`Modalidade de Instrumento: ${INSTRUMENTO.modalidade}`],
+      [`CNPJ e Nome da Executora: ${INSTRUMENTO.executora}`],
+      [`Nº do Instrumento (TransfereGov): ${INSTRUMENTO.transferegov}`],
+      [`NUP/SEI/MTE: ${INSTRUMENTO.nup_sei}`],
+      [`Início da Vigência: —`],
+      [`Fim da Vigência: —`],
+      [`Meta de Qualificados: —`],
+      [],
+    ];
+    const linhaGrupos: string[] = [];
+    for (const g of REL_FINAL_GROUPS) {
+      linhaGrupos.push(g.grupo);
+      for (let i = 1; i < g.cols.length; i += 1) linhaGrupos.push("");
+    }
+    const linhaLabels = allCols.map((c) => c.label);
+    const dataRows = rows.map((r, idx) => {
+      const rec = r as Record<string, unknown>;
+      return allCols.map((c) => {
+        if (c.key === "ordem") return idx + 1;
+        const aliases = c.aliases ?? [c.key];
+        let val: unknown = "";
+        for (const a of aliases) {
+          if (a in rec && rec[a] != null && rec[a] !== "") {
+            val = rec[a];
+            break;
+          }
+        }
+        // PS-XX: SIM/NÃO
+        if (c.key.startsWith("ps_")) {
+          if (val === true || String(val).toLowerCase() === "sim") return "SIM";
+          if (val === false || String(val).toLowerCase() === "não" || String(val).toLowerCase() === "nao") return "NÃO";
+          return "NÃO";
+        }
+        if (c.type === "pct01" && typeof val === "number") {
+          return val <= 1 ? val : val / 100;
+        }
+        if (c.key === "idade" && !val) {
+          // Calcular a partir de data_nascimento se houver
+          const dn = rec.data_nascimento ?? rec.nascimento;
+          if (dn) {
+            const dt = new Date(String(dn));
+            if (!Number.isNaN(dt.getTime())) {
+              const now = new Date();
+              let age = now.getFullYear() - dt.getFullYear();
+              const m = now.getMonth() - dt.getMonth();
+              if (m < 0 || (m === 0 && now.getDate() < dt.getDate())) age -= 1;
+              return age;
+            }
+          }
+          return "";
+        }
+        return val ?? "";
+      });
+    });
+    const aoa = [linhaCab, ...info, linhaGrupos, linhaLabels, ...dataRows];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: nc - 1 } }];
+    // Merge dos grupos na linha de grupos (linhaGrupos index = 1 + info.length)
+    let col = 0;
+    const grupoRow = 1 + info.length;
+    for (const g of REL_FINAL_GROUPS) {
+      if (g.cols.length > 1) {
+        merges.push({ s: { r: grupoRow, c: col }, e: { r: grupoRow, c: col + g.cols.length - 1 } });
+      }
+      col += g.cols.length;
+    }
+    ws["!merges"] = merges;
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   } else {
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
