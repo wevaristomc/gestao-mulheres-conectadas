@@ -131,30 +131,42 @@ export function renderCabecalhoInstitucional(
     for (let i = 0; i < alturas.length; i += 1) alturas[i] *= fator;
   }
 
-  // ————— Coluna esquerda: 5 logos, shrink-to-fit dentro da altura fixa —————
-  const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
+  // ————— Coluna esquerda: 5 logos com aspect ratio preservado —————
+  // Largura-alvo INDIVIDUAL por logo (fração da largura da coluna), imitando
+  // o documento oficial escaneado. Índices seguem LOGO_ARQUIVOS.
+  const LARGURAS_FRACAO = [0.80, 0.42, 0.78, 0.45, 0.65];
+  // Só filtramos nulos preservando o índice original para casar a fração.
+  const logosComIndice = logos
+    .map((l, i) => ({ logo: l, idx: i }))
+    .filter((x): x is { logo: LogoInstitucional; idx: number } => Boolean(x.logo));
   const gapLogos = 6;
-  const larguraSlot = leftW * 0.75;
-  const naturalHs = logosValidos.map((l) => larguraSlot * (l.h / l.w));
-  const somaNatural = naturalHs.reduce((a, b) => a + b, 0);
-  const gapsTotal = gapLogos * (logosValidos.length + 1);
+  // Dimensões naturais (aspect ratio preservado) na largura-alvo.
+  const naturais = logosComIndice.map(({ logo, idx }) => {
+    const frac = LARGURAS_FRACAO[idx] ?? 0.65;
+    const w = leftW * frac;
+    const h = w * (logo.h / logo.w);
+    return { w, h };
+  });
+  const somaNaturalH = naturais.reduce((a, b) => a + b.h, 0);
+  const gapsTotal = gapLogos * (logosComIndice.length + 1);
   const disponivelLogos = alturaTotal - gapsTotal;
+  // Shrink-to-fit UNIFORME em ambas as dimensões (nunca distorcer).
   const escala =
-    somaNatural > 0 && somaNatural > disponivelLogos ? disponivelLogos / somaNatural : 1;
-  const alturasLogos = naturalHs.map((h) => h * escala);
+    somaNaturalH > 0 && somaNaturalH > disponivelLogos ? disponivelLogos / somaNaturalH : 1;
+  const dimsLogos = naturais.map((n) => ({ w: n.w * escala, h: n.h * escala }));
 
   // ————— Coluna esquerda: caixa única com logos empilhados —————
   doc.setDrawColor(0);
   doc.setLineWidth(0.6);
   doc.rect(marginX, yStart, leftW, alturaTotal);
 
-  if (logosValidos.length > 0) {
-    const totalLogosH = alturasLogos.reduce((a, b) => a + b, 0);
-    const gapEfetivo = (alturaTotal - totalLogosH) / (logosValidos.length + 1);
+  if (logosComIndice.length > 0) {
+    const totalLogosH = dimsLogos.reduce((a, b) => a + b.h, 0);
+    const gapEfetivo = (alturaTotal - totalLogosH) / (logosComIndice.length + 1);
     let yLogo = yStart + gapEfetivo;
-    logosValidos.forEach((logo, i) => {
-      const hw = larguraSlot;
-      const hh = alturasLogos[i];
+    logosComIndice.forEach(({ logo }, i) => {
+      const hw = dimsLogos[i].w;
+      const hh = dimsLogos[i].h;
       const lx = marginX + (leftW - hw) / 2;
       try {
         doc.addImage(logo.dataUrl, logo.format, lx, yLogo, hw, hh);
