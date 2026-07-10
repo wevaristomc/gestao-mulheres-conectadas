@@ -106,15 +106,22 @@ export function renderCabecalhoInstitucional(
   });
   let alturaTotal = alturas.reduce((a, b) => a + b, 0);
 
-  // Garante altura mínima do cabeçalho para acomodar os 5 logos de forma
-  // legível no lado esquerdo. Se a soma das alturas do lado direito for
-  // menor, cresce proporcionalmente cada linha.
-  const logosCount = logos.filter(Boolean).length || 1;
-  const alturaMinima = logosCount * 58 + (logosCount + 1) * 8; // ~340pt p/ 5 logos
-  if (alturaTotal < alturaMinima) {
-    const fator = alturaMinima / alturaTotal;
+  // Coluna esquerda: cada logo mantém sua proporção natural.
+  // A largura de todos os logos é fixa (~82% da coluna); a altura de cada
+  // slot é largura/aspect. A altura mínima do cabeçalho vira a soma dessas
+  // alturas naturais + gaps — assim logos "altos" (como o 3-MTEL/MTE) não
+  // ficam minúsculos por compartilharem a mesma altura de linha com logos
+  // largos.
+  const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
+  const gapLogos = 8;
+  const larguraSlot = leftW * 0.82;
+  const alturasLogos = logosValidos.map((l) => larguraSlot * (l.h / l.w));
+  const alturaLogosCol =
+    alturasLogos.reduce((a, b) => a + b, 0) + gapLogos * (logosValidos.length + 1);
+  if (alturaTotal < alturaLogosCol) {
+    const fator = alturaLogosCol / alturaTotal;
     for (let i = 0; i < alturas.length; i += 1) alturas[i] = alturas[i] * fator;
-    alturaTotal = alturaMinima;
+    alturaTotal = alturaLogosCol;
   }
 
   // ————— Coluna esquerda: caixa única com logos empilhados —————
@@ -122,29 +129,23 @@ export function renderCabecalhoInstitucional(
   doc.setLineWidth(0.6);
   doc.rect(marginX, yStart, leftW, alturaTotal);
 
-  const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
   if (logosValidos.length > 0) {
-    const gap = 8;
-    const alturaSlot = (alturaTotal - gap * (logosValidos.length + 1)) / logosValidos.length;
-    // logos ocupam ~80% da largura da coluna, centralizados
-    const larguraSlot = leftW * 0.82;
-    let yLogo = yStart + gap;
-    logosValidos.forEach((logo) => {
-      const aspect = logo.w / logo.h;
-      let hw = larguraSlot;
-      let hh = hw / aspect;
-      if (hh > alturaSlot) {
-        hh = alturaSlot;
-        hw = hh * aspect;
-      }
+    // Distribui gaps extras uniformemente caso o lado direito seja mais alto
+    // que a soma natural dos logos.
+    const totalLogosH = alturasLogos.reduce((a, b) => a + b, 0);
+    const gapEfetivo =
+      (alturaTotal - totalLogosH) / (logosValidos.length + 1);
+    let yLogo = yStart + gapEfetivo;
+    logosValidos.forEach((logo, i) => {
+      const hw = larguraSlot;
+      const hh = alturasLogos[i];
       const lx = marginX + (leftW - hw) / 2;
-      const ly = yLogo + (alturaSlot - hh) / 2;
       try {
-        doc.addImage(logo.dataUrl, logo.format, lx, ly, hw, hh);
+        doc.addImage(logo.dataUrl, logo.format, lx, yLogo, hw, hh);
       } catch {
         /* ignora imagem que falhe no addImage */
       }
-      yLogo += alturaSlot + gap;
+      yLogo += hh + gapEfetivo;
     });
   }
 
