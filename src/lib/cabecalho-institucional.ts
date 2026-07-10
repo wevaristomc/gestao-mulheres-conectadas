@@ -226,11 +226,20 @@ function desenharCampo(
   const maxValorW = w - labelW - 12;
   const valorTxt = String(valor ?? "");
   if (valorTxt) {
-    doc.text(valorTxt, valorX, baseY, { maxWidth: maxValorW });
-    if (sublinhar) {
-      const larg = Math.min(doc.getTextWidth(valorTxt), maxValorW);
-      doc.setLineWidth(0.4);
-      doc.line(valorX, baseY + 1.5, valorX + larg, baseY + 1.5);
+    // Sequências de underscore ("_____") como placeholder devem caber
+    // exatamente na célula — jsPDF não quebra "_" com maxWidth, e o traço
+    // vazava para fora do quadro. Recalculamos quantos "_" cabem.
+    if (/^[_\s]+$/.test(valorTxt)) {
+      const oneW = Math.max(doc.getTextWidth("_"), 0.1);
+      const count = Math.max(1, Math.floor(maxValorW / oneW));
+      doc.text("_".repeat(count), valorX, baseY);
+    } else {
+      doc.text(valorTxt, valorX, baseY, { maxWidth: maxValorW });
+      if (sublinhar) {
+        const larg = Math.min(doc.getTextWidth(valorTxt), maxValorW);
+        doc.setLineWidth(0.4);
+        doc.line(valorX, baseY + 1.5, valorX + larg, baseY + 1.5);
+      }
     }
   }
 }
