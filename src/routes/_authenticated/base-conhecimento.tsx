@@ -28,8 +28,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
+import { DriveSyncPanel } from "@/components/base-conhecimento/drive-sync-panel";
 import {
   CATEGORIAS, categoriaLabel, documentosListOptions,
   formatBytes, formatarData, FORMATO_LABEL, getSignedUrl, pickFirst,
@@ -266,6 +268,17 @@ function BaseConhecimentoPage() {
         }
       />
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "biblioteca" | "drive")} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="biblioteca">Biblioteca</TabsTrigger>
+          <TabsTrigger value="drive">Sincronização do Drive</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {tab === "drive" ? (
+        <DriveSyncPanel projetoId={projetoId} />
+      ) : (
+        <>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Total de documentos" value={String(rows.length)} loading={q.isLoading} erro={!!erro} />
         <Kpi
@@ -492,6 +505,8 @@ function BaseConhecimentoPage() {
         busy={importFromDrive.isPending}
         progress={importProgress}
       />
+        </>
+      )}
     </div>
   );
 }

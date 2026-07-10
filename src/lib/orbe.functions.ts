@@ -220,6 +220,7 @@ const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   aulas_da_turma: (a, x) => toolAulasDaTurma(a, x),
   relatorio_deq_resumo: (a) => toolDeqResumo(a),
   buscar_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
+  buscar_base_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
 };
 
 const TOOL_DESCRICOES = `

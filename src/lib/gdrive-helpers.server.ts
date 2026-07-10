@@ -171,6 +171,48 @@ export async function downloadFileBase64(
   return { base64, contentType, size: buf.length };
 }
 
+/** Exporta um Google-native file (Docs/Sheets/Slides) para um mime alvo (ex.: text/plain, text/csv). */
+export async function exportGoogleFile(
+  fileId: string,
+  targetMime: string,
+): Promise<{ text: string; contentType: string; size: number }> {
+  const usp = new URLSearchParams({ mimeType: targetMime, supportsAllDrives: "true" });
+  const res = await gwFetch(`/drive/v3/files/${encodeURIComponent(fileId)}/export?${usp.toString()}`);
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Google Drive: export falhou (${res.status}) ${t.slice(0, 200)}`);
+  }
+  const contentType = res.headers.get("content-type") || targetMime;
+  const text = await res.text();
+  return { text, contentType, size: text.length };
+}
+
+/** Lista arquivos e pastas recursivamente sob rootId (BFS). */
+export async function listRecursive(rootId: string, maxItems = 5000): Promise<Array<GDriveFile & { pasta_caminho: string }>> {
+  const out: Array<GDriveFile & { pasta_caminho: string }> = [];
+  // BFS: fila de { folderId, path }
+  const queue: Array<{ folderId: string; path: string }> = [{ folderId: rootId, path: "" }];
+  while (queue.length > 0 && out.length < maxItems) {
+    const { folderId, path } = queue.shift()!;
+    let pageToken: string | null | undefined = null;
+    do {
+      const page: { files: GDriveFile[]; nextPageToken?: string | null } = await listChildren({
+        folderId, pageToken, pageSize: 200, orderBy: "folder,name",
+      });
+      for (const f of page.files ?? []) {
+        if (out.length >= maxItems) break;
+        if (f.mimeType === FOLDER_MIME) {
+          queue.push({ folderId: f.id, path: path ? `${path}/${f.name}` : f.name });
+        } else {
+          out.push({ ...f, pasta_caminho: path || "/" });
+        }
+      }
+      pageToken = page.nextPageToken ?? null;
+    } while (pageToken);
+  }
+  return out;
+}
+
 export async function createFolder(name: string, parentId: string): Promise<GDriveFile> {
   return gwJson<GDriveFile>(`/drive/v3/files?fields=id,name,mimeType,parents,webViewLink&supportsAllDrives=true`, {
     method: "POST",
