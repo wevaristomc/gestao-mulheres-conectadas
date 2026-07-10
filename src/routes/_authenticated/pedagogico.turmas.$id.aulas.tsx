@@ -88,6 +88,7 @@ function AulasTab() {
           <AulaFormDialog
             turmaId={turmaId}
             aula={null}
+            turma={turmaQ.data?.row ?? null}
             onClose={() => setNovaOpen(false)}
             onSaved={() => {
               qc.invalidateQueries({ queryKey: ["pedagogico", "aulas", turmaId] });
@@ -196,6 +197,7 @@ function AulasTab() {
           <AulaFormDialog
             turmaId={turmaId}
             aula={editando}
+            turma={turmaQ.data?.row ?? null}
             onClose={() => setEditando(null)}
             onSaved={() => {
               qc.invalidateQueries({ queryKey: ["pedagogico", "aulas", turmaId] });
@@ -244,13 +246,28 @@ function AulasTab() {
 }
 
 function AulaFormDialog({
-  turmaId, aula, onClose, onSaved,
+  turmaId, aula, turma, onClose, onSaved,
 }: {
   turmaId: string;
   aula: Row | null;
+  turma: Row | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const parseHorario = (raw: unknown): { inicio: string; fim: string } => {
+    if (!raw) return { inicio: "", fim: "" };
+    const s = String(raw);
+    const m = s.match(/(\d{1,2})(?:[:h](\d{2}))?\s*(?:às|as|-|–|até|a)\s*(\d{1,2})(?:[:h](\d{2}))?/i);
+    if (!m) return { inicio: "", fim: "" };
+    const pad = (h: string, mm?: string) =>
+      `${h.padStart(2, "0")}:${(mm ?? "00").padStart(2, "0")}`;
+    return { inicio: pad(m[1], m[2]), fim: pad(m[3], m[4]) };
+  };
+  const turmaHorario = parseHorario(turma ? pickFirst(turma, ["horario_realizacao", "horario"]) : null);
+  const turmaInstrutor = String((turma ? pickFirst(turma, ["professor_nome", "instrutor"]) : null) ?? "");
+  const turmaHoraInicio = String((turma ? pickFirst(turma, ["hora_inicio"]) : null) ?? "").slice(0, 5) || turmaHorario.inicio;
+  const turmaHoraFim = String((turma ? pickFirst(turma, ["hora_fim"]) : null) ?? "").slice(0, 5) || turmaHorario.fim;
+
   const initialData = aula ? String(aula.data ?? "").slice(0, 10) : "";
   const initialTema = aula
     ? String(aula.conteudo_programatico ?? aula.titulo ?? aula.tema ?? aula.assunto ?? "")
@@ -258,9 +275,12 @@ function AulaFormDialog({
   const initialCh = aula
     ? String(aula.ch_prevista ?? aula.duracao ?? aula.carga_horaria ?? "")
     : "";
-  const initialHoraInicio = aula ? String(aula.hora_inicio ?? "").slice(0, 5) : "";
-  const initialHoraFim = aula ? String(aula.hora_fim ?? "").slice(0, 5) : "";
-  const initialInstrutor = aula ? String(aula.instrutor ?? "") : "";
+  const aulaHoraInicio = aula ? String(aula.hora_inicio ?? "").slice(0, 5) : "";
+  const aulaHoraFim = aula ? String(aula.hora_fim ?? "").slice(0, 5) : "";
+  const aulaInstrutor = aula ? String(aula.instrutor ?? "") : "";
+  const initialHoraInicio = aulaHoraInicio || turmaHoraInicio;
+  const initialHoraFim = aulaHoraFim || turmaHoraFim;
+  const initialInstrutor = aulaInstrutor || turmaInstrutor;
 
   const [data, setData] = useState<string>(initialData);
   const [tema, setTema] = useState<string>(initialTema);

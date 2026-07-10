@@ -1,37 +1,35 @@
-## Problema
+## Objetivo
 
-O formulário de "Nova aula" na aba Pedagógico → Turma → Aulas grava só `data`, `titulo`, `duracao`. O gerador da Lista de Frequência (e o diálogo "Gerar listas de presença") lê os campos oficiais MTE da mesma tabela `aulas`: `conteudo_programatico`, `ch_prevista`, `hora_inicio`, `hora_fim`, `instrutor`. Resultado: aulas criadas pela UI pedagógica aparecem como "(sem tema)", "—h", e o PDF sai com Conteúdo/Horário/CH/Instrutor em branco.
+No diálogo de Nova/Editar aula (aba Aulas do Pedagógico), preencher automaticamente **Instrutor/a**, **Hora início** e **Hora fim** a partir dos dados já cadastrados na turma, quando a própria aula ainda não tiver esses campos.
 
-## Correção (só frontend, sem migração)
+Hoje esses campos ficam vazios mesmo com a turma tendo professor titular e horário definidos — o usuário precisa redigitar em cada aula.
 
-Uma única alteração de escopo, em 2 arquivos, mantendo compatibilidade com aulas antigas:
+## Regra de preenchimento
 
-### 1. `src/lib/pedagogico-queries.ts` — `upsertAula`
-Estender a assinatura e o payload para incluir os campos MTE canônicos:
-- `conteudo_programatico?: string | null`
-- `ch_prevista?: number | null` (em horas; substitui `duracao` em minutos)
-- `hora_inicio?: string | null` (HH:MM)
-- `hora_fim?: string | null` (HH:MM)
-- `instrutor?: string | null`
+Para cada campo, usar a primeira fonte não-vazia:
 
-Continuar aceitando `titulo`/`duracao` no input (não quebra chamadas antigas), mas também gravar espelhado em `conteudo_programatico`/`ch_prevista` quando o form novo enviar — assim a lista de presença já sai preenchida.
+- **Instrutor/a**: `aula.instrutor` → `turma.professor_nome`
+- **Hora início**: `aula.hora_inicio` → `turma.hora_inicio` → parse de `turma.horario_realizacao` (padrão "HH:MM às HH:MM", "HH:MM-HH:MM", "HH:MMh às HH:MMh")
+- **Hora fim**: `aula.hora_fim` → `turma.hora_fim` → parse de `turma.horario_realizacao`
 
-### 2. `src/routes/_authenticated/pedagogico.turmas.$id.aulas.tsx` — `AulaFormDialog`
-Ampliar o formulário para os campos oficiais, mantendo layout compacto:
-- Data (já existe)
-- Tema / Conteúdo programático (input longo) → grava em `conteudo_programatico`
-- Instrutor/a
-- Hora início / Hora fim (dois `type="time"` lado a lado)
-- Carga horária prevista (horas, decimal aceito) → grava em `ch_prevista`
+Vale tanto no modo **Nova aula** (todos os campos vêm da turma) quanto **Editar aula** (só preenche o que estiver vazio na aula; se o usuário já digitou algo diferente, mantém).
 
-Pré-preencher em edição lendo `conteudo_programatico ?? titulo ?? tema`, `ch_prevista ?? duracao`, `hora_inicio`, `hora_fim`, `instrutor` — aulas legadas abrem no formulário sem perder dados e, ao salvar, migram para as colunas MTE.
+O usuário continua podendo editar/sobrescrever qualquer campo antes de salvar — o pré-preenchimento é só um default visível no formulário.
 
-Na tabela da aba Aulas, ajustar `pickFirst` das colunas:
-- Tema: `["conteudo_programatico", "titulo", "tema", "assunto", "descricao"]`
-- Duração: mostrar `ch_prevista` como "Nh" quando presente; senão `duracao` como antes.
+## Mudanças
 
-### 3. Nada mais muda
-Não mexer no gerador PDF (`lista-presenca-gerador.ts`), no diálogo (`dialog-gerar-listas.tsx`), nas rotas MTE, nem em migração — as colunas MTE já existem em `aulas` (comprovado por `src/lib/mte-queries.ts`).
+### `src/routes/_authenticated/pedagogico.turmas.$id.aulas.tsx`
+
+1. A rota já carrega `turmaByIdOptions(turmaId)` para o card de comprovação — reaproveitar essa query e passar `turma` como prop para `AulaFormDialog` (evita segunda requisição).
+2. Em `AulaFormDialog`:
+   - Adicionar helper local `parseHorario(horario)` que extrai `{ inicio, fim }` no formato `HH:MM` de strings tipo "08:00 às 12:00", "8h às 12h", "08:00-12:00". Retorna `{ null, null }` se não casar.
+   - Nos `useState` iniciais, aplicar o fallback descrito acima usando `turma.professor_nome`, `turma.hora_inicio`, `turma.hora_fim` e `parseHorario(turma.horario_realizacao)`.
+   - Nada muda no submit — `salvar` já grava os cinco campos MTE via `upsertAula`.
+
+Nenhuma outra rota, o gerador de PDF, `upsertAula`, migrations ou schema mudam. Só UI de formulário.
 
 ## Verificação
-Após aplicar: build limpo, criar nova aula com todos os campos, abrir "Gerar listas de presença", confirmar que a linha mostra o tema e a CH, gerar PDF e conferir Conteúdo/Instrutor/Horário/CH preenchidos.
+
+- Abrir uma aula existente sem instrutor/horário → os três campos aparecem preenchidos com dados da turma; salvar persiste na aula (o gerador de lista de presença passa a ler direto de `aulas.instrutor` / `hora_inicio` / `hora_fim`).
+- Abrir aula que já tem instrutor próprio (diferente do da turma) → mantém o valor da aula.
+- "Nova aula" numa turma com horário/professor definidos → campos já vêm preenchidos.
