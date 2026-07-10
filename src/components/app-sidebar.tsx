@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   MessageCircle,
+  Clock,
 } from "lucide-react";
 
 import {
@@ -51,6 +52,7 @@ const MODULOS: Item[] = [
   { key: "captacao", title: "Captação", url: "/captacao", icon: Sprout },
   { key: "relatorios", title: "Relatórios", url: "/relatorios", icon: BarChart3 },
   { key: "whatsapp", title: "WhatsApp", url: "/whatsapp", icon: MessageCircle },
+  { key: "relacao-horas", title: "Relação de Horas", url: "/relacao-horas", icon: Clock },
 ];
 
 const APOIO: Item[] = [
