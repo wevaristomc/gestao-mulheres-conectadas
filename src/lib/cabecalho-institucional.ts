@@ -251,21 +251,24 @@ function desenharCampo(
   const labelW = doc.getTextWidth(label);
   doc.setFont("helvetica", "normal");
   const cellRight = x + w;
-  const valorX = x + 6 + labelW + 4;
+  // Padding de 6pt entre o label e o valor (respiro como no documento real).
+  const valorX = x + 6 + labelW + 6;
   const maxValorW = cellRight - 6 - valorX;
   const valorTxt = String(valor ?? "");
   if (valorTxt) {
-    // Placeholder de linha em branco — desenhar como LINHA real, nunca como
-    // sequência de "_" (que jsPDF não quebra por maxWidth e vaza a célula).
+    // Placeholder de linha em branco — traço CURTO de ~40pt (só cabem uns
+    // poucos caracteres manuscritos), nunca linha até o fim da célula.
     if (/^[_\s]+$/.test(valorTxt)) {
       doc.setLineWidth(0.4);
-      if (maxValorW >= 30) {
-        doc.line(valorX, baseY + 1.5, valorX + maxValorW, baseY + 1.5);
+      const LARG_LINHA = 40;
+      if (maxValorW >= LARG_LINHA) {
+        doc.line(valorX, baseY + 1.5, valorX + LARG_LINHA, baseY + 1.5);
       } else {
-        // Espaço insuficiente ao lado do label → linha abaixo do label,
-        // dentro da célula.
+        // Sem espaço ao lado do label → linha curta abaixo do label,
+        // alinhada à esquerda dentro da célula.
         const lineY = Math.min(y + h - 4, baseY + 10);
-        doc.line(x + 6, lineY, cellRight - 6, lineY);
+        const larg = Math.min(LARG_LINHA, cellRight - 6 - (x + 6));
+        doc.line(x + 6, lineY, x + 6 + larg, lineY);
       }
     } else {
       doc.text(valorTxt, valorX, baseY, { maxWidth: Math.max(1, maxValorW) });
