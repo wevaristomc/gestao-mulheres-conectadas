@@ -135,6 +135,11 @@ export async function upsertAula(input: {
   data: string;
   titulo?: string | null;
   duracao?: number | null;
+  conteudo_programatico?: string | null;
+  ch_prevista?: number | null;
+  hora_inicio?: string | null;
+  hora_fim?: string | null;
+  instrutor?: string | null;
 }) {
   const payload: Record<string, unknown> = {
     turma_id: input.turma_id,
@@ -142,6 +147,11 @@ export async function upsertAula(input: {
   };
   if (input.titulo !== undefined) payload.titulo = input.titulo;
   if (input.duracao !== undefined && input.duracao !== null) payload.duracao = input.duracao;
+  if (input.conteudo_programatico !== undefined) payload.conteudo_programatico = input.conteudo_programatico;
+  if (input.ch_prevista !== undefined) payload.ch_prevista = input.ch_prevista;
+  if (input.hora_inicio !== undefined) payload.hora_inicio = input.hora_inicio;
+  if (input.hora_fim !== undefined) payload.hora_fim = input.hora_fim;
+  if (input.instrutor !== undefined) payload.instrutor = input.instrutor;
   if (input.id) {
     const { error } = await supabase.from("aulas").update(payload).eq("id", input.id);
     if (error) throw new Error(error.message);

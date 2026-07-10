@@ -142,9 +142,14 @@ function AulasTab() {
                   return (
                   <TableRow key={r.id}>
                     <TableCell>{formatarData(pickFirst(r, ["data"]))}</TableCell>
-                    <TableCell>{pickFirst(r, ["titulo", "tema", "assunto", "descricao"]) ?? "—"}</TableCell>
+                    <TableCell>{pickFirst(r, ["conteudo_programatico", "titulo", "tema", "assunto", "descricao"]) ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {pickFirst(r, ["duracao", "carga_horaria"]) ?? "—"}
+                      {(() => {
+                        const ch = pickFirst(r, ["ch_prevista"]);
+                        if (ch !== null && ch !== undefined && ch !== "") return `${ch}h`;
+                        const dur = pickFirst(r, ["duracao", "carga_horaria"]);
+                        return dur ?? "—";
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -247,22 +252,39 @@ function AulaFormDialog({
   onSaved: () => void;
 }) {
   const initialData = aula ? String(aula.data ?? "").slice(0, 10) : "";
-  const initialTitulo = aula ? String(aula.titulo ?? aula.tema ?? aula.assunto ?? "") : "";
-  const initialDuracao = aula ? String(aula.duracao ?? aula.carga_horaria ?? "") : "";
+  const initialTema = aula
+    ? String(aula.conteudo_programatico ?? aula.titulo ?? aula.tema ?? aula.assunto ?? "")
+    : "";
+  const initialCh = aula
+    ? String(aula.ch_prevista ?? aula.duracao ?? aula.carga_horaria ?? "")
+    : "";
+  const initialHoraInicio = aula ? String(aula.hora_inicio ?? "").slice(0, 5) : "";
+  const initialHoraFim = aula ? String(aula.hora_fim ?? "").slice(0, 5) : "";
+  const initialInstrutor = aula ? String(aula.instrutor ?? "") : "";
 
   const [data, setData] = useState<string>(initialData);
-  const [titulo, setTitulo] = useState<string>(initialTitulo);
-  const [duracao, setDuracao] = useState<string>(initialDuracao);
+  const [tema, setTema] = useState<string>(initialTema);
+  const [ch, setCh] = useState<string>(initialCh);
+  const [horaInicio, setHoraInicio] = useState<string>(initialHoraInicio);
+  const [horaFim, setHoraFim] = useState<string>(initialHoraFim);
+  const [instrutor, setInstrutor] = useState<string>(initialInstrutor);
 
   const salvar = useMutation({
-    mutationFn: () =>
-      upsertAula({
+    mutationFn: () => {
+      const temaTrim = tema.trim();
+      const chNum = ch.trim() ? Number(ch.replace(",", ".")) : null;
+      return upsertAula({
         id: aula?.id,
         turma_id: turmaId,
         data,
-        titulo: titulo.trim() || null,
-        duracao: duracao.trim() ? Number(duracao) : null,
-      }),
+        titulo: temaTrim || null,
+        conteudo_programatico: temaTrim || null,
+        ch_prevista: chNum && !Number.isNaN(chNum) ? chNum : null,
+        hora_inicio: horaInicio || null,
+        hora_fim: horaFim || null,
+        instrutor: instrutor.trim() || null,
+      });
+    },
     onSuccess: () => {
       toast.success(aula ? "Aula atualizada." : "Aula criada.");
       onSaved();
@@ -277,7 +299,7 @@ function AulaFormDialog({
       <DialogHeader>
         <DialogTitle>{aula ? "Editar aula" : "Nova aula"}</DialogTitle>
         <DialogDescription>
-          Registre a data e (opcionalmente) o tema e a duração da aula.
+          Registre data, conteúdo programático, instrutor/a, horário e carga horária.
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-3">
@@ -286,18 +308,32 @@ function AulaFormDialog({
           <Input id="a-data" type="date" value={data} onChange={(e) => setData(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="a-titulo">Tema (opcional)</Label>
-          <Input id="a-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Introdução ao HTML" />
+          <Label htmlFor="a-tema">Conteúdo programático / tema</Label>
+          <Input id="a-tema" value={tema} onChange={(e) => setTema(e.target.value)} placeholder="Ex.: Introdução ao HTML" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="a-duracao">Duração em minutos (opcional)</Label>
-          <Input
-            id="a-duracao"
-            inputMode="numeric"
-            value={duracao}
-            onChange={(e) => setDuracao(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="120"
-          />
+          <Label htmlFor="a-instrutor">Instrutor/a</Label>
+          <Input id="a-instrutor" value={instrutor} onChange={(e) => setInstrutor(e.target.value)} placeholder="Nome do/a instrutor/a" />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="a-hi">Hora início</Label>
+            <Input id="a-hi" type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-hf">Hora fim</Label>
+            <Input id="a-hf" type="time" value={horaFim} onChange={(e) => setHoraFim(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="a-ch">CH prevista (h)</Label>
+            <Input
+              id="a-ch"
+              inputMode="decimal"
+              value={ch}
+              onChange={(e) => setCh(e.target.value.replace(/[^0-9.,]/g, ""))}
+              placeholder="4"
+            />
+          </div>
         </div>
       </div>
       <DialogFooter>
