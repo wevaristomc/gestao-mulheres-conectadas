@@ -431,15 +431,16 @@ function RelatoriosMte() {
   const [detalhadaOpen, setDetalhadaOpen] = useState(false);
 
   async function baixar(def: RelatorioDef) {
-    setLoading(def.view);
-    setErro((e) => ({ ...e, [def.view]: "" }));
+    const key = `${def.view}::${def.variant ?? ""}`;
+    setLoading(key);
+    setErro((e) => ({ ...e, [key]: "" }));
     try {
       const res =
         def.variant === "execucao_ff"
           ? await consultarExecucaoFisicoFinanceira()
           : await consultarViewMTE({ data: { view: def.view as never } });
       if (res.error) {
-        setErro((e) => ({ ...e, [def.view]: res.error! }));
+        setErro((e) => ({ ...e, [key]: res.error! }));
         toast.error(`View ${def.view} indisponível: ${res.error}`);
         return;
       }
@@ -451,7 +452,7 @@ function RelatoriosMte() {
       toast.success(`Relatório "${def.titulo}" exportado.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setErro((s) => ({ ...s, [def.view]: msg }));
+      setErro((s) => ({ ...s, [key]: msg }));
       toast.error(msg);
     } finally {
       setLoading(null);
