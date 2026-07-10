@@ -85,7 +85,7 @@ export function renderCabecalhoInstitucional(
 ): number {
   const { W, marginX, yStart, linhas, logos } = opts;
   const usableW = W - marginX * 2;
-  const leftW = Math.round(usableW * 0.22);
+  const leftW = Math.round(usableW * 0.30);
   const rightX = marginX + leftW;
   const rightW = usableW - leftW;
 
@@ -113,10 +113,10 @@ export function renderCabecalhoInstitucional(
 
   const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
   if (logosValidos.length > 0) {
-    const gap = 4;
-    const padX = 4;
+    const gap = 8;
     const alturaSlot = (alturaTotal - gap * (logosValidos.length + 1)) / logosValidos.length;
-    const larguraSlot = leftW - padX * 2;
+    // logos ocupam ~80% da largura da coluna, centralizados
+    const larguraSlot = leftW * 0.82;
     let yLogo = yStart + gap;
     logosValidos.forEach((logo) => {
       const aspect = logo.w / logo.h;
