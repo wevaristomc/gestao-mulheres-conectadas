@@ -263,10 +263,10 @@ function AulaFormDialog({
       `${h.padStart(2, "0")}:${(mm ?? "00").padStart(2, "0")}`;
     return { inicio: pad(m[1], m[2]), fim: pad(m[3], m[4]) };
   };
-  const turmaHorario = parseHorario(pickFirst(turma ?? {}, ["horario_realizacao", "horario"]));
-  const turmaInstrutor = String(pickFirst(turma ?? {}, ["professor_nome", "instrutor"]) ?? "");
-  const turmaHoraInicio = String(pickFirst(turma ?? {}, ["hora_inicio"]) ?? "").slice(0, 5) || turmaHorario.inicio;
-  const turmaHoraFim = String(pickFirst(turma ?? {}, ["hora_fim"]) ?? "").slice(0, 5) || turmaHorario.fim;
+  const turmaHorario = parseHorario(turma ? pickFirst(turma, ["horario_realizacao", "horario"]) : null);
+  const turmaInstrutor = String((turma ? pickFirst(turma, ["professor_nome", "instrutor"]) : null) ?? "");
+  const turmaHoraInicio = String((turma ? pickFirst(turma, ["hora_inicio"]) : null) ?? "").slice(0, 5) || turmaHorario.inicio;
+  const turmaHoraFim = String((turma ? pickFirst(turma, ["hora_fim"]) : null) ?? "").slice(0, 5) || turmaHorario.fim;
 
   const initialData = aula ? String(aula.data ?? "").slice(0, 10) : "";
   const initialTema = aula
