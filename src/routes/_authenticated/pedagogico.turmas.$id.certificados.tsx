@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertCircle, Award, Download, Loader2 } from "lucide-react";
+import { AlertCircle, Award, Download, FileSignature, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
@@ -18,6 +18,11 @@ import {
 } from "@/lib/certificados.functions";
 import { gerarCertificadoPDF, slugifyNome } from "@/lib/certificado-pdf";
 import { turmaByIdOptions, pickFirst } from "@/lib/pedagogico-queries";
+import {
+  baixarBlob,
+  gerarListaEntregaCertificadosPDF,
+  type CursistaEntrega,
+} from "@/lib/lista-entrega-gerador";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/certificados")({
   component: CertificadosTab,
@@ -90,6 +95,38 @@ function CertificadosTab() {
   const inicio = pickFirst(turma, ["data_inicio", "inicio"]);
   const fim = pickFirst(turma, ["data_fim", "fim"]);
   const periodo = inicio && fim ? `${formatBR(inicio)} a ${formatBR(fim)}` : null;
+  const codigoTurma = (pickFirst(turma, ["codigo_turma"]) as string | null) ?? null;
+  const localEndereco = pickFirst(turma, ["local_endereco", "local", "endereco"]);
+  const executora = pickFirst(turma, ["executora"]) ?? "QUINTA ARTE";
+
+  function baixarListaEntregaCertificados() {
+    const emitidos = rows.filter((r) => r.certificado_emitido);
+    const base: MatriculaRow[] = emitidos.length > 0 ? emitidos : rows;
+    const cursistas: CursistaEntrega[] = base
+      .map((r) => ({
+        nome: r.beneficiarias?.nome ?? "",
+        cpf: r.beneficiarias?.cpf ?? null,
+      }))
+      .filter((c) => c.nome);
+    if (cursistas.length === 0) {
+      toast.error("Nenhum concluinte para listar.");
+      return;
+    }
+    const ident = `${codigoTurma ?? ""}${cursoNome ? " · " + cursoNome : ""}`;
+    const blob = gerarListaEntregaCertificadosPDF({
+      cabecalho: {
+        entidade: executora as string,
+        local: (localEndereco as string) ?? null,
+        turma: ident,
+        data: new Date().toISOString().slice(0, 10),
+      },
+      cursistas,
+    });
+    baixarBlob(
+      blob,
+      `lista-entrega-certificados_${slugifyNome(codigoTurma ?? cursoNome)}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
+  }
 
   const gerarLote = useMutation({
     mutationFn: async () => {
@@ -157,6 +194,15 @@ function CertificadosTab() {
             Elegíveis: frequência ≥ 75% e não emitido.
           </div>
         </div>
+        <div className="flex gap-2">
+        <Button
+          variant="outline"
+          onClick={baixarListaEntregaCertificados}
+          disabled={rows.length === 0}
+          className="gap-1.5"
+        >
+          <FileSignature className="h-4 w-4" /> Lista de entrega
+        </Button>
         <Button
           onClick={() => gerarLote.mutate()}
           disabled={!selecionadas.length || gerarLote.isPending}
@@ -169,6 +215,7 @@ function CertificadosTab() {
           )}
           Gerar {selecionadas.length ? `(${selecionadas.length})` : ""}
         </Button>
+        </div>
       </div>
 
       {erro ? (

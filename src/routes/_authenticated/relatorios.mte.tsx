@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { consultarViewMTE, consultarExecucaoFisicoFinanceira } from "@/lib/mte-relatorios.functions";
 import { ComprovacaoTurmaCard } from "@/components/pedagogico/comprovacao-turma-card";
+import { DialogListaDetalhada } from "@/components/relatorios/dialog-lista-detalhada";
 
 type RelatorioDef = {
   view:
@@ -22,7 +23,11 @@ type RelatorioDef = {
   descricao: string;
   arquivo: string;
   cabecalhoDuplo?: boolean;
-  variant?: "relacao_qualificados" | "execucao_ff";
+  variant?:
+    | "relacao_qualificados"
+    | "relacao_final_qualificados"
+    | "execucao_ff"
+    | "cursos_executados";
   deqItem?: string;
 };
 
@@ -34,6 +39,142 @@ const INSTRUMENTO = {
   nup_sei: "19968.200342/2025-94",
   vigencia: "",
 };
+
+const CABECALHO_CURSOS_EXECUTADOS =
+  "Tipo de instrumento/parceria: Termo de Fomento — MROSC · Programa Manuel Querino / QUINTA ARTE";
+
+// Rótulos oficiais MODELO_Cursos Executados.xlsx
+const CURSOS_EXECUTADOS_COLS: { key: string; label: string; group?: "CH" | "PERIODO" }[] = [
+  { key: "executora", label: "Executora" },
+  { key: "nome_curso", label: "Nome Curso" },
+  { key: "codigo_turma", label: "Código da Turma" },
+  { key: "turno", label: "Turno" },
+  { key: "horario_realizacao", label: "Horário de Realização" },
+  { key: "ch_gerais", label: "Conhecimentos Gerais", group: "CH" },
+  { key: "ch_especificos", label: "Conhecimentos Específico", group: "CH" },
+  { key: "ch_total", label: "CH Total", group: "CH" },
+  { key: "qtd_dias", label: "Quantidade de Dias de Curso" },
+  { key: "periodo_inicio", label: "Início", group: "PERIODO" },
+  { key: "periodo_fim", label: "Fim", group: "PERIODO" },
+  { key: "municipio", label: "Município" },
+  { key: "vagas", label: "Nº Vagas" },
+  { key: "inscritas_matriculadas", label: "Nº Educ. Inscritos/Matriculados" },
+  { key: "evadidas", label: "Nº de Evadidos" },
+];
+
+// Aliases best-effort para mapear vw_cursos_executados → colunas oficiais.
+const CURSOS_EXECUTADOS_ALIASES: Record<string, string[]> = {
+  executora: ["executora", "entidade_executora", "entidade"],
+  nome_curso: ["nome_curso", "curso", "titulo_curso"],
+  codigo_turma: ["codigo_turma", "codigo", "turma_codigo"],
+  turno: ["turno"],
+  horario_realizacao: ["horario_realizacao", "horario", "horario_realizacao_turma"],
+  ch_gerais: ["ch_conhecimentos_gerais", "ch_gerais", "carga_horaria_gerais"],
+  ch_especificos: ["ch_conhecimentos_especificos", "ch_especificos", "carga_horaria_especificos"],
+  ch_total: ["ch_total", "carga_horaria_total", "ch"],
+  qtd_dias: ["qtd_dias", "quantidade_dias", "dias_curso"],
+  periodo_inicio: ["data_inicio", "periodo_inicio", "inicio"],
+  periodo_fim: ["data_fim", "periodo_fim", "fim"],
+  municipio: ["municipio", "municipio_realizacao"],
+  vagas: ["vagas", "n_vagas", "qtd_vagas"],
+  inscritas_matriculadas: [
+    "matriculadas",
+    "inscritas_matriculadas",
+    "qtd_matriculadas",
+    "n_matriculadas",
+    "inscritas",
+  ],
+  evadidas: ["evadidas", "qtd_evadidas", "n_evadidas"],
+};
+
+function pegar(row: Record<string, unknown>, key: string): unknown {
+  const aliases = CURSOS_EXECUTADOS_ALIASES[key] ?? [key];
+  for (const a of aliases) {
+    if (a in row && row[a] != null && row[a] !== "") return row[a];
+  }
+  return "";
+}
+
+// Grupos oficiais para o layout final SINE/MTE.
+const REL_FINAL_GROUPS: {
+  grupo: string;
+  cols: { key: string; label: string; aliases?: string[]; type?: "date" | "pct01" | "int" }[];
+}[] = [
+  {
+    grupo: "DADOS DA QUALIFICAÇÃO",
+    cols: [
+      { key: "ordem", label: "Ordem" },
+      {
+        key: "codigo_turma",
+        label: "Código Único de Identificação (Turma)",
+        aliases: ["codigo_turma", "turma_codigo"],
+      },
+      {
+        key: "data_inicio",
+        label: "Data de Início (Turma)",
+        aliases: ["data_inicio", "turma_data_inicio"],
+        type: "date",
+      },
+      {
+        key: "data_fim",
+        label: "Data de Conclusão (Turma)",
+        aliases: ["data_fim", "turma_data_fim"],
+        type: "date",
+      },
+      { key: "ch_total", label: "Carga Horária (Turma)", aliases: ["ch_total", "carga_horaria_total"] },
+      {
+        key: "modalidade_ensino",
+        label: "Modalidade Ensino (Turma)",
+        aliases: ["modalidade_ensino", "modalidade"],
+      },
+      {
+        key: "codigo_ibge",
+        label: "Código do IBGE do Município de Realização",
+        aliases: ["codigo_ibge", "ibge_municipio", "municipio_ibge"],
+      },
+      {
+        key: "codigo_curso",
+        label: "Código Único de Identificação (Curso)",
+        aliases: ["codigo_curso", "curso_codigo"],
+      },
+      {
+        key: "nome_curso",
+        label: "Nome de Identificação (Curso)",
+        aliases: ["nome_curso", "curso"],
+      },
+    ],
+  },
+  {
+    grupo: "DADOS DO BENEFICIÁRIO",
+    cols: [
+      { key: "cpf", label: "CPF" },
+      { key: "nome", label: "Nome Completo", aliases: ["nome", "nome_completo"] },
+      {
+        key: "data_nascimento",
+        label: "Data de Nascimento",
+        aliases: ["data_nascimento", "nascimento"],
+        type: "date",
+      },
+      { key: "idade", label: "Idade (Calculada)", type: "int" },
+      { key: "raca_cor", label: "Raça/Cor Declarada", aliases: ["raca_cor", "raca"] },
+      { key: "sexo", label: "Sexo de Registro", aliases: ["sexo", "genero"] },
+      { key: "tipo_deficiencia", label: "Tipo de Deficiência", aliases: ["tipo_deficiencia", "pcd_tipo"] },
+      {
+        key: "frequencia",
+        label: "Frequência Obtida na Turma",
+        aliases: ["frequencia", "frequencia_percentual", "percentual_frequencia"],
+        type: "pct01",
+      },
+    ],
+  },
+  {
+    grupo: "DADOS DE ADERÊNCIA AO PERFIL PRIORITÁRIO",
+    cols: Array.from({ length: 21 }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0");
+      return { key: `ps_${n}`, label: `PS-${n}`, aliases: [`ps_${n}`, `ps${n}`] };
+    }),
+  },
+];
 
 const RELATORIOS: RelatorioDef[] = [
   {
@@ -47,9 +188,10 @@ const RELATORIOS: RelatorioDef[] = [
     view: "vw_cursos_executados",
     titulo: "Cursos Executados",
     descricao:
-      "Município, curso, turma, turno, público-alvo, carga horária, vagas registradas, inscritas/matriculadas, concluintes, evadidas.",
+      "Layout oficial MODELO_Cursos Executados.xlsx: Executora, curso, turma, turno, horário, CH (Gerais/Específico/Total), dias, período, município, vagas, matriculadas, evadidas.",
     arquivo: "cursos-executados.xlsx",
     deqItem: "DEQ — Item IV",
+    variant: "cursos_executados",
   },
   {
     view: "vw_beneficiarias",
@@ -82,6 +224,14 @@ const RELATORIOS: RelatorioDef[] = [
       "Layout oficial MTE com bloco de identificação do instrumento e frequência em decimal 0–1.",
     arquivo: "relacao-qualificados.xlsx",
     variant: "relacao_qualificados",
+  },
+  {
+    view: "vw_relacao_qualificados",
+    titulo: "Relação Final de Qualificados (SINE/MTE)",
+    descricao:
+      "Layout final oficial: cabeçalho institucional + grupos DADOS DA QUALIFICAÇÃO / BENEFICIÁRIO / ADERÊNCIA (PS-01…PS-21).",
+    arquivo: "relacao-final-qualificados.xlsx",
+    variant: "relacao_final_qualificados",
   },
   {
     view: "execucao_fisico_financeira",

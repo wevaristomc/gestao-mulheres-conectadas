@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Loader2, Pencil, Plus, Trash2, AlertCircle, FileCheck2, FileWarning, Paperclip } from "lucide-react";
+import { ClipboardList, Loader2, Package, Pencil, Plus, Trash2, AlertCircle, FileCheck2, FileWarning, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   evidenciasCountByTurmaOptions, turmaByIdOptions,
 } from "@/lib/pedagogico-queries";
 import { DialogGerarListas } from "@/components/pedagogico/dialog-gerar-listas";
+import { DialogGerarListasEntrega } from "@/components/pedagogico/dialog-gerar-listas-entrega";
 import { AulaComprovacaoDialog } from "@/components/pedagogico/aula-comprovacao-dialog";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/aulas")({
@@ -45,6 +46,7 @@ function AulasTab() {
   const [editando, setEditando] = useState<Row | null>(null);
   const [confirmarExcluir, setConfirmarExcluir] = useState<string | null>(null);
   const [gerarOpen, setGerarOpen] = useState(false);
+  const [entregaOpen, setEntregaOpen] = useState(false);
   const [comprovando, setComprovando] = useState<Row | null>(null);
 
   const excluir = useMutation({
@@ -75,6 +77,9 @@ function AulasTab() {
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setGerarOpen(true)}>
             <ClipboardList className="mr-1.5 h-4 w-4" /> Gerar listas de presença
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setEntregaOpen(true)}>
+            <Package className="mr-1.5 h-4 w-4" /> Listas de entrega
           </Button>
           <Dialog open={novaOpen} onOpenChange={setNovaOpen}>
           <DialogTrigger asChild>
@@ -217,6 +222,7 @@ function AulasTab() {
       </AlertDialog>
 
       <DialogGerarListas open={gerarOpen} onOpenChange={setGerarOpen} turmaId={turmaId} />
+      <DialogGerarListasEntrega open={entregaOpen} onOpenChange={setEntregaOpen} turmaId={turmaId} />
 
       {comprovando ? (
         <AulaComprovacaoDialog

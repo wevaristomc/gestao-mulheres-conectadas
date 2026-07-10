@@ -213,7 +213,6 @@ function construirLista(turma: TurmaMTE, aula: AulaMTE, cursistas: Cursista[], e
   };
 }
 
-// TODO(entrega): implementar listas de entrega (kits/materiais/EPI e auxílios
-// transporte/alimentação) no mesmo padrão visual do modelo de frequência.
-// Colunas: Nº | Nome | CPF | Item/Benefício entregue | Data | Assinatura.
-// Conferir contra modelo oficial docx (kits/auxílios) quando disponibilizado.
+// Listas de entrega (kits/EPI/camisetas e benefícios transporte/alimentação)
+// já implementadas em src/components/pedagogico/dialog-gerar-listas-entrega.tsx
+// no formato oficial DEQ/PMQ.
