@@ -73,7 +73,7 @@ export function DialogGerarListasEntrega({
       let blob: Blob;
       let sufixo: string;
       if (tipoLista === "kit") {
-        blob = gerarListaEntregaKitPDF({
+        blob = await gerarListaEntregaKitPDF({
           cabecalho: cab,
           cursistas,
           tipoSelecionado: tipoKit,
@@ -81,7 +81,7 @@ export function DialogGerarListasEntrega({
         });
         sufixo = `kit-${tipoKit}`;
       } else {
-        blob = gerarListaEntregaBeneficiosPDF({ cabecalho: cab, cursistas });
+        blob = await gerarListaEntregaBeneficiosPDF({ cabecalho: cab, cursistas });
         sufixo = "beneficios";
       }
       const codigo = (turma.codigo_turma ?? "turma").replace(/[^\w-]+/g, "-");

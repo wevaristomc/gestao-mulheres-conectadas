@@ -99,7 +99,7 @@ function CertificadosTab() {
   const localEndereco = pickFirst(turma, ["local_endereco", "local", "endereco"]);
   const executora = pickFirst(turma, ["executora"]) ?? "QUINTA ARTE";
 
-  function baixarListaEntregaCertificados() {
+  async function baixarListaEntregaCertificados() {
     const emitidos = rows.filter((r) => r.certificado_emitido);
     const base: MatriculaRow[] = emitidos.length > 0 ? emitidos : rows;
     const cursistas: CursistaEntrega[] = base
@@ -113,7 +113,7 @@ function CertificadosTab() {
       return;
     }
     const ident = `${codigoTurma ?? ""}${cursoNome ? " · " + cursoNome : ""}`;
-    const blob = gerarListaEntregaCertificadosPDF({
+    const blob = await gerarListaEntregaCertificadosPDF({
       cabecalho: {
         entidade: executora as string,
         local: (localEndereco as string) ?? null,

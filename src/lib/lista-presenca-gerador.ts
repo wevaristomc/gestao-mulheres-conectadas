@@ -4,6 +4,12 @@ import {
   AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph, Table,
   TableCell, TableRow, TextRun, WidthType, PageBreak,
 } from "docx";
+import {
+  carregarLogosInstitucionais,
+  renderCabecalhoInstitucional,
+  type LinhaCabecalho,
+  type LogoInstitucional,
+} from "./cabecalho-institucional";
 
 export type Cursista = { nome: string; cpf: string | null };
 export type AulaInfo = {
@@ -59,34 +65,6 @@ function ordenarCursistas(rows: Cursista[]): Cursista[] {
 
 const LINHAS_POR_PAGINA = 25;
 
-// Logo do PMQ (mesmo asset usado no cabeçalho do app / certificado). Buscado
-// uma única vez por geração e embutido como dataURL no PDF. Logos do MTE /
-// Governo Federal ainda não estão publicados no bucket `marca`; quando forem,
-// basta adicionar a URL em LOGOS_DIREITA que a renderização passa a incluí-los
-// sem outras mudanças no gerador.
-const LOGO_PMQ_URL =
-  "https://yqvocpnvunaprpmhlswn.supabase.co/storage/v1/object/public/marca/logo-pmq-horizontal.png";
-const LOGOS_DIREITA: string[] = [
-  // "https://.../logo-mte.png",
-  // "https://.../logo-governo-federal.png",
-];
-
-async function carregarImagemDataUrl(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, { cache: "force-cache" });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise<string | null>((resolve) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : null);
-      fr.onerror = () => resolve(null);
-      fr.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 function paginarCursistas(cursistas: Cursista[], extras: number): Cursista[][] {
   const rows: Cursista[] = [...cursistas];
   for (let i = 0; i < extras; i += 1) rows.push({ nome: "", cpf: null });
@@ -108,10 +86,7 @@ export async function gerarListaPDF(listas: ListaData[]): Promise<Blob> {
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
 
-  const logoPmq = await carregarImagemDataUrl(LOGO_PMQ_URL);
-  const logosDir = (
-    await Promise.all(LOGOS_DIREITA.map((u) => carregarImagemDataUrl(u)))
-  ).filter((v): v is string => Boolean(v));
+  const logos = await carregarLogosInstitucionais();
 
   const paginasPorLista = listas.map((l) => paginarCursistas(ordenarCursistas(l.cursistas), l.extras));
   const totalPag = paginasPorLista.reduce((a, p) => a + p.length, 0);
@@ -121,7 +96,7 @@ export async function gerarListaPDF(listas: ListaData[]): Promise<Blob> {
     paginas.forEach((linhas, pi) => {
       pageNo += 1;
       if (pageNo > 1) doc.addPage();
-      renderPaginaPDF(doc, lista, linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, logoPmq, logosDir);
+      renderPaginaPDF(doc, lista, linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, logos);
     });
   });
 
@@ -143,89 +118,42 @@ function renderPaginaPDF(
   totalDocPag: number,
   paginaLista: number,
   totalPaginasLista: number,
-  logoPmq: string | null,
-  logosDireita: string[],
+  logos: (LogoInstitucional | null)[],
 ) {
-  const AZUL: [number, number, number] = [27, 42, 74];
   const marginX = 28;
   let y = 34;
 
-  // ————— Cabeçalho institucional (bloco em caixa) —————
-  doc.setDrawColor(...AZUL);
-  doc.setLineWidth(0.8);
-
-  // Faixa de logos + título. Altura ~14mm (≈ 40pt).
-  const faixaH = 40;
-  const logoH = 28; // ≈ 10mm
-  const logoY = y + (faixaH - logoH) / 2;
-  if (logoPmq) {
-    try { doc.addImage(logoPmq, "PNG", marginX + 4, logoY, logoH * 2.6, logoH); } catch { /* ignore */ }
-  }
-  // Logos à direita (MTE / Governo Federal), quando disponíveis.
-  const larguraLogoDir = logoH * 1.6;
-  let xDir = W - marginX - 4;
-  for (let i = logosDireita.length - 1; i >= 0; i -= 1) {
-    try {
-      doc.addImage(logosDireita[i], "PNG", xDir - larguraLogoDir, logoY, larguraLogoDir, logoH);
-      xDir -= larguraLogoDir + 6;
-    } catch { /* ignore */ }
-  }
-  // Título centralizado + subtítulo, dentro da faixa.
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...AZUL);
-  doc.setFontSize(10.5);
-  doc.text(
-    "LISTA DE FREQUÊNCIA DOS CURSISTAS AS AULAS TEÓRICAS E PRÁTICAS",
-    W / 2, y + 18, { align: "center" },
-  );
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text(
-    "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE",
-    W / 2, y + 32, { align: "center" },
-  );
-  y += faixaH + 4;
-
-  // Bloco de metadados
+  // ————— Cabeçalho institucional oficial (2 colunas: logos | campos) —————
   const entidade = (lista.turma.entidade ?? "QUINTA ARTE").toUpperCase();
   const local = lista.turma.local ?? "";
-  const identTurma = `${lista.turma.codigo ?? ""}${lista.turma.nomeCurso ? " · " + lista.turma.nomeCurso : ""}`;
+  const turno = lista.turma.turno ? ` ${lista.turma.turno.toUpperCase()}` : "";
+  const identTurma = `${lista.turma.codigo ?? ""}${turno ? " -" + turno : ""}`.trim();
   const conteudo = lista.aula.tema ?? "";
   const instrutor = lista.aula.instrutor ?? "";
   const horaIni = lista.aula.horaInicio && lista.aula.horaInicio.trim() ? lista.aula.horaInicio : "___:___";
   const horaFim = lista.aula.horaFim && lista.aula.horaFim.trim() ? lista.aula.horaFim : "___:___";
-  const ch = lista.aula.cargaHoraria ?? "____";
-
-  const campos: [string, string][] = [
-    ["Nome da Entidade Executora:", entidade],
-    ["Local de Realização da Qualificação:", local],
-    ["Identificação da Turma:", identTurma],
-    ["Conteúdo das Aulas:", conteudo],
-    ["Instrutor/a:", instrutor],
-    [
-      "Horário de Início e Fim das Aulas:",
-      `${horaIni} às ${horaFim}`,
-    ],
-    [
-      "Carga Horária Total/Dia:",
-      `${ch} horas    Quantidade de Cursistas Presentes na Aula: ____`,
-    ],
+  const chValor = lista.aula.cargaHoraria ?? "____";
+  const linhasCab: LinhaCabecalho[] = [
+    { tipo: "titulo", texto: "LISTA DE FREQUÊNCIA DOS CURSISTAS AS AULAS TEÓRICAS E PRÁTICAS" },
+    { tipo: "subtitulo", texto: "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE" },
+    { tipo: "campo", label: "Nome da Entidade Executora:", valor: entidade },
+    { tipo: "campo", label: "Local de Realização da Qualificação:", valor: local },
+    { tipo: "campo", label: "Identificação da Turma:", valor: identTurma },
+    { tipo: "campo", label: "Conteúdo das Aulas:", valor: conteudo },
+    { tipo: "campo", label: "Instrutor/a:", valor: instrutor, sublinhar: Boolean(instrutor) },
+    {
+      tipo: "campo",
+      label: "Horário de Início e Fim das Aulas:",
+      valor: `${horaIni} às ${horaFim}`,
+      sublinhar: Boolean(lista.aula.horaInicio && lista.aula.horaFim),
+    },
+    {
+      tipo: "dois-campos",
+      a: { label: "Carga Horária Total/Dia:", valor: `${chValor} horas`, sublinhar: Boolean(lista.aula.cargaHoraria) },
+      b: { label: "Quantidade de Cursistas Presentes na Aula:", valor: "_____" },
+    },
   ];
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(20, 20, 20);
-  const linhaAlt = 16;
-  campos.forEach(([label, valor]) => {
-    doc.rect(marginX, y, W - marginX * 2, linhaAlt);
-    doc.setFont("helvetica", "bold");
-    doc.text(label, marginX + 6, y + 11);
-    doc.setFont("helvetica", "normal");
-    const labelW = doc.getTextWidth(label) + 12;
-    const disponivel = W - marginX * 2 - labelW - 12;
-    doc.text(String(valor).slice(0, 200), marginX + 6 + labelW, y + 11, { maxWidth: disponivel });
-    y += linhaAlt;
-  });
+  y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
   y += 4;
 
   // ————— Tabela de cursistas —————
@@ -249,9 +177,10 @@ function renderPaginaPDF(
     tableX + tableW,
   ];
   const headerH = 36;
-  doc.setFillColor(...AZUL);
-  doc.rect(tableX, y, tableW, headerH, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.6);
+  doc.rect(tableX, y, tableW, headerH);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
 
@@ -276,7 +205,7 @@ function renderPaginaPDF(
     });
   });
   // grade do header
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
   for (let i = 1; i < xs2.length - 1; i += 1) {
     doc.line(xs2[i], y, xs2[i], y + headerH);
@@ -284,9 +213,9 @@ function renderPaginaPDF(
   y += headerH;
 
   // linhas
-  doc.setDrawColor(120, 120, 120);
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
-  doc.setTextColor(20, 20, 20);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   const linhaTabH = Math.min(
