@@ -6,18 +6,35 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type Row = Record<string, unknown> & { id: string };
 
-export function turmasListOptions(projetoId: string | null) {
+/**
+ * Lista as turmas do projeto.
+ * Quando `restrictToUserId` é passado (professor/auxiliar), aplica filtro
+ * pelo vínculo em `instrutor_turmas` para trazer apenas as próprias turmas.
+ */
+export function turmasListOptions(projetoId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["pedagogico", "turmas", projetoId],
+    queryKey: ["pedagogico", "turmas", projetoId, restrictToUserId ?? "all"],
     enabled: !!projetoId,
     queryFn: async (): Promise<{ rows: Row[]; error?: string }> => {
       if (!projetoId) return { rows: [] };
+      let permitidas: Set<string> | null = null;
+      if (restrictToUserId) {
+        const vinc = await supabase
+          .from("instrutor_turmas")
+          .select("turma_id")
+          .eq("user_id", restrictToUserId);
+        if (vinc.error) return { rows: [], error: vinc.error.message };
+        permitidas = new Set(((vinc.data ?? []) as { turma_id: string }[]).map((r) => r.turma_id));
+        if (permitidas.size === 0) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("turmas")
         .select("*")
         .eq("projeto_id", projetoId);
       if (error) return { rows: [], error: error.message };
-      const rows = ((data ?? []) as Row[]).slice().sort((a, b) => {
+      let rows = ((data ?? []) as Row[]);
+      if (permitidas) rows = rows.filter((r) => permitidas!.has(String(r.id)));
+      rows = rows.slice().sort((a, b) => {
         const an = nomeTurma(a);
         const bn = nomeTurma(b);
         return an.localeCompare(bn, "pt-BR");
