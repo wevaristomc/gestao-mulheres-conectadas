@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Award, Download, Loader2, Undo2 } from "lucide-react";
+import { AlertCircle, Award, Download, FileSignature, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,12 @@ import {
   type CursistaLinha,
 } from "@/lib/administrativo-queries";
 import { nomeTurma } from "@/lib/pedagogico-queries";
+import {
+  baixarBlob,
+  gerarListaEntregaCertificadosPDF,
+  type CursistaEntrega,
+} from "@/lib/lista-entrega-gerador";
+import { slugifyNome } from "@/lib/certificado-pdf";
 
 export const Route = createFileRoute("/_authenticated/administrativo/qualificacao")({
   component: QualificacaoTab,
@@ -116,6 +122,35 @@ function QualificacaoTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  function baixarListaEntregaCertificados() {
+    const qualificadas = linhas.filter((l) => !!l.qualificado);
+    const base = qualificadas.length > 0 ? qualificadas : linhas;
+    const cursistas: CursistaEntrega[] = base
+      .map((l) => ({ nome: l.nome, cpf: l.cpf }))
+      .filter((c) => c.nome && c.nome !== "—");
+    if (cursistas.length === 0) {
+      toast.error("Nenhum concluinte para listar.");
+      return;
+    }
+    const t = turmaAtiva as Record<string, unknown> | null;
+    const codigo = (t?.codigo_turma as string | undefined) ?? "";
+    const local = (t?.local_endereco as string | undefined) ?? (t?.local as string | undefined) ?? null;
+    const executora = (t?.executora as string | undefined) ?? "QUINTA ARTE";
+    const blob = gerarListaEntregaCertificadosPDF({
+      cabecalho: {
+        entidade: executora,
+        local,
+        turma: `${codigo}${turmaNomeAtiva ? " · " + turmaNomeAtiva : ""}`,
+        data: new Date().toISOString().slice(0, 10),
+      },
+      cursistas,
+    });
+    baixarBlob(
+      blob,
+      `lista-entrega-certificados_${slugifyNome(codigo || turmaNomeAtiva)}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
+  }
+
   async function abrirCertificado(url: string) {
     try {
       const link = await baixarCertificado(url);
@@ -172,6 +207,14 @@ function QualificacaoTab() {
                 : `${qualificadas}${total ? ` (${Math.round((qualificadas / total) * 100)}%)` : ""}`}
             </div>
           </div>
+          <Button
+            variant="outline"
+            className="self-end gap-1.5"
+            onClick={baixarListaEntregaCertificados}
+            disabled={linhas.length === 0}
+          >
+            <FileSignature className="h-4 w-4" /> Lista de entrega
+          </Button>
         </div>
       </div>
 
