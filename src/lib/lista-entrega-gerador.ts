@@ -1,4 +1,10 @@
 import { jsPDF } from "jspdf";
+import {
+  carregarLogosInstitucionais,
+  renderCabecalhoInstitucional,
+  type LinhaCabecalho,
+  type LogoInstitucional,
+} from "./cabecalho-institucional";
 
 // Modelos oficiais DEQ/PMQ — fidelidade exata ao docx original.
 //   1) Lista Comprobatória de Entregas aos Cursistas (kits/EPI/camisetas).
@@ -32,7 +38,6 @@ export const TIPOS_KIT_LABEL: Record<TipoKit, string> = {
   camisetas: "camisetas",
 };
 
-const AZUL: [number, number, number] = [27, 42, 74];
 const LINHAS_POR_PAGINA = 25;
 
 function fCPF(cpf: string | null): string {
@@ -71,38 +76,13 @@ function paginar(cursistas: CursistaEntrega[]): CursistaEntrega[][] {
   return paginas;
 }
 
-// ————————————— Cabeçalho comum (título + subtítulo + campos) ——————————
+// ————————————— Cabeçalho comum ——————————————————————————————————————
 
-function tituloBloco(
-  doc: jsPDF,
-  W: number,
-  y: number,
-  titulo: string,
-  subtitulo: string,
-  marginX: number,
-): number {
-  doc.setFillColor(...AZUL);
-  doc.rect(marginX, y, W - marginX * 2, 22, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10.5);
-  doc.text(titulo, W / 2, y + 15, { align: "center", maxWidth: W - marginX * 2 - 20 });
-  let y2 = y + 22;
-  doc.setTextColor(...AZUL);
-  doc.setFontSize(8.5);
-  doc.rect(marginX, y2, W - marginX * 2, 16);
-  doc.text(subtitulo, W / 2, y2 + 11, { align: "center" });
-  return y2 + 16;
-}
-
-function metadadosBloco(
-  doc: jsPDF,
-  W: number,
-  yStart: number,
-  marginX: number,
+function montarLinhasCabecalho(
   cab: CabecalhoEntrega,
-  extraLinha?: [string, string],
-): number {
+  titulo: string,
+  extra?: LinhaCabecalho[],
+): LinhaCabecalho[] {
   const entidade = (cab.entidade ?? "QUINTA ARTE").toUpperCase();
   const respNome = cab.responsavelNome ?? "____________________________________";
   const respCPF = cab.responsavelCPF ?? "____________________";
@@ -110,65 +90,59 @@ function metadadosBloco(
   const [hh, mm] = (cab.horario ?? "").split(":");
   const hhTxt = hh ?? "___";
   const mmTxt = mm ?? "___";
-
-  const campos: [string, string][] = [
-    ["Nome da Entidade Executora:", entidade],
-    ["Local de Realização da Qualificação:", cab.local ?? ""],
-    ["Identificação da Turma:", cab.turma ?? ""],
-    ["Responsável pela Entrega:", `${respNome}   CPF: ${respCPF}`],
-    ["Data:", `${d}/${m}/${y}   —   Horário: ${hhTxt}:${mmTxt}`],
+  const linhas: LinhaCabecalho[] = [
+    { tipo: "titulo", texto: titulo },
+    {
+      tipo: "subtitulo",
+      texto: "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE",
+    },
+    { tipo: "campo", label: "Nome da Entidade Executora:", valor: entidade },
+    { tipo: "campo", label: "Local de Realização da Qualificação:", valor: cab.local ?? "" },
+    { tipo: "campo", label: "Identificação da Turma:", valor: cab.turma ?? "" },
+    {
+      tipo: "dois-campos",
+      a: { label: "Responsável pela Entrega:", valor: respNome, sublinhar: Boolean(cab.responsavelNome) },
+      b: { label: "CPF:", valor: respCPF, sublinhar: Boolean(cab.responsavelCPF) },
+    },
+    {
+      tipo: "dois-campos",
+      a: { label: "Data:", valor: `${d}/${m}/${y}`, sublinhar: Boolean(cab.data) },
+      b: { label: "Horário:", valor: `${hhTxt}:${mmTxt}`, sublinhar: Boolean(cab.horario) },
+    },
   ];
-  if (extraLinha) campos.push(extraLinha);
-
-  doc.setDrawColor(...AZUL);
-  doc.setLineWidth(0.6);
-  doc.setFontSize(8.5);
-  doc.setTextColor(20, 20, 20);
-  let y1 = yStart;
-  const linhaAlt = 16;
-  campos.forEach(([label, valor]) => {
-    doc.rect(marginX, y1, W - marginX * 2, linhaAlt);
-    doc.setFont("helvetica", "bold");
-    doc.text(label, marginX + 6, y1 + 11);
-    doc.setFont("helvetica", "normal");
-    const labelW = doc.getTextWidth(label) + 10;
-    doc.text(String(valor).slice(0, 200), marginX + 6 + labelW, y1 + 11, {
-      maxWidth: W - marginX * 2 - labelW - 12,
-    });
-    y1 += linhaAlt;
-  });
-  return y1;
+  if (extra) linhas.push(...extra);
+  return linhas;
 }
 
 // ————————————— (1) Lista Comprobatória — Kits/EPI/Camisetas ——————————
 
-export function gerarListaEntregaKitPDF(input: {
+export async function gerarListaEntregaKitPDF(input: {
   cabecalho: CabecalhoEntrega;
   cursistas: CursistaEntrega[];
   tipoSelecionado: TipoKit;
   instrutorNome?: string | null;
-}): Blob {
+}): Promise<Blob> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const marginX = 28;
 
+  const logos = await carregarLogosInstitucionais();
   const paginas = paginar(ordenar(input.cursistas));
   paginas.forEach((linhas, pi) => {
     if (pi > 0) doc.addPage();
     let y = 34;
-    y = tituloBloco(
-      doc,
-      W,
-      y,
+    const linhasCab = montarLinhasCabecalho(
+      input.cabecalho,
       "LISTA COMPROBATÓRIA DE ENTREGAS AOS CURSISTAS (kit aluno, material pedagógico, kit profissional, EPI, camisetas)",
-      "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE",
-      marginX,
     );
-    y = metadadosBloco(doc, W, y, marginX, input.cabecalho);
+    y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
+    y += 4;
 
     // Bloco de detalhamento com checkboxes
     const boxH = 52;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.6);
     doc.rect(marginX, y, W - marginX * 2, boxH);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.5);
@@ -234,28 +208,26 @@ export function gerarListaEntregaKitPDF(input: {
 
 // ————————————— (2) Lista de Entrega — Benefícios (Transporte/Alimentação) ————
 
-export function gerarListaEntregaBeneficiosPDF(input: {
+export async function gerarListaEntregaBeneficiosPDF(input: {
   cabecalho: CabecalhoEntrega;
   cursistas: CursistaEntrega[];
-}): Blob {
+}): Promise<Blob> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const marginX = 28;
 
+  const logos = await carregarLogosInstitucionais();
   const paginas = paginar(ordenar(input.cursistas));
   paginas.forEach((linhas, pi) => {
     if (pi > 0) doc.addPage();
     let y = 34;
-    y = tituloBloco(
-      doc,
-      W,
-      y,
+    const linhasCab = montarLinhasCabecalho(
+      input.cabecalho,
       "LISTA DE ENTREGA DOS BENEFÍCIOS - ALIMENTAÇÃO E TRANSPORTE",
-      "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE",
-      marginX,
     );
-    y = metadadosBloco(doc, W, y, marginX, input.cabecalho);
+    y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
+    y += 4;
 
     // Parágrafo normativo (literal — Instrução Normativa SGER nº 9/2024)
     const paragrafo =
@@ -265,6 +237,8 @@ export function gerarListaEntregaBeneficiosPDF(input: {
     doc.setTextColor(45, 45, 45);
     const linhasTxt = doc.splitTextToSize(paragrafo, W - marginX * 2 - 12);
     const paragH = linhasTxt.length * 10 + 10;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.6);
     doc.rect(marginX, y, W - marginX * 2, paragH);
     doc.text(linhasTxt, marginX + 6, y + 12, { lineHeightFactor: 1.35 });
     y += paragH + 4;
@@ -299,28 +273,26 @@ export function gerarListaEntregaBeneficiosPDF(input: {
 
 // ————————————— (3) Lista de Entrega — Certificados ————————————————————
 
-export function gerarListaEntregaCertificadosPDF(input: {
+export async function gerarListaEntregaCertificadosPDF(input: {
   cabecalho: CabecalhoEntrega;
   cursistas: CursistaEntrega[];
-}): Blob {
+}): Promise<Blob> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const marginX = 28;
 
+  const logos = await carregarLogosInstitucionais();
   const paginas = paginar(ordenar(input.cursistas));
   paginas.forEach((linhas, pi) => {
     if (pi > 0) doc.addPage();
     let y = 34;
-    y = tituloBloco(
-      doc,
-      W,
-      y,
+    const linhasCab = montarLinhasCabecalho(
+      input.cabecalho,
       "LISTA DE ENTREGA DOS CERTIFICADOS DE CONCLUSÃO DE CURSO DOS CONCLUINTES",
-      "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE",
-      marginX,
     );
-    y = metadadosBloco(doc, W, y, marginX, input.cabecalho);
+    y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
+    y += 4;
 
     y = tabelaCursistas(doc, W, H, y, marginX, linhas, pi, [
       { label: "Nº", w: 26, align: "center" },
@@ -369,9 +341,10 @@ function tabelaCursistas(
   ws.forEach((w) => xs.push(xs[xs.length - 1] + w));
 
   const headerH = 30;
-  doc.setFillColor(...AZUL);
-  doc.rect(tableX, yStart, tableW, headerH, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.6);
+  doc.rect(tableX, yStart, tableW, headerH);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   cols.forEach((c, i) => {
@@ -381,7 +354,7 @@ function tabelaCursistas(
       doc.text(p, cx, yStart + 12 + j * 9, { align: "center" });
     });
   });
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
   for (let i = 1; i < xs.length - 1; i += 1) {
     doc.line(xs[i], yStart, xs[i], yStart + headerH);
@@ -391,9 +364,9 @@ function tabelaCursistas(
   const disponivel = H - y - 70;
   const rowH = Math.max(18, Math.min(24, Math.floor(disponivel / linhas.length)));
 
-  doc.setDrawColor(120, 120, 120);
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
-  doc.setTextColor(20, 20, 20);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   const numeroInicial = paginaIdx * LINHAS_POR_PAGINA + 1;
