@@ -59,6 +59,34 @@ function ordenarCursistas(rows: Cursista[]): Cursista[] {
 
 const LINHAS_POR_PAGINA = 25;
 
+// Logo do PMQ (mesmo asset usado no cabeçalho do app / certificado). Buscado
+// uma única vez por geração e embutido como dataURL no PDF. Logos do MTE /
+// Governo Federal ainda não estão publicados no bucket `marca`; quando forem,
+// basta adicionar a URL em LOGOS_DIREITA que a renderização passa a incluí-los
+// sem outras mudanças no gerador.
+const LOGO_PMQ_URL =
+  "https://yqvocpnvunaprpmhlswn.supabase.co/storage/v1/object/public/marca/logo-pmq-horizontal.png";
+const LOGOS_DIREITA: string[] = [
+  // "https://.../logo-mte.png",
+  // "https://.../logo-governo-federal.png",
+];
+
+async function carregarImagemDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { cache: "force-cache" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : null);
+      fr.onerror = () => resolve(null);
+      fr.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 function paginarCursistas(cursistas: Cursista[], extras: number): Cursista[][] {
   const rows: Cursista[] = [...cursistas];
   for (let i = 0; i < extras; i += 1) rows.push({ nome: "", cpf: null });
@@ -75,10 +103,15 @@ function paginarCursistas(cursistas: Cursista[], extras: number): Cursista[][] {
 
 // -------------------------------- PDF --------------------------------
 
-export function gerarListaPDF(listas: ListaData[]): Blob {
+export async function gerarListaPDF(listas: ListaData[]): Promise<Blob> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
+
+  const logoPmq = await carregarImagemDataUrl(LOGO_PMQ_URL);
+  const logosDir = (
+    await Promise.all(LOGOS_DIREITA.map((u) => carregarImagemDataUrl(u)))
+  ).filter((v): v is string => Boolean(v));
 
   const paginasPorLista = listas.map((l) => paginarCursistas(ordenarCursistas(l.cursistas), l.extras));
   const totalPag = paginasPorLista.reduce((a, p) => a + p.length, 0);
@@ -88,7 +121,7 @@ export function gerarListaPDF(listas: ListaData[]): Blob {
     paginas.forEach((linhas, pi) => {
       pageNo += 1;
       if (pageNo > 1) doc.addPage();
-      renderPaginaPDF(doc, lista, linhas, W, H, pageNo, totalPag, pi + 1, paginas.length);
+      renderPaginaPDF(doc, lista, linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, logoPmq, logosDir);
     });
   });
 
@@ -110,6 +143,8 @@ function renderPaginaPDF(
   totalDocPag: number,
   paginaLista: number,
   totalPaginasLista: number,
+  logoPmq: string | null,
+  logosDireita: string[],
 ) {
   const AZUL: [number, number, number] = [27, 42, 74];
   const marginX = 28;
@@ -119,27 +154,37 @@ function renderPaginaPDF(
   doc.setDrawColor(...AZUL);
   doc.setLineWidth(0.8);
 
-  // Título principal
-  doc.setFillColor(...AZUL);
-  doc.rect(marginX, y, W - marginX * 2, 22, "F");
+  // Faixa de logos + título. Altura ~14mm (≈ 40pt).
+  const faixaH = 40;
+  const logoH = 28; // ≈ 10mm
+  const logoY = y + (faixaH - logoH) / 2;
+  if (logoPmq) {
+    try { doc.addImage(logoPmq, "PNG", marginX + 4, logoY, logoH * 2.6, logoH); } catch { /* ignore */ }
+  }
+  // Logos à direita (MTE / Governo Federal), quando disponíveis.
+  const larguraLogoDir = logoH * 1.6;
+  let xDir = W - marginX - 4;
+  for (let i = logosDireita.length - 1; i >= 0; i -= 1) {
+    try {
+      doc.addImage(logosDireita[i], "PNG", xDir - larguraLogoDir, logoY, larguraLogoDir, logoH);
+      xDir -= larguraLogoDir + 6;
+    } catch { /* ignore */ }
+  }
+  // Título centralizado + subtítulo, dentro da faixa.
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setTextColor(...AZUL);
+  doc.setFontSize(10.5);
   doc.text(
     "LISTA DE FREQUÊNCIA DOS CURSISTAS AS AULAS TEÓRICAS E PRÁTICAS",
-    W / 2, y + 15, { align: "center" },
+    W / 2, y + 18, { align: "center" },
   );
-  y += 22;
-
-  doc.setTextColor(...AZUL);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.rect(marginX, y, W - marginX * 2, 18);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
   doc.text(
-    "Programa Manuel Querino de Qualificação Social e Profissional — PMQ / DEQ / SEMP / MTE",
-    W / 2, y + 12, { align: "center" },
+    "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE",
+    W / 2, y + 32, { align: "center" },
   );
-  y += 18;
+  y += faixaH + 4;
 
   // Bloco de metadados
   const entidade = (lista.turma.entidade ?? "QUINTA ARTE").toUpperCase();
@@ -147,8 +192,8 @@ function renderPaginaPDF(
   const identTurma = `${lista.turma.codigo ?? ""}${lista.turma.nomeCurso ? " · " + lista.turma.nomeCurso : ""}`;
   const conteudo = lista.aula.tema ?? "";
   const instrutor = lista.aula.instrutor ?? "";
-  const horaIni = lista.aula.horaInicio ?? "____";
-  const horaFim = lista.aula.horaFim ?? "____";
+  const horaIni = lista.aula.horaInicio && lista.aula.horaInicio.trim() ? lista.aula.horaInicio : "___:___";
+  const horaFim = lista.aula.horaFim && lista.aula.horaFim.trim() ? lista.aula.horaFim : "___:___";
   const ch = lista.aula.cargaHoraria ?? "____";
 
   const campos: [string, string][] = [
@@ -203,34 +248,57 @@ function renderPaginaPDF(
     tableX + tableW,
   ];
 
-  const headerH = 30;
+  // colunas: Nº (6%) | NOME (34%) | CPF (14%) | Data+Freq (14%) | Lanche (14%) | Assinatura (18%)
+  const wNo2 = tableW * 0.06;
+  const wNome2 = tableW * 0.34;
+  const wCPF2 = tableW * 0.14;
+  const wFreq2 = tableW * 0.14;
+  const wLanche2 = tableW * 0.14;
+  const wAss2 = tableW - (wNo2 + wNome2 + wCPF2 + wFreq2 + wLanche2);
+  const xs2 = [
+    tableX,
+    tableX + wNo2,
+    tableX + wNo2 + wNome2,
+    tableX + wNo2 + wNome2 + wCPF2,
+    tableX + wNo2 + wNome2 + wCPF2 + wFreq2,
+    tableX + wNo2 + wNome2 + wCPF2 + wFreq2 + wLanche2,
+    tableX + tableW,
+  ];
+  // reatribui às variáveis usadas abaixo
+  const _unused = { wNo, wNome, wCPF, wFreq, wLanche, wAss, xs };
+  void _unused;
+  const headerH = 36;
   doc.setFillColor(...AZUL);
   doc.rect(tableX, y, tableW, headerH, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
 
   const dataLabel = formatarDataBR(lista.aula.data);
-  const headers = [
+  const headers: string[] = [
     "Nº",
-    "NOME COMPLETO DO/A CURSISTA\n(digitalizado)",
-    "CPF\n(digitalizado)",
-    `Data ${dataLabel}\nFrequência`,
-    "ENTREGA DO LANCHE\n(QUANDO FOR DIÁRIO)",
-    "ASSINATURA DO/A\nCURSISTA",
+    "NOME COMPLETO DO/A CURSISTA (digitalizado)",
+    "CPF (digitalizado)",
+    `Data ${dataLabel} Frequência`,
+    "ENTREGA DO LANCHE (QUANDO FOR DIÁRIO)",
+    "ASSINATURA DO/A CURSISTA",
   ];
   headers.forEach((h, i) => {
-    const cx = xs[i] + (xs[i + 1] - xs[i]) / 2;
-    const partes = h.split("\n");
-    partes.forEach((p, j) => {
-      doc.text(p, cx, y + 12 + j * 9, { align: "center" });
+    const colW = xs2[i + 1] - xs2[i];
+    const cx = xs2[i] + colW / 2;
+    const linhasTxt = doc.splitTextToSize(h, colW - 6) as string[];
+    const lh = 8;
+    const bloco = linhasTxt.length * lh;
+    const startY = y + (headerH - bloco) / 2 + lh - 2;
+    linhasTxt.forEach((p, j) => {
+      doc.text(p, cx, startY + j * lh, { align: "center" });
     });
   });
   // grade do header
   doc.setDrawColor(255, 255, 255);
   doc.setLineWidth(0.4);
-  for (let i = 1; i < xs.length - 1; i += 1) {
-    doc.line(xs[i], y, xs[i], y + headerH);
+  for (let i = 1; i < xs2.length - 1; i += 1) {
+    doc.line(xs2[i], y, xs2[i], y + headerH);
   }
   y += headerH;
 
@@ -249,16 +317,18 @@ function renderPaginaPDF(
   linhas.forEach((c, i) => {
     const rowY = y + i * rowH;
     doc.rect(tableX, rowY, tableW, rowH);
-    for (let j = 1; j < xs.length - 1; j += 1) {
-      doc.line(xs[j], rowY, xs[j], rowY + rowH);
+    for (let j = 1; j < xs2.length - 1; j += 1) {
+      doc.line(xs2[j], rowY, xs2[j], rowY + rowH);
     }
     const numero = String(numeroInicial + i).padStart(2, "0");
-    doc.text(numero, xs[0] + wNo / 2, rowY + rowH / 2 + 3, { align: "center" });
+    doc.text(numero, xs2[0] + wNo2 / 2, rowY + rowH / 2 + 3, { align: "center" });
     if (c.nome) {
-      doc.text(c.nome.slice(0, 44), xs[1] + 4, rowY + rowH / 2 + 3);
+      const maxNomeW = wNome2 - 8;
+      const nome = doc.splitTextToSize(c.nome, maxNomeW)[0] as string;
+      doc.text(nome, xs2[1] + 4, rowY + rowH / 2 + 3);
     }
     if (c.cpf) {
-      doc.text(formatarCPF(c.cpf), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
+      doc.text(formatarCPF(c.cpf), xs2[2] + wCPF2 / 2, rowY + rowH / 2 + 3, { align: "center" });
     }
   });
   y += rowH * linhas.length;
@@ -272,15 +342,15 @@ function renderPaginaPDF(
   doc.setLineWidth(0.6);
   doc.line(marginX + doc.getTextWidth("ASSINATURA DO/A INSTRUTOR/A:") + 8, y + 2, W - marginX, y + 2);
 
-  // Página X/Y
+  // Rodapé de controle interno (não faz parte do modelo oficial DEQ).
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(120, 120, 120);
+  doc.setFontSize(7);
+  doc.setTextColor(160, 160, 160);
   doc.text(
-    `Página ${pageNo}/${totalDocPag}${totalPaginasLista > 1 ? ` — folha ${paginaLista}/${totalPaginasLista}` : ""}`,
-    W - marginX, H - 16, { align: "right" },
+    `Data de referência ${dataPorExtenso(lista.aula.data)} — Página ${pageNo}/${totalDocPag}` +
+      (totalPaginasLista > 1 ? ` — folha ${paginaLista}/${totalPaginasLista}` : ""),
+    W - marginX, H - 12, { align: "right" },
   );
-  doc.text(`Data de referência: ${dataPorExtenso(lista.aula.data)}`, marginX, H - 16);
 }
 
 // -------------------------------- XLSX --------------------------------
