@@ -145,20 +145,43 @@ export async function upsertAula(input: {
     turma_id: input.turma_id,
     data: input.data,
   };
+  // Espelha campos novos nas colunas legadas para manter compatibilidade
+  // com bancos que ainda não têm conteudo_programatico/ch_prevista/hora_*.
   if (input.titulo !== undefined) payload.titulo = input.titulo;
+  if (input.conteudo_programatico !== undefined) {
+    payload.conteudo_programatico = input.conteudo_programatico;
+    payload.conteudo = input.conteudo_programatico;
+    if (payload.titulo === undefined) payload.titulo = input.conteudo_programatico;
+  }
+  if (input.ch_prevista !== undefined && input.ch_prevista !== null) {
+    payload.ch_prevista = input.ch_prevista;
+    if (input.duracao === undefined) payload.duracao = input.ch_prevista;
+  }
   if (input.duracao !== undefined && input.duracao !== null) payload.duracao = input.duracao;
-  if (input.conteudo_programatico !== undefined) payload.conteudo_programatico = input.conteudo_programatico;
-  if (input.ch_prevista !== undefined) payload.ch_prevista = input.ch_prevista;
   if (input.hora_inicio !== undefined) payload.hora_inicio = input.hora_inicio;
   if (input.hora_fim !== undefined) payload.hora_fim = input.hora_fim;
   if (input.instrutor !== undefined) payload.instrutor = input.instrutor;
-  if (input.id) {
-    const { error } = await supabase.from("aulas").update(payload).eq("id", input.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabase.from("aulas").insert(payload);
-    if (error) throw new Error(error.message);
+
+  // Retry progressivo: se o banco não tem alguma coluna nova (PGRST204),
+  // remove essa coluna do payload e tenta de novo. Assim funciona antes e
+  // depois de aplicar a migração que adiciona os campos.
+  const write = async (p: Record<string, unknown>) => {
+    return input.id
+      ? await supabase.from("aulas").update(p).eq("id", input.id)
+      : await supabase.from("aulas").insert(p);
+  };
+  let attempt = { ...payload };
+  for (let i = 0; i < 6; i++) {
+    const res = await write(attempt);
+    if (!res.error) return;
+    const msg = res.error.message || "";
+    const m = msg.match(/'([^']+)' column of 'aulas'/i) || msg.match(/column "?([a-z_]+)"? .* does not exist/i);
+    if (!m) throw new Error(msg);
+    const col = m[1];
+    if (!(col in attempt)) throw new Error(msg);
+    delete attempt[col];
   }
+  throw new Error("Falha ao salvar aula após múltiplas tentativas.");
 }
 
 export type UpsertTurmaInput = {
