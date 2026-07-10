@@ -231,23 +231,6 @@ function renderPaginaPDF(
   // ————— Tabela de cursistas —————
   const tableX = marginX;
   const tableW = W - marginX * 2;
-  // colunas: Nº | Nome | CPF | Data/Frequência | Lanche | Assinatura
-  const wNo = 22;
-  const wNome = 170;
-  const wCPF = 76;
-  const wFreq = 74;
-  const wLanche = 74;
-  const wAss = tableW - (wNo + wNome + wCPF + wFreq + wLanche);
-  const xs = [
-    tableX,
-    tableX + wNo,
-    tableX + wNo + wNome,
-    tableX + wNo + wNome + wCPF,
-    tableX + wNo + wNome + wCPF + wFreq,
-    tableX + wNo + wNome + wCPF + wFreq + wLanche,
-    tableX + tableW,
-  ];
-
   // colunas: Nº (6%) | NOME (34%) | CPF (14%) | Data+Freq (14%) | Lanche (14%) | Assinatura (18%)
   const wNo2 = tableW * 0.06;
   const wNome2 = tableW * 0.34;
@@ -255,6 +238,7 @@ function renderPaginaPDF(
   const wFreq2 = tableW * 0.14;
   const wLanche2 = tableW * 0.14;
   const wAss2 = tableW - (wNo2 + wNome2 + wCPF2 + wFreq2 + wLanche2);
+  void wAss2;
   const xs2 = [
     tableX,
     tableX + wNo2,
@@ -264,9 +248,6 @@ function renderPaginaPDF(
     tableX + wNo2 + wNome2 + wCPF2 + wFreq2 + wLanche2,
     tableX + tableW,
   ];
-  // reatribui às variáveis usadas abaixo
-  const _unused = { wNo, wNome, wCPF, wFreq, wLanche, wAss, xs };
-  void _unused;
   const headerH = 36;
   doc.setFillColor(...AZUL);
   doc.rect(tableX, y, tableW, headerH, "F");
