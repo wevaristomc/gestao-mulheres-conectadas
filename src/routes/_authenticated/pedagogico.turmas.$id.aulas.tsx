@@ -142,9 +142,14 @@ function AulasTab() {
                   return (
                   <TableRow key={r.id}>
                     <TableCell>{formatarData(pickFirst(r, ["data"]))}</TableCell>
-                    <TableCell>{pickFirst(r, ["titulo", "tema", "assunto", "descricao"]) ?? "—"}</TableCell>
+                    <TableCell>{pickFirst(r, ["conteudo_programatico", "titulo", "tema", "assunto", "descricao"]) ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {pickFirst(r, ["duracao", "carga_horaria"]) ?? "—"}
+                      {(() => {
+                        const ch = pickFirst(r, ["ch_prevista"]);
+                        if (ch !== null && ch !== undefined && ch !== "") return `${ch}h`;
+                        const dur = pickFirst(r, ["duracao", "carga_horaria"]);
+                        return dur ?? "—";
+                      })()}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
