@@ -131,30 +131,42 @@ export function renderCabecalhoInstitucional(
     for (let i = 0; i < alturas.length; i += 1) alturas[i] *= fator;
   }
 
-  // ————— Coluna esquerda: 5 logos, shrink-to-fit dentro da altura fixa —————
-  const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
+  // ————— Coluna esquerda: 5 logos com aspect ratio preservado —————
+  // Largura-alvo INDIVIDUAL por logo (fração da largura da coluna), imitando
+  // o documento oficial escaneado. Índices seguem LOGO_ARQUIVOS.
+  const LARGURAS_FRACAO = [0.80, 0.42, 0.78, 0.45, 0.65];
+  // Só filtramos nulos preservando o índice original para casar a fração.
+  const logosComIndice = logos
+    .map((l, i) => ({ logo: l, idx: i }))
+    .filter((x): x is { logo: LogoInstitucional; idx: number } => Boolean(x.logo));
   const gapLogos = 6;
-  const larguraSlot = leftW * 0.75;
-  const naturalHs = logosValidos.map((l) => larguraSlot * (l.h / l.w));
-  const somaNatural = naturalHs.reduce((a, b) => a + b, 0);
-  const gapsTotal = gapLogos * (logosValidos.length + 1);
+  // Dimensões naturais (aspect ratio preservado) na largura-alvo.
+  const naturais = logosComIndice.map(({ logo, idx }) => {
+    const frac = LARGURAS_FRACAO[idx] ?? 0.65;
+    const w = leftW * frac;
+    const h = w * (logo.h / logo.w);
+    return { w, h };
+  });
+  const somaNaturalH = naturais.reduce((a, b) => a + b.h, 0);
+  const gapsTotal = gapLogos * (logosComIndice.length + 1);
   const disponivelLogos = alturaTotal - gapsTotal;
+  // Shrink-to-fit UNIFORME em ambas as dimensões (nunca distorcer).
   const escala =
-    somaNatural > 0 && somaNatural > disponivelLogos ? disponivelLogos / somaNatural : 1;
-  const alturasLogos = naturalHs.map((h) => h * escala);
+    somaNaturalH > 0 && somaNaturalH > disponivelLogos ? disponivelLogos / somaNaturalH : 1;
+  const dimsLogos = naturais.map((n) => ({ w: n.w * escala, h: n.h * escala }));
 
   // ————— Coluna esquerda: caixa única com logos empilhados —————
   doc.setDrawColor(0);
   doc.setLineWidth(0.6);
   doc.rect(marginX, yStart, leftW, alturaTotal);
 
-  if (logosValidos.length > 0) {
-    const totalLogosH = alturasLogos.reduce((a, b) => a + b, 0);
-    const gapEfetivo = (alturaTotal - totalLogosH) / (logosValidos.length + 1);
+  if (logosComIndice.length > 0) {
+    const totalLogosH = dimsLogos.reduce((a, b) => a + b.h, 0);
+    const gapEfetivo = (alturaTotal - totalLogosH) / (logosComIndice.length + 1);
     let yLogo = yStart + gapEfetivo;
-    logosValidos.forEach((logo, i) => {
-      const hw = larguraSlot;
-      const hh = alturasLogos[i];
+    logosComIndice.forEach(({ logo }, i) => {
+      const hw = dimsLogos[i].w;
+      const hh = dimsLogos[i].h;
       const lx = marginX + (leftW - hw) / 2;
       try {
         doc.addImage(logo.dataUrl, logo.format, lx, yLogo, hw, hh);
@@ -239,21 +251,24 @@ function desenharCampo(
   const labelW = doc.getTextWidth(label);
   doc.setFont("helvetica", "normal");
   const cellRight = x + w;
-  const valorX = x + 6 + labelW + 4;
+  // Padding de 6pt entre o label e o valor (respiro como no documento real).
+  const valorX = x + 6 + labelW + 6;
   const maxValorW = cellRight - 6 - valorX;
   const valorTxt = String(valor ?? "");
   if (valorTxt) {
-    // Placeholder de linha em branco — desenhar como LINHA real, nunca como
-    // sequência de "_" (que jsPDF não quebra por maxWidth e vaza a célula).
+    // Placeholder de linha em branco — traço CURTO de ~40pt (só cabem uns
+    // poucos caracteres manuscritos), nunca linha até o fim da célula.
     if (/^[_\s]+$/.test(valorTxt)) {
       doc.setLineWidth(0.4);
-      if (maxValorW >= 30) {
-        doc.line(valorX, baseY + 1.5, valorX + maxValorW, baseY + 1.5);
+      const LARG_LINHA = 40;
+      if (maxValorW >= LARG_LINHA) {
+        doc.line(valorX, baseY + 1.5, valorX + LARG_LINHA, baseY + 1.5);
       } else {
-        // Espaço insuficiente ao lado do label → linha abaixo do label,
-        // dentro da célula.
+        // Sem espaço ao lado do label → linha curta abaixo do label,
+        // alinhada à esquerda dentro da célula.
         const lineY = Math.min(y + h - 4, baseY + 10);
-        doc.line(x + 6, lineY, cellRight - 6, lineY);
+        const larg = Math.min(LARG_LINHA, cellRight - 6 - (x + 6));
+        doc.line(x + 6, lineY, x + 6 + larg, lineY);
       }
     } else {
       doc.text(valorTxt, valorX, baseY, { maxWidth: Math.max(1, maxValorW) });
