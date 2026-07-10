@@ -157,7 +157,6 @@ function renderPaginaPDF(
   y += 4;
 
   // ————— Tabela de cursistas —————
-  const AZUL: [number, number, number] = [0, 0, 0];
   const tableX = marginX;
   const tableW = W - marginX * 2;
   // colunas: Nº (6%) | NOME (34%) | CPF (14%) | Data+Freq (14%) | Lanche (14%) | Assinatura (18%)
@@ -178,9 +177,10 @@ function renderPaginaPDF(
     tableX + tableW,
   ];
   const headerH = 36;
-  doc.setFillColor(...AZUL);
-  doc.rect(tableX, y, tableW, headerH, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.6);
+  doc.rect(tableX, y, tableW, headerH);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
 
@@ -205,7 +205,7 @@ function renderPaginaPDF(
     });
   });
   // grade do header
-  doc.setDrawColor(255, 255, 255);
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
   for (let i = 1; i < xs2.length - 1; i += 1) {
     doc.line(xs2[i], y, xs2[i], y + headerH);
@@ -213,9 +213,9 @@ function renderPaginaPDF(
   y += headerH;
 
   // linhas
-  doc.setDrawColor(120, 120, 120);
+  doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.4);
-  doc.setTextColor(20, 20, 20);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   const linhaTabH = Math.min(
