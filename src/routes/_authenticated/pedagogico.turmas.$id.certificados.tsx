@@ -113,7 +113,7 @@ function CertificadosTab() {
       return;
     }
     const ident = `${codigoTurma ?? ""}${cursoNome ? " · " + cursoNome : ""}`;
-    const blob = gerarListaEntregaCertificadosPDF({
+    const blob = await gerarListaEntregaCertificadosPDF({
       cabecalho: {
         entidade: executora as string,
         local: (localEndereco as string) ?? null,
