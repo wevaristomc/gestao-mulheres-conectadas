@@ -428,6 +428,7 @@ function exportarXLSX(
 function RelatoriosMte() {
   const [loading, setLoading] = useState<string | null>(null);
   const [erro, setErro] = useState<Record<string, string>>({});
+  const [detalhadaOpen, setDetalhadaOpen] = useState(false);
 
   async function baixar(def: RelatorioDef) {
     setLoading(def.view);
@@ -466,9 +467,15 @@ function RelatoriosMte() {
       <div className="mb-6">
         <ComprovacaoTurmaCard />
       </div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => setDetalhadaOpen(true)}>
+          <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+          Lista Detalhada por turma (XLSX 3 abas)
+        </Button>
+      </div>
       <div className="grid gap-3 md:grid-cols-2">
         {RELATORIOS.map((r) => (
-          <div key={r.view} className="rounded-lg border bg-card p-4 space-y-2">
+          <div key={`${r.view}::${r.variant ?? ""}`} className="rounded-lg border bg-card p-4 space-y-2">
             <div className="flex items-start gap-3">
               <FileSpreadsheet className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
@@ -488,20 +495,25 @@ function RelatoriosMte() {
               size="sm"
               className="w-full gap-1.5"
               onClick={() => baixar(r)}
-              disabled={loading === r.view}
+              disabled={loading === `${r.view}::${r.variant ?? ""}`}
             >
-              {loading === r.view ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {loading === `${r.view}::${r.variant ?? ""}` ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
               Baixar XLSX
             </Button>
-            {erro[r.view] ? (
+            {erro[`${r.view}::${r.variant ?? ""}`] ? (
               <div className="flex items-start gap-1.5 rounded border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <span className="break-words">{erro[r.view]}</span>
+                <span className="break-words">{erro[`${r.view}::${r.variant ?? ""}`]}</span>
               </div>
             ) : null}
           </div>
         ))}
       </div>
+      <DialogListaDetalhada open={detalhadaOpen} onOpenChange={setDetalhadaOpen} />
     </div>
   );
 }
