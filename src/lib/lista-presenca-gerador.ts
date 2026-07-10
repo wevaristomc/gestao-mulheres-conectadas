@@ -401,7 +401,6 @@ function renderContinuacaoPDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
 
-  // Numeração contínua: soma da primeira (22) + continuações anteriores (40 cada).
   const anteriores = LINHAS_PRIMEIRA_PAGINA + Math.max(0, paginaLista - 2) * LINHAS_CONTINUACAO;
   const numeroInicial = anteriores + 1;
 
