@@ -85,7 +85,7 @@ export function renderCabecalhoInstitucional(
 ): number {
   const { W, marginX, yStart, linhas, logos } = opts;
   const usableW = W - marginX * 2;
-  const leftW = Math.round(usableW * 0.22);
+  const leftW = Math.round(usableW * 0.30);
   const rightX = marginX + leftW;
   const rightW = usableW - leftW;
 
@@ -95,16 +95,27 @@ export function renderCabecalhoInstitucional(
     if (l.tipo === "titulo") {
       doc.setFontSize(10.5);
       const linhasTxt = doc.splitTextToSize(l.texto, rightW - 12) as string[];
-      return Math.max(24, linhasTxt.length * 13 + 6);
+      return Math.max(28, linhasTxt.length * 13 + 8);
     }
     if (l.tipo === "subtitulo") {
       doc.setFontSize(8.5);
       const linhasTxt = doc.splitTextToSize(l.texto, rightW - 12) as string[];
-      return Math.max(16, linhasTxt.length * 10 + 4);
+      return Math.max(20, linhasTxt.length * 10 + 6);
     }
-    return 16;
+    return 22;
   });
-  const alturaTotal = alturas.reduce((a, b) => a + b, 0);
+  let alturaTotal = alturas.reduce((a, b) => a + b, 0);
+
+  // Garante altura mínima do cabeçalho para acomodar os 5 logos de forma
+  // legível no lado esquerdo. Se a soma das alturas do lado direito for
+  // menor, cresce proporcionalmente cada linha.
+  const logosCount = logos.filter(Boolean).length || 1;
+  const alturaMinima = logosCount * 58 + (logosCount + 1) * 8; // ~340pt p/ 5 logos
+  if (alturaTotal < alturaMinima) {
+    const fator = alturaMinima / alturaTotal;
+    for (let i = 0; i < alturas.length; i += 1) alturas[i] = alturas[i] * fator;
+    alturaTotal = alturaMinima;
+  }
 
   // ————— Coluna esquerda: caixa única com logos empilhados —————
   doc.setDrawColor(0);
@@ -113,10 +124,10 @@ export function renderCabecalhoInstitucional(
 
   const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
   if (logosValidos.length > 0) {
-    const gap = 4;
-    const padX = 4;
+    const gap = 8;
     const alturaSlot = (alturaTotal - gap * (logosValidos.length + 1)) / logosValidos.length;
-    const larguraSlot = leftW - padX * 2;
+    // logos ocupam ~80% da largura da coluna, centralizados
+    const larguraSlot = leftW * 0.82;
     let yLogo = yStart + gap;
     logosValidos.forEach((logo) => {
       const aspect = logo.w / logo.h;

@@ -64,19 +64,54 @@ function ordenarCursistas(rows: Cursista[]): Cursista[] {
 }
 
 const LINHAS_POR_PAGINA = 25;
+const LINHAS_PRIMEIRA_PAGINA = 22;
 
 function paginarCursistas(cursistas: Cursista[], extras: number): Cursista[][] {
   const rows: Cursista[] = [...cursistas];
   for (let i = 0; i < extras; i += 1) rows.push({ nome: "", cpf: null });
-  // sempre ao menos uma página com 25 linhas
-  const total = Math.max(rows.length, LINHAS_POR_PAGINA);
+  // primeira folha tem 22 linhas (cabeçalho institucional é alto); demais 25.
   const paginas: Cursista[][] = [];
-  for (let i = 0; i < total; i += LINHAS_POR_PAGINA) {
-    const slice = rows.slice(i, i + LINHAS_POR_PAGINA);
-    while (slice.length < LINHAS_POR_PAGINA) slice.push({ nome: "", cpf: null });
+  const total = Math.max(rows.length, LINHAS_PRIMEIRA_PAGINA);
+  let idx = 0;
+  while (idx < total) {
+    const size = paginas.length === 0 ? LINHAS_PRIMEIRA_PAGINA : LINHAS_POR_PAGINA;
+    const slice = rows.slice(idx, idx + size);
+    while (slice.length < size) slice.push({ nome: "", cpf: null });
     paginas.push(slice);
+    idx += size;
   }
   return paginas;
+}
+
+/**
+ * Calcula a carga horária de uma aula no formato "NN horas".
+ * 1) Se houver hora início e fim válidas → (fim − início) em horas.
+ * 2) Caso contrário, parseia `cargaHoraria`. Se o número > 12 assume minutos
+ *    e divide por 60. Sempre com 2 dígitos.
+ */
+function formatarCargaHorariaAula(aula: AulaInfo): string | null {
+  const parseHM = (s: string | null | undefined): number | null => {
+    if (!s) return null;
+    const m = String(s).match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+  const ini = parseHM(aula.horaInicio);
+  const fim = parseHM(aula.horaFim);
+  if (ini !== null && fim !== null && fim > ini) {
+    const horas = (fim - ini) / 60;
+    const inteiro = Number.isInteger(horas) ? String(Math.round(horas)).padStart(2, "0") : horas.toFixed(1);
+    return `${inteiro} horas`;
+  }
+  if (aula.cargaHoraria) {
+    const num = Number(String(aula.cargaHoraria).replace(/[^\d.,]/g, "").replace(",", "."));
+    if (Number.isFinite(num) && num > 0) {
+      const horas = num > 12 ? num / 60 : num;
+      const inteiro = Number.isInteger(horas) ? String(Math.round(horas)).padStart(2, "0") : horas.toFixed(1);
+      return `${inteiro} horas`;
+    }
+  }
+  return null;
 }
 
 // -------------------------------- PDF --------------------------------
@@ -132,7 +167,7 @@ function renderPaginaPDF(
   const instrutor = lista.aula.instrutor ?? "";
   const horaIni = lista.aula.horaInicio && lista.aula.horaInicio.trim() ? lista.aula.horaInicio : "___:___";
   const horaFim = lista.aula.horaFim && lista.aula.horaFim.trim() ? lista.aula.horaFim : "___:___";
-  const chValor = lista.aula.cargaHoraria ?? "____";
+  const chFmt = formatarCargaHorariaAula(lista.aula);
   const linhasCab: LinhaCabecalho[] = [
     { tipo: "titulo", texto: "LISTA DE FREQUÊNCIA DOS CURSISTAS AS AULAS TEÓRICAS E PRÁTICAS" },
     { tipo: "subtitulo", texto: "Programa Manuel Querino de Qualificação Social e Profissional-PMQ/DEQ/SEMP/MTE" },
@@ -149,7 +184,11 @@ function renderPaginaPDF(
     },
     {
       tipo: "dois-campos",
-      a: { label: "Carga Horária Total/Dia:", valor: `${chValor} horas`, sublinhar: Boolean(lista.aula.cargaHoraria) },
+      a: {
+        label: "Carga Horária Total/Dia:",
+        valor: chFmt ?? "____ horas",
+        sublinhar: Boolean(chFmt),
+      },
       b: { label: "Quantidade de Cursistas Presentes na Aula:", valor: "_____" },
     },
   ];
@@ -223,7 +262,10 @@ function renderPaginaPDF(
     Math.floor((H - y - 60) / linhas.length),
   );
   const rowH = Math.max(18, linhaTabH);
-  const numeroInicial = (paginaLista - 1) * LINHAS_POR_PAGINA + 1;
+  const numeroInicial =
+    paginaLista === 1
+      ? 1
+      : LINHAS_PRIMEIRA_PAGINA + (paginaLista - 2) * LINHAS_POR_PAGINA + 1;
   linhas.forEach((c, i) => {
     const rowY = y + i * rowH;
     doc.rect(tableX, rowY, tableW, rowH);
