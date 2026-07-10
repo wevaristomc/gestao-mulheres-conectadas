@@ -330,7 +330,7 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
           }
           const dl = await h.downloadFileBase64(gdriveId);
           const bytes = base64ToBytes(dl.base64);
-          const blob = new Blob([bytes], { type: dl.contentType });
+          const blob = new Blob([bytes.buffer as ArrayBuffer], { type: dl.contentType });
           const t = await executarTranscricaoRouter({
             admin, processo: "drive_transcricao", file: blob, filename: nome, contentType: dl.contentType,
           });
@@ -342,7 +342,7 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
           } else {
             const dl = await h.downloadFileBase64(gdriveId);
             const bytes = base64ToBytes(dl.base64);
-            const blob = new Blob([bytes], { type: dl.contentType });
+            const blob = new Blob([bytes.buffer as ArrayBuffer], { type: dl.contentType });
             const t = await executarTranscricaoRouter({
               admin, processo: "drive_transcricao", file: blob, filename: nome, contentType: dl.contentType,
             });
