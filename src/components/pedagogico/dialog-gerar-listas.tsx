@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { aulasMteListOptions, turmasMteListOptions, type AulaMTE, type TurmaMTE } from "@/lib/mte-queries";
+import { turmaByIdOptions, pickFirst, type Row } from "@/lib/pedagogico-queries";
 import {
   baixarBlob, gerarListaDOCX, gerarListaPDF, gerarListaXLSX,
   type Cursista, type ListaData,
@@ -35,6 +36,8 @@ export function DialogGerarListas({
 
   const aulasQ = useQuery(aulasMteListOptions(turmaId || null));
   const aulas = useMemo(() => (aulasQ.data?.rows ?? []).slice().sort((a, b) => String(a.data ?? "").localeCompare(String(b.data ?? ""))), [aulasQ.data]);
+  const turmaRowQ = useQuery({ ...turmaByIdOptions(turmaId), enabled: !!turmaId });
+  const turmaRow = turmaRowQ.data?.row ?? null;
 
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [extras, setExtras] = useState<number>(5);
@@ -60,7 +63,7 @@ export function DialogGerarListas({
     setGerando(true);
     try {
       const cursistas = await buscarCursistas(turmaId);
-      const listas: ListaData[] = aulasSelecionadas.map((a) => construirLista(turma, a, cursistas, extras));
+      const listas: ListaData[] = aulasSelecionadas.map((a) => construirLista(turma, turmaRow, a, cursistas, extras));
 
       const codigo = (turma.codigo_turma ?? "turma").replace(/[^\w-]+/g, "-");
       const hoje = new Date().toISOString().slice(0, 10);
@@ -126,8 +129,8 @@ export function DialogGerarListas({
                   <li key={a.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <Checkbox checked={!!sel[a.id]} onCheckedChange={(v) => setSel((s) => ({ ...s, [a.id]: !!v }))} />
                     <span className="w-24 shrink-0 tabular-nums">{formatarData(a.data)}</span>
-                    <span className="flex-1 truncate">{a.conteudo_programatico ?? "(sem tema)"}</span>
-                    <span className="text-xs text-muted-foreground">{a.ch_prevista ?? "—"}h</span>
+                    <span className="flex-1 truncate">{pickFirst(a as unknown as Row, ["conteudo_programatico", "titulo", "tema", "assunto", "descricao"]) ?? "(sem tema)"}</span>
+                    <span className="text-xs text-muted-foreground">{pickFirst(a as unknown as Row, ["ch_prevista", "duracao", "carga_horaria"]) ?? "—"}h</span>
                   </li>
                 ))}
               </ul>
@@ -190,7 +193,45 @@ async function buscarCursistas(turmaId: string): Promise<Cursista[]> {
     .filter((c) => c.nome && c.nome !== "—");
 }
 
-function construirLista(turma: TurmaMTE, aula: AulaMTE, cursistas: Cursista[], extras: number): ListaData {
+function parseHorario(horario: string | null | undefined): { inicio: string | null; fim: string | null } {
+  if (!horario) return { inicio: null, fim: null };
+  const s = String(horario).trim();
+  const m = s.match(/(\d{1,2})[:h](\d{2})?\s*(?:às|as|-|a|até)\s*(\d{1,2})[:h]?(\d{2})?/i);
+  if (!m) return { inicio: null, fim: null };
+  const pad = (h: string, mm?: string) => `${h.padStart(2, "0")}:${(mm ?? "00").padStart(2, "0")}`;
+  return { inicio: pad(m[1], m[2]), fim: pad(m[3], m[4]) };
+}
+
+function construirLista(
+  turma: TurmaMTE,
+  turmaRow: Row | null,
+  aula: AulaMTE,
+  cursistas: Cursista[],
+  extras: number,
+): ListaData {
+  const aulaRow = aula as unknown as Row;
+  const parsed = parseHorario(turmaRow ? (pickFirst(turmaRow, ["horario_realizacao", "horario"]) as string | null) : null);
+  const tema =
+    (pickFirst(aulaRow, ["conteudo_programatico", "titulo", "tema", "assunto", "descricao"]) as string | null) ?? null;
+  const chAula = pickFirst(aulaRow, ["ch_prevista", "duracao", "carga_horaria"]);
+  let cargaHoraria: string | null = chAula ? `${chAula}h` : null;
+  if (!cargaHoraria && turma.ch_total && turma.qtd_dias_curso) {
+    const v = turma.ch_total / turma.qtd_dias_curso;
+    if (Number.isFinite(v) && v > 0) cargaHoraria = `${v}h`;
+  }
+  const instrutor =
+    aula.instrutor ??
+    (turmaRow ? (pickFirst(turmaRow, ["professor_nome", "instrutor"]) as string | null) : null);
+  const horaInicioRaw =
+    (aula.hora_inicio ??
+      (turmaRow ? (pickFirst(turmaRow, ["hora_inicio"]) as string | null) : null) ??
+      parsed.inicio) ?? null;
+  const horaFimRaw =
+    (aula.hora_fim ??
+      (turmaRow ? (pickFirst(turmaRow, ["hora_fim"]) as string | null) : null) ??
+      parsed.fim) ?? null;
+  const horaInicio = horaInicioRaw ? String(horaInicioRaw).slice(0, 5) : null;
+  const horaFim = horaFimRaw ? String(horaFimRaw).slice(0, 5) : null;
   return {
     turma: {
       codigo: turma.codigo_turma,
@@ -202,11 +243,11 @@ function construirLista(turma: TurmaMTE, aula: AulaMTE, cursistas: Cursista[], e
     },
     aula: {
       data: aula.data,
-      tema: aula.conteudo_programatico,
-      cargaHoraria: aula.ch_prevista ? `${aula.ch_prevista}h` : null,
-      instrutor: aula.instrutor,
-      horaInicio: aula.hora_inicio ?? null,
-      horaFim: aula.hora_fim ?? null,
+      tema,
+      cargaHoraria,
+      instrutor,
+      horaInicio,
+      horaFim,
     },
     cursistas,
     extras,
