@@ -236,23 +236,29 @@ function desenharCampo(
   doc.setFontSize(8.5);
   const baseY = y + h / 2 + 3;
   doc.text(label, x + 6, baseY);
-  const labelW = doc.getTextWidth(label) + 6;
+  const labelW = doc.getTextWidth(label);
   doc.setFont("helvetica", "normal");
-  const valorX = x + 6 + labelW;
-  const maxValorW = w - labelW - 12;
+  const cellRight = x + w;
+  const valorX = x + 6 + labelW + 4;
+  const maxValorW = cellRight - 6 - valorX;
   const valorTxt = String(valor ?? "");
   if (valorTxt) {
-    // Sequências de underscore ("_____") como placeholder devem caber
-    // exatamente na célula — jsPDF não quebra "_" com maxWidth, e o traço
-    // vazava para fora do quadro. Recalculamos quantos "_" cabem.
+    // Placeholder de linha em branco — desenhar como LINHA real, nunca como
+    // sequência de "_" (que jsPDF não quebra por maxWidth e vaza a célula).
     if (/^[_\s]+$/.test(valorTxt)) {
-      const oneW = Math.max(doc.getTextWidth("_"), 0.1);
-      const count = Math.max(1, Math.floor(maxValorW / oneW));
-      doc.text("_".repeat(count), valorX, baseY);
+      doc.setLineWidth(0.4);
+      if (maxValorW >= 30) {
+        doc.line(valorX, baseY + 1.5, valorX + maxValorW, baseY + 1.5);
+      } else {
+        // Espaço insuficiente ao lado do label → linha abaixo do label,
+        // dentro da célula.
+        const lineY = Math.min(y + h - 4, baseY + 10);
+        doc.line(x + 6, lineY, cellRight - 6, lineY);
+      }
     } else {
-      doc.text(valorTxt, valorX, baseY, { maxWidth: maxValorW });
+      doc.text(valorTxt, valorX, baseY, { maxWidth: Math.max(1, maxValorW) });
       if (sublinhar) {
-        const larg = Math.min(doc.getTextWidth(valorTxt), maxValorW);
+        const larg = Math.min(doc.getTextWidth(valorTxt), Math.max(1, maxValorW));
         doc.setLineWidth(0.4);
         doc.line(valorX, baseY + 1.5, valorX + larg, baseY + 1.5);
       }
