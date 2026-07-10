@@ -16,6 +16,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedWhatsappRouteImport } from './routes/_authenticated/whatsapp'
 import { Route as AuthenticatedTrocarSenhaRouteImport } from './routes/_authenticated/trocar-senha'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
+import { Route as AuthenticatedRelacaoHorasRouteImport } from './routes/_authenticated/relacao-horas'
 import { Route as AuthenticatedPendenciasRouteImport } from './routes/_authenticated/pendencias'
 import { Route as AuthenticatedPedagogicoRouteImport } from './routes/_authenticated/pedagogico'
 import { Route as AuthenticatedMteRouteImport } from './routes/_authenticated/mte'
@@ -103,6 +104,12 @@ const AuthenticatedRelatoriosRoute = AuthenticatedRelatoriosRouteImport.update({
   path: '/relatorios',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRelacaoHorasRoute =
+  AuthenticatedRelacaoHorasRouteImport.update({
+    id: '/relacao-horas',
+    path: '/relacao-horas',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPendenciasRoute = AuthenticatedPendenciasRouteImport.update({
   id: '/pendencias',
   path: '/pendencias',
@@ -413,6 +420,7 @@ export interface FileRoutesByFullPath {
   '/mte': typeof AuthenticatedMteRouteWithChildren
   '/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRouteWithChildren
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
@@ -466,6 +474,7 @@ export interface FileRoutesByTo {
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/drive': typeof AuthenticatedDriveRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
@@ -524,6 +533,7 @@ export interface FileRoutesById {
   '/_authenticated/mte': typeof AuthenticatedMteRouteWithChildren
   '/_authenticated/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
+  '/_authenticated/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRouteWithChildren
   '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
@@ -586,6 +596,7 @@ export interface FileRouteTypes {
     | '/mte'
     | '/pedagogico'
     | '/pendencias'
+    | '/relacao-horas'
     | '/relatorios'
     | '/trocar-senha'
     | '/whatsapp'
@@ -639,6 +650,7 @@ export interface FileRouteTypes {
     | '/captacao'
     | '/drive'
     | '/pendencias'
+    | '/relacao-horas'
     | '/trocar-senha'
     | '/'
     | '/administrativo/beneficios'
@@ -696,6 +708,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mte'
     | '/_authenticated/pedagogico'
     | '/_authenticated/pendencias'
+    | '/_authenticated/relacao-horas'
     | '/_authenticated/relatorios'
     | '/_authenticated/trocar-senha'
     | '/_authenticated/whatsapp'
@@ -799,6 +812,13 @@ declare module '@tanstack/react-router' {
       path: '/relatorios'
       fullPath: '/relatorios'
       preLoaderRoute: typeof AuthenticatedRelatoriosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/relacao-horas': {
+      id: '/_authenticated/relacao-horas'
+      path: '/relacao-horas'
+      fullPath: '/relacao-horas'
+      preLoaderRoute: typeof AuthenticatedRelacaoHorasRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/pendencias': {
@@ -1368,6 +1388,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMteRoute: typeof AuthenticatedMteRouteWithChildren
   AuthenticatedPedagogicoRoute: typeof AuthenticatedPedagogicoRouteWithChildren
   AuthenticatedPendenciasRoute: typeof AuthenticatedPendenciasRoute
+  AuthenticatedRelacaoHorasRoute: typeof AuthenticatedRelacaoHorasRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRouteWithChildren
   AuthenticatedTrocarSenhaRoute: typeof AuthenticatedTrocarSenhaRoute
   AuthenticatedWhatsappRoute: typeof AuthenticatedWhatsappRouteWithChildren
@@ -1385,6 +1406,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMteRoute: AuthenticatedMteRouteWithChildren,
   AuthenticatedPedagogicoRoute: AuthenticatedPedagogicoRouteWithChildren,
   AuthenticatedPendenciasRoute: AuthenticatedPendenciasRoute,
+  AuthenticatedRelacaoHorasRoute: AuthenticatedRelacaoHorasRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRouteWithChildren,
   AuthenticatedTrocarSenhaRoute: AuthenticatedTrocarSenhaRoute,
   AuthenticatedWhatsappRoute: AuthenticatedWhatsappRouteWithChildren,
