@@ -122,7 +122,7 @@ function QualificacaoTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  function baixarListaEntregaCertificados() {
+  async function baixarListaEntregaCertificados() {
     const qualificadas = linhas.filter((l) => !!l.qualificado);
     const base = qualificadas.length > 0 ? qualificadas : linhas;
     const cursistas: CursistaEntrega[] = base
@@ -136,7 +136,7 @@ function QualificacaoTab() {
     const codigo = (t?.codigo_turma as string | undefined) ?? "";
     const local = (t?.local_endereco as string | undefined) ?? (t?.local as string | undefined) ?? null;
     const executora = (t?.executora as string | undefined) ?? "QUINTA ARTE";
-    const blob = gerarListaEntregaCertificadosPDF({
+    const blob = await gerarListaEntregaCertificadosPDF({
       cabecalho: {
         entidade: executora,
         local,
