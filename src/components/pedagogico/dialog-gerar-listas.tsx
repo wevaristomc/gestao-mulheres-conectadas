@@ -65,7 +65,7 @@ export function DialogGerarListas({
       const codigo = (turma.codigo_turma ?? "turma").replace(/[^\w-]+/g, "-");
       const hoje = new Date().toISOString().slice(0, 10);
       let blob: Blob; let ext: string;
-      if (formato === "pdf") { blob = gerarListaPDF(listas); ext = "pdf"; }
+      if (formato === "pdf") { blob = await gerarListaPDF(listas); ext = "pdf"; }
       else if (formato === "xlsx") { blob = await gerarListaXLSX(listas); ext = "xlsx"; }
       else { blob = await gerarListaDOCX(listas); ext = "docx"; }
       baixarBlob(blob, `listas-presenca_${codigo}_${hoje}.${ext}`);
