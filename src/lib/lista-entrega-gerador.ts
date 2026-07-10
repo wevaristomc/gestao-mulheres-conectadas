@@ -38,7 +38,17 @@ export const TIPOS_KIT_LABEL: Record<TipoKit, string> = {
   camisetas: "camisetas",
 };
 
-const LINHAS_POR_PAGINA = 25;
+// Ritmo de folhas replicando o documento oficial escaneado — mesmo padrão
+// da lista de frequência: primeira folha tem cabeçalho institucional +
+// bloco específico + 25 linhas. Folhas de continuação recomeçam a tabela
+// direto do topo (sem cabeçalho e sem cabeçalho de colunas), com 40 linhas.
+// A última folha (que também é continuação, ou a única quando cabe tudo)
+// reserva espaço para a caixa de assinatura no rodapé — 33 linhas.
+const LINHAS_PRIMEIRA = 25;
+const LINHAS_CONTINUACAO = 40;
+const LINHAS_ULTIMA = 33;
+
+type FolhaEntrega = { linhas: CursistaEntrega[]; tipo: "primeira" | "continuacao" | "ultima" };
 
 function fCPF(cpf: string | null): string {
   if (!cpf) return "";
@@ -64,16 +74,34 @@ function ordenar(rows: CursistaEntrega[]): CursistaEntrega[] {
   );
 }
 
-function paginar(cursistas: CursistaEntrega[]): CursistaEntrega[][] {
+function paginar(cursistas: CursistaEntrega[]): FolhaEntrega[] {
   const rows = [...cursistas];
-  const total = Math.max(rows.length, LINHAS_POR_PAGINA);
-  const paginas: CursistaEntrega[][] = [];
-  for (let i = 0; i < total; i += LINHAS_POR_PAGINA) {
-    const slice = rows.slice(i, i + LINHAS_POR_PAGINA);
-    while (slice.length < LINHAS_POR_PAGINA) slice.push({ nome: "", cpf: null });
-    paginas.push(slice);
+  const preenche = (arr: CursistaEntrega[], n: number) => {
+    while (arr.length < n) arr.push({ nome: "", cpf: null });
+    return arr;
+  };
+  if (rows.length <= LINHAS_PRIMEIRA) {
+    return [{ linhas: preenche(rows.slice(0, LINHAS_PRIMEIRA), LINHAS_PRIMEIRA), tipo: "primeira" }];
   }
-  return paginas;
+  const folhas: FolhaEntrega[] = [];
+  folhas.push({ linhas: preenche(rows.slice(0, LINHAS_PRIMEIRA), LINHAS_PRIMEIRA), tipo: "primeira" });
+  let i = LINHAS_PRIMEIRA;
+  while (rows.length - i > LINHAS_ULTIMA) {
+    const slice = rows.slice(i, i + LINHAS_CONTINUACAO);
+    preenche(slice, LINHAS_CONTINUACAO);
+    folhas.push({ linhas: slice, tipo: "continuacao" });
+    i += LINHAS_CONTINUACAO;
+  }
+  const ultima = rows.slice(i);
+  preenche(ultima, LINHAS_ULTIMA);
+  folhas.push({ linhas: ultima, tipo: "ultima" });
+  return folhas;
+}
+
+function numeroInicialContinuacao(paginaIdx: number): number {
+  // paginaIdx=0 → 1; paginaIdx=1 → 26; depois +40 por folha.
+  if (paginaIdx === 0) return 1;
+  return LINHAS_PRIMEIRA + (paginaIdx - 1) * LINHAS_CONTINUACAO + 1;
 }
 
 // ————————————— Cabeçalho comum ——————————————————————————————————————
@@ -129,17 +157,25 @@ export async function gerarListaEntregaKitPDF(input: {
 
   const logos = await carregarLogosInstitucionais();
   const paginas = paginar(ordenar(input.cursistas));
-  paginas.forEach((linhas, pi) => {
+  const colsKit: ColDef[] = [
+    { label: "Nº", w: 26, align: "center" },
+    { label: "NOME COMPLETO DO/A CURSISTA (digitalizado)", w: 240, align: "left" },
+    { label: "CPF (digitalizado)", w: 100, align: "center" },
+    { label: "ASSINATURA DO/A CURSISTA", w: 0, align: "left" },
+  ];
+  paginas.forEach((folha, pi) => {
     if (pi > 0) doc.addPage();
+    const ehUltima = pi === paginas.length - 1;
     let y = 34;
-    const linhasCab = montarLinhasCabecalho(
-      input.cabecalho,
-      "LISTA COMPROBATÓRIA DE ENTREGAS AOS CURSISTAS (kit aluno, material pedagógico, kit profissional, EPI, camisetas)",
-    );
-    y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
-    y += 4;
+    if (folha.tipo === "primeira") {
+      const linhasCab = montarLinhasCabecalho(
+        input.cabecalho,
+        "LISTA COMPROBATÓRIA DE ENTREGAS AOS CURSISTAS (kit aluno, material pedagógico, kit profissional, EPI, camisetas)",
+      );
+      y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
+      y += 4;
 
-    // Bloco de detalhamento com checkboxes
+      // Bloco de detalhamento com checkboxes (só na primeira folha)
     const boxH = 52;
     doc.setDrawColor(0);
     doc.setLineWidth(0.6);
@@ -182,25 +218,14 @@ export async function gerarListaEntregaKitPDF(input: {
       }
     });
     y += boxH + 4;
+    }
 
     // Tabela: Nº | Nome | CPF | Assinatura
-    y = tabelaCursistas(doc, W, H, y, marginX, linhas, pi, [
-      { label: "Nº", w: 26, align: "center" },
-      { label: "NOME COMPLETO DO/A CURSISTA (digitalizado)", w: 240, align: "left" },
-      { label: "CPF (digitalizado)", w: 100, align: "center" },
-      { label: "ASSINATURA DO/A CURSISTA", w: 0, align: "left" },
-    ]);
-
-    rodapeAssinatura(
-      doc,
-      W,
-      H,
-      marginX,
-      "ASSINATURA DO/A INSTRUTOR/A:",
-      input.instrutorNome ?? null,
-      pi + 1,
-      paginas.length,
-    );
+    y = tabelaCursistas(doc, W, H, y, marginX, folha.linhas, pi, colsKit, folha.tipo === "primeira", ehUltima);
+    if (ehUltima) {
+      caixaAssinaturaFinal(doc, W, H, marginX, "ASSINATURA DO/A INSTRUTOR/A:", input.instrutorNome ?? null);
+    }
+    rodapeControle(doc, W, H, marginX, pi + 1, paginas.length);
   });
 
   return doc.output("blob");
@@ -219,15 +244,25 @@ export async function gerarListaEntregaBeneficiosPDF(input: {
 
   const logos = await carregarLogosInstitucionais();
   const paginas = paginar(ordenar(input.cursistas));
-  paginas.forEach((linhas, pi) => {
+  const colsBen: ColDef[] = [
+    { label: "Nº", w: 26, align: "center" },
+    { label: "NOME COMPLETO DO/A CURSISTA (digitalizado)", w: 170, align: "left" },
+    { label: "CPF (digitalizado)", w: 88, align: "center" },
+    { label: "Auxílio Transporte", w: 74, align: "center" },
+    { label: "Auxílio Alimentação\n(quando não for diário)", w: 88, align: "center" },
+    { label: "ASSINATURA DO/A CURSISTA", w: 0, align: "left" },
+  ];
+  paginas.forEach((folha, pi) => {
     if (pi > 0) doc.addPage();
+    const ehUltima = pi === paginas.length - 1;
     let y = 34;
-    const linhasCab = montarLinhasCabecalho(
-      input.cabecalho,
-      "LISTA DE ENTREGA DOS BENEFÍCIOS - ALIMENTAÇÃO E TRANSPORTE",
-    );
-    y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
-    y += 4;
+    if (folha.tipo === "primeira") {
+      const linhasCab = montarLinhasCabecalho(
+        input.cabecalho,
+        "LISTA DE ENTREGA DOS BENEFÍCIOS - ALIMENTAÇÃO E TRANSPORTE",
+      );
+      y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
+      y += 4;
 
     // Parágrafo normativo (literal — Instrução Normativa SGER nº 9/2024)
     const paragrafo =
@@ -242,30 +277,13 @@ export async function gerarListaEntregaBeneficiosPDF(input: {
     doc.rect(marginX, y, W - marginX * 2, paragH);
     doc.text(linhasTxt, marginX + 6, y + 12, { lineHeightFactor: 1.35 });
     y += paragH + 4;
+    }
 
-    y = tabelaCursistas(doc, W, H, y, marginX, linhas, pi, [
-      { label: "Nº", w: 26, align: "center" },
-      { label: "NOME COMPLETO DO/A CURSISTA (digitalizado)", w: 170, align: "left" },
-      { label: "CPF (digitalizado)", w: 88, align: "center" },
-      { label: "Auxílio Transporte", w: 74, align: "center" },
-      {
-        label: "Auxílio Alimentação\n(quando não for diário)",
-        w: 88,
-        align: "center",
-      },
-      { label: "ASSINATURA DO/A CURSISTA", w: 0, align: "left" },
-    ]);
-
-    rodapeAssinatura(
-      doc,
-      W,
-      H,
-      marginX,
-      "ASSINATURA DO/A RESPONSÁVEL PELA ENTREGA:",
-      input.cabecalho.responsavelNome ?? null,
-      pi + 1,
-      paginas.length,
-    );
+    y = tabelaCursistas(doc, W, H, y, marginX, folha.linhas, pi, colsBen, folha.tipo === "primeira", ehUltima);
+    if (ehUltima) {
+      caixaAssinaturaFinal(doc, W, H, marginX, "ASSINATURA DO/A RESPONSÁVEL PELA ENTREGA:", input.cabecalho.responsavelNome ?? null);
+    }
+    rodapeControle(doc, W, H, marginX, pi + 1, paginas.length);
   });
 
   return doc.output("blob");
@@ -284,33 +302,30 @@ export async function gerarListaEntregaCertificadosPDF(input: {
 
   const logos = await carregarLogosInstitucionais();
   const paginas = paginar(ordenar(input.cursistas));
-  paginas.forEach((linhas, pi) => {
+  const colsCert: ColDef[] = [
+    { label: "Nº", w: 26, align: "center" },
+    { label: "NOME COMPLETO DO/A CURSISTA (digitado)", w: 240, align: "left" },
+    { label: "CPF (digitado)", w: 100, align: "center" },
+    { label: "ASSINATURA DO/A CONCLUINTE", w: 0, align: "left" },
+  ];
+  paginas.forEach((folha, pi) => {
     if (pi > 0) doc.addPage();
+    const ehUltima = pi === paginas.length - 1;
     let y = 34;
-    const linhasCab = montarLinhasCabecalho(
-      input.cabecalho,
-      "LISTA DE ENTREGA DOS CERTIFICADOS DE CONCLUSÃO DE CURSO DOS CONCLUINTES",
-    );
-    y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
-    y += 4;
+    if (folha.tipo === "primeira") {
+      const linhasCab = montarLinhasCabecalho(
+        input.cabecalho,
+        "LISTA DE ENTREGA DOS CERTIFICADOS DE CONCLUSÃO DE CURSO DOS CONCLUINTES",
+      );
+      y = renderCabecalhoInstitucional(doc, { W, marginX, yStart: y, linhas: linhasCab, logos });
+      y += 4;
+    }
 
-    y = tabelaCursistas(doc, W, H, y, marginX, linhas, pi, [
-      { label: "Nº", w: 26, align: "center" },
-      { label: "NOME COMPLETO DO/A CURSISTA (digitado)", w: 240, align: "left" },
-      { label: "CPF (digitado)", w: 100, align: "center" },
-      { label: "ASSINATURA DO/A CONCLUINTE", w: 0, align: "left" },
-    ]);
-
-    rodapeAssinatura(
-      doc,
-      W,
-      H,
-      marginX,
-      "ASSINATURA DO/A RESPONSÁVEL:",
-      input.cabecalho.responsavelNome ?? null,
-      pi + 1,
-      paginas.length,
-    );
+    y = tabelaCursistas(doc, W, H, y, marginX, folha.linhas, pi, colsCert, folha.tipo === "primeira", ehUltima);
+    if (ehUltima) {
+      caixaAssinaturaFinal(doc, W, H, marginX, "ASSINATURA DO/A RESPONSÁVEL:", input.cabecalho.responsavelNome ?? null);
+    }
+    rodapeControle(doc, W, H, marginX, pi + 1, paginas.length);
   });
 
   return doc.output("blob");
@@ -329,6 +344,8 @@ function tabelaCursistas(
   linhas: CursistaEntrega[],
   paginaIdx: number,
   cols: ColDef[],
+  renderHeader: boolean,
+  ehUltima: boolean,
 ): number {
   const tableX = marginX;
   const tableW = W - marginX * 2;
@@ -340,28 +357,34 @@ function tabelaCursistas(
   const xs: number[] = [tableX];
   ws.forEach((w) => xs.push(xs[xs.length - 1] + w));
 
-  const headerH = 30;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.6);
-  doc.rect(tableX, yStart, tableW, headerH);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  cols.forEach((c, i) => {
-    const cx = xs[i] + (xs[i + 1] - xs[i]) / 2;
-    const partes = c.label.split("\n");
-    partes.forEach((p, j) => {
-      doc.text(p, cx, yStart + 12 + j * 9, { align: "center" });
+  let y = yStart;
+  if (renderHeader) {
+    const headerH = 30;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.6);
+    doc.rect(tableX, y, tableW, headerH);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    cols.forEach((c, i) => {
+      const cx = xs[i] + (xs[i + 1] - xs[i]) / 2;
+      const partes = c.label.split("\n");
+      partes.forEach((p, j) => {
+        doc.text(p, cx, y + 12 + j * 9, { align: "center" });
+      });
     });
-  });
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.4);
-  for (let i = 1; i < xs.length - 1; i += 1) {
-    doc.line(xs[i], yStart, xs[i], yStart + headerH);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.4);
+    for (let i = 1; i < xs.length - 1; i += 1) {
+      doc.line(xs[i], y, xs[i], y + headerH);
+    }
+    y += headerH;
   }
-  let y = yStart + headerH;
 
-  const disponivel = H - y - 70;
+  // Reserva rodapé: última folha precisa de caixa de assinatura + rodapé;
+  // demais folhas só do rodapé de controle.
+  const reservaRodape = ehUltima ? 70 : 26;
+  const disponivel = H - y - reservaRodape;
   const rowH = Math.max(18, Math.min(24, Math.floor(disponivel / linhas.length)));
 
   doc.setDrawColor(0, 0, 0);
@@ -369,7 +392,7 @@ function tabelaCursistas(
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  const numeroInicial = paginaIdx * LINHAS_POR_PAGINA + 1;
+  const numeroInicial = numeroInicialContinuacao(paginaIdx);
   linhas.forEach((c, i) => {
     const rowY = y + i * rowH;
     doc.rect(tableX, rowY, tableW, rowH);
@@ -389,36 +412,50 @@ function tabelaCursistas(
   return y + rowH * linhas.length;
 }
 
-function rodapeAssinatura(
+// Caixa de assinatura no rodapé da última folha (dentro de um quadro,
+// imitando o documento oficial).
+function caixaAssinaturaFinal(
   doc: jsPDF,
   W: number,
   H: number,
   marginX: number,
   label: string,
   nome: string | null,
-  paginaLista: number,
-  totalPaginasLista: number,
 ) {
-  const yy = H - 46;
+  const w = W - marginX * 2;
+  const h = 42;
+  const y = H - 26 - h;
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.6);
+  doc.rect(marginX, y, w, h);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(20, 20, 20);
-  doc.text(label, marginX, yy);
-  const w = doc.getTextWidth(label) + 8;
-  doc.setLineWidth(0.6);
-  doc.line(marginX + w, yy + 2, W - marginX, yy + 2);
+  doc.setTextColor(0, 0, 0);
+  doc.text(label, marginX + 8, y + h / 2 + 3);
+  const labW = doc.getTextWidth(label);
+  doc.setLineWidth(0.4);
+  doc.line(marginX + 8 + labW + 8, y + h / 2 + 5, marginX + w - 8, y + h / 2 + 5);
   if (nome) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text(nome, marginX + w + 6, yy - 2);
+    doc.text(nome, marginX + 8 + labW + 12, y + h / 2 + 1);
   }
+}
+
+// Rodapé de controle interno (cinza, 7pt) — impresso em todas as folhas.
+function rodapeControle(
+  doc: jsPDF,
+  W: number,
+  H: number,
+  marginX: number,
+  paginaLista: number,
+  totalPaginasLista: number,
+) {
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(120, 120, 120);
+  doc.setFontSize(7);
+  doc.setTextColor(160, 160, 160);
   if (totalPaginasLista > 1) {
-    doc.text(`Folha ${paginaLista}/${totalPaginasLista}`, W - marginX, H - 16, {
-      align: "right",
-    });
+    doc.text(`Folha ${paginaLista}/${totalPaginasLista}`, W - marginX, H - 12, { align: "right" });
   }
 }
 

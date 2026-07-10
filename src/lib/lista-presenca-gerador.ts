@@ -63,24 +63,45 @@ function ordenarCursistas(rows: Cursista[]): Cursista[] {
   return [...rows].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
 }
 
-const LINHAS_POR_PAGINA = 25;
+// Ritmo de folhas replicando o documento oficial escaneado:
+// - Primeira folha: cabeçalho institucional alto + cabeçalho de colunas +
+//   22 linhas de cursistas.
+// - Folhas de continuação: SEM cabeçalho institucional e SEM cabeçalho de
+//   colunas — a tabela recomeça do topo da folha, com numeração contínua.
+// - Última folha (que também é uma folha de continuação, exceto quando a
+//   turma cabe toda na primeira): reserva espaço para o bloco de assinatura
+//   do/a instrutor/a no rodapé, dentro de uma caixa.
 const LINHAS_PRIMEIRA_PAGINA = 22;
+const LINHAS_CONTINUACAO = 40;
+const LINHAS_ULTIMA = 33;
 
-function paginarCursistas(cursistas: Cursista[], extras: number): Cursista[][] {
+type FolhaLista = { linhas: Cursista[]; tipo: "primeira" | "continuacao" | "ultima" };
+
+function paginarCursistas(cursistas: Cursista[], extras: number): FolhaLista[] {
   const rows: Cursista[] = [...cursistas];
   for (let i = 0; i < extras; i += 1) rows.push({ nome: "", cpf: null });
-  // primeira folha tem 22 linhas (cabeçalho institucional é alto); demais 25.
-  const paginas: Cursista[][] = [];
-  const total = Math.max(rows.length, LINHAS_PRIMEIRA_PAGINA);
-  let idx = 0;
-  while (idx < total) {
-    const size = paginas.length === 0 ? LINHAS_PRIMEIRA_PAGINA : LINHAS_POR_PAGINA;
-    const slice = rows.slice(idx, idx + size);
-    while (slice.length < size) slice.push({ nome: "", cpf: null });
-    paginas.push(slice);
-    idx += size;
+  const preenche = (arr: Cursista[], target: number) => {
+    while (arr.length < target) arr.push({ nome: "", cpf: null });
+    return arr;
+  };
+  // Caso 1: tudo cabe na primeira folha → única folha, tratada como última
+  // (para desenhar a caixa de assinatura no rodapé).
+  if (rows.length <= LINHAS_PRIMEIRA_PAGINA) {
+    return [{ linhas: preenche(rows.slice(0, LINHAS_PRIMEIRA_PAGINA), LINHAS_PRIMEIRA_PAGINA), tipo: "primeira" }];
   }
-  return paginas;
+  const folhas: FolhaLista[] = [];
+  folhas.push({ linhas: preenche(rows.slice(0, LINHAS_PRIMEIRA_PAGINA), LINHAS_PRIMEIRA_PAGINA), tipo: "primeira" });
+  let i = LINHAS_PRIMEIRA_PAGINA;
+  while (rows.length - i > LINHAS_ULTIMA) {
+    const slice = rows.slice(i, i + LINHAS_CONTINUACAO);
+    preenche(slice, LINHAS_CONTINUACAO);
+    folhas.push({ linhas: slice, tipo: "continuacao" });
+    i += LINHAS_CONTINUACAO;
+  }
+  const ultima = rows.slice(i);
+  preenche(ultima, LINHAS_ULTIMA);
+  folhas.push({ linhas: ultima, tipo: "ultima" });
+  return folhas;
 }
 
 /**
@@ -128,22 +149,81 @@ export async function gerarListaPDF(listas: ListaData[]): Promise<Blob> {
   let pageNo = 0;
   listas.forEach((lista, i) => {
     const paginas = paginasPorLista[i];
-    paginas.forEach((linhas, pi) => {
+    paginas.forEach((folha, pi) => {
       pageNo += 1;
       if (pageNo > 1) doc.addPage();
-      renderPaginaPDF(doc, lista, linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, logos);
+      // A primeira folha (única ou não) é também a última quando há só uma.
+      const ehUltima = pi === paginas.length - 1;
+      if (folha.tipo === "primeira") {
+        renderPrimeiraPaginaPDF(doc, lista, folha.linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, logos, ehUltima);
+      } else {
+        renderContinuacaoPDF(doc, lista, folha.linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, folha.tipo === "ultima");
+      }
     });
   });
 
   return doc.output("blob");
 }
 
-/**
- * Renderiza uma página da lista de frequência no formato oficial DEQ/PMQ.
- * Cabeçalho institucional + bloco de metadados + tabela com colunas exatas
- * (Nº | Nome | CPF | Data + Frequência | Entrega do Lanche | Assinatura).
- */
-function renderPaginaPDF(
+// Larguras de coluna da tabela (fração da largura útil), compartilhadas
+// entre a primeira folha e as folhas de continuação para manter alinhamento
+// visual perfeito entre páginas.
+const COL_FRAC = {
+  no: 0.06,
+  nome: 0.34,
+  cpf: 0.14,
+  freq: 0.14,
+  lanche: 0.14,
+  // assinatura: restante (0.18)
+} as const;
+
+function calcularXs(marginX: number, tableW: number): number[] {
+  const wNo = tableW * COL_FRAC.no;
+  const wNome = tableW * COL_FRAC.nome;
+  const wCPF = tableW * COL_FRAC.cpf;
+  const wFreq = tableW * COL_FRAC.freq;
+  const wLanche = tableW * COL_FRAC.lanche;
+  return [
+    marginX,
+    marginX + wNo,
+    marginX + wNo + wNome,
+    marginX + wNo + wNome + wCPF,
+    marginX + wNo + wNome + wCPF + wFreq,
+    marginX + wNo + wNome + wCPF + wFreq + wLanche,
+    marginX + tableW,
+  ];
+}
+
+// Rodapé de controle interno (cinza), impresso em todas as folhas.
+function rodapeControle(doc: jsPDF, W: number, H: number, marginX: number, dataAula: string | null, pageNo: number, totalDocPag: number, paginaLista: number, totalPaginasLista: number) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(160, 160, 160);
+  doc.text(
+    `Data de referência ${dataPorExtenso(dataAula)} — Página ${pageNo}/${totalDocPag}` +
+      (totalPaginasLista > 1 ? ` — folha ${paginaLista}/${totalPaginasLista}` : ""),
+    W - marginX, H - 12, { align: "right" },
+  );
+}
+
+// Caixa de assinatura do/a instrutor/a — só na última folha.
+function caixaAssinaturaInstrutor(doc: jsPDF, W: number, marginX: number, y: number): number {
+  const w = W - marginX * 2;
+  const h = 42;
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.6);
+  doc.rect(marginX, y, w, h);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  doc.text("ASSINATURA DO/A INSTRUTOR/A:", marginX + 8, y + h / 2 + 3);
+  const labW = doc.getTextWidth("ASSINATURA DO/A INSTRUTOR/A:");
+  doc.setLineWidth(0.4);
+  doc.line(marginX + 8 + labW + 8, y + h / 2 + 5, marginX + w - 8, y + h / 2 + 5);
+  return y + h;
+}
+
+function renderPrimeiraPaginaPDF(
   doc: jsPDF,
   lista: ListaData,
   linhas: Cursista[],
@@ -154,6 +234,7 @@ function renderPaginaPDF(
   paginaLista: number,
   totalPaginasLista: number,
   logos: (LogoInstitucional | null)[],
+  ehUltima: boolean,
 ) {
   const marginX = 28;
   let y = 34;
@@ -198,23 +279,10 @@ function renderPaginaPDF(
   // ————— Tabela de cursistas —————
   const tableX = marginX;
   const tableW = W - marginX * 2;
-  // colunas: Nº (6%) | NOME (34%) | CPF (14%) | Data+Freq (14%) | Lanche (14%) | Assinatura (18%)
-  const wNo2 = tableW * 0.06;
-  const wNome2 = tableW * 0.34;
-  const wCPF2 = tableW * 0.14;
-  const wFreq2 = tableW * 0.14;
-  const wLanche2 = tableW * 0.14;
-  const wAss2 = tableW - (wNo2 + wNome2 + wCPF2 + wFreq2 + wLanche2);
-  void wAss2;
-  const xs2 = [
-    tableX,
-    tableX + wNo2,
-    tableX + wNo2 + wNome2,
-    tableX + wNo2 + wNome2 + wCPF2,
-    tableX + wNo2 + wNome2 + wCPF2 + wFreq2,
-    tableX + wNo2 + wNome2 + wCPF2 + wFreq2 + wLanche2,
-    tableX + tableW,
-  ];
+  const xs2 = calcularXs(marginX, tableW);
+  const wNo2 = xs2[1] - xs2[0];
+  const wNome2 = xs2[2] - xs2[1];
+  const wCPF2 = xs2[3] - xs2[2];
   const headerH = 36;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.6);
@@ -257,15 +325,10 @@ function renderPaginaPDF(
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  const linhaTabH = Math.min(
-    24,
-    Math.floor((H - y - 60) / linhas.length),
-  );
-  const rowH = Math.max(18, linhaTabH);
-  const numeroInicial =
-    paginaLista === 1
-      ? 1
-      : LINHAS_PRIMEIRA_PAGINA + (paginaLista - 2) * LINHAS_POR_PAGINA + 1;
+  const reservaRodape = ehUltima ? 60 : 26;
+  const linhaTabH = Math.floor((H - y - reservaRodape) / linhas.length);
+  const rowH = Math.max(18, Math.min(24, linhaTabH));
+  const numeroInicial = 1;
   linhas.forEach((c, i) => {
     const rowY = y + i * rowH;
     doc.rect(tableX, rowY, tableW, rowH);
@@ -285,24 +348,74 @@ function renderPaginaPDF(
   });
   y += rowH * linhas.length;
 
-  // ————— Rodapé: assinatura do instrutor —————
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(20, 20, 20);
-  doc.text("ASSINATURA DO/A INSTRUTOR/A:", marginX, y);
-  doc.setLineWidth(0.6);
-  doc.line(marginX + doc.getTextWidth("ASSINATURA DO/A INSTRUTOR/A:") + 8, y + 2, W - marginX, y + 2);
+  // ————— Rodapé: caixa de assinatura só na última folha —————
+  if (ehUltima) {
+    y += 10;
+    caixaAssinaturaInstrutor(doc, W, marginX, y);
+  }
+  rodapeControle(doc, W, H, marginX, lista.aula.data, pageNo, totalDocPag, paginaLista, totalPaginasLista);
+}
 
-  // Rodapé de controle interno (não faz parte do modelo oficial DEQ).
+// Folhas 2..N — sem cabeçalho institucional e sem cabeçalho de colunas.
+// A tabela recomeça do topo com numeração contínua e as mesmas larguras.
+function renderContinuacaoPDF(
+  doc: jsPDF,
+  lista: ListaData,
+  linhas: Cursista[],
+  W: number,
+  H: number,
+  pageNo: number,
+  totalDocPag: number,
+  paginaLista: number,
+  totalPaginasLista: number,
+  ehUltima: boolean,
+) {
+  const marginX = 28;
+  const tableX = marginX;
+  const tableW = W - marginX * 2;
+  const xs = calcularXs(marginX, tableW);
+  const wNo = xs[1] - xs[0];
+  const wNome = xs[2] - xs[1];
+  const wCPF = xs[3] - xs[2];
+
+  const yTop = 34;
+  const reservaRodape = ehUltima ? 66 : 26;
+  const rowH = Math.max(18, Math.min(24, Math.floor((H - yTop - reservaRodape) / linhas.length)));
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(160, 160, 160);
-  doc.text(
-    `Data de referência ${dataPorExtenso(lista.aula.data)} — Página ${pageNo}/${totalDocPag}` +
-      (totalPaginasLista > 1 ? ` — folha ${paginaLista}/${totalPaginasLista}` : ""),
-    W - marginX, H - 12, { align: "right" },
-  );
+  doc.setFontSize(8.5);
+
+  // Numeração contínua: soma da primeira (22) + continuações anteriores (40 cada).
+  const anteriores = LINHAS_PRIMEIRA_PAGINA + Math.max(0, paginaLista - 2) * LINHAS_CONTINUACAO;
+  const numeroInicial = anteriores + 1;
+
+  linhas.forEach((c, i) => {
+    const rowY = yTop + i * rowH;
+    doc.rect(tableX, rowY, tableW, rowH);
+    for (let j = 1; j < xs.length - 1; j += 1) {
+      doc.line(xs[j], rowY, xs[j], rowY + rowH);
+    }
+    const numero = String(numeroInicial + i).padStart(2, "0");
+    doc.text(numero, xs[0] + wNo / 2, rowY + rowH / 2 + 3, { align: "center" });
+    if (c.nome) {
+      const maxNomeW = wNome - 8;
+      const nome = doc.splitTextToSize(c.nome, maxNomeW)[0] as string;
+      doc.text(nome, xs[1] + 4, rowY + rowH / 2 + 3);
+    }
+    if (c.cpf) {
+      doc.text(formatarCPF(c.cpf), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
+    }
+  });
+  let y = yTop + rowH * linhas.length;
+
+  if (ehUltima) {
+    y += 10;
+    caixaAssinaturaInstrutor(doc, W, marginX, y);
+  }
+  rodapeControle(doc, W, H, marginX, lista.aula.data, pageNo, totalDocPag, paginaLista, totalPaginasLista);
 }
 
 // -------------------------------- XLSX --------------------------------
