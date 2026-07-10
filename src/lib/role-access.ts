@@ -30,6 +30,8 @@ export type ModuleKey =
   | "whatsapp"
   | "base-conhecimento"
   | "drive"
+  | "relacao-horas"
+  | "financeiro-relacoes-horas"
   | "configuracoes";
 
 const ALL: AppRole[] = [...APP_ROLES];
@@ -39,24 +41,40 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
   pendencias: ALL,
   pedagogico: [
     "coordenador_geral",
+    "administrativo",
     "coordenador_pedagogico",
     "professor",
     "auxiliar_pedagogico",
   ],
   mte: [
     "coordenador_geral",
-    "coordenador_pedagogico",
     "administrativo",
-    "auxiliar_pedagogico",
+    "coordenador_pedagogico",
   ],
   administrativo: ["coordenador_geral", "administrativo"],
-  financeiro: ["coordenador_geral", "gestor_financeiro"],
-  captacao: ["coordenador_geral", "gestor_financeiro"],
-  relatorios: ["coordenador_geral", "coordenador_pedagogico", "gestor_financeiro"],
-  whatsapp: ["coordenador_geral", "coordenador_pedagogico", "administrativo"],
+  financeiro: ["coordenador_geral", "administrativo", "gestor_financeiro"],
+  captacao: ["coordenador_geral", "administrativo", "gestor_financeiro"],
+  relatorios: [
+    "coordenador_geral",
+    "administrativo",
+    "coordenador_pedagogico",
+    "gestor_financeiro",
+  ],
+  whatsapp: ["coordenador_geral", "administrativo", "coordenador_pedagogico"],
   "base-conhecimento": ALL,
   drive: ALL,
-  configuracoes: ["coordenador_geral"],
+  "relacao-horas": [
+    "coordenador_geral",
+    "administrativo",
+    "professor",
+    "auxiliar_pedagogico",
+  ],
+  "financeiro-relacoes-horas": [
+    "coordenador_geral",
+    "administrativo",
+    "gestor_financeiro",
+  ],
+  configuracoes: ["coordenador_geral", "administrativo"],
 };
 
 export function canAccess(module: ModuleKey, role: AppRole | null): boolean {

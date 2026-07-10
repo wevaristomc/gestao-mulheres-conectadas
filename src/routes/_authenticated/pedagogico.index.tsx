@@ -25,11 +25,14 @@ export const Route = createFileRoute("/_authenticated/pedagogico/")({
 });
 
 function PedagogicoIndex() {
-  const { projetoId, projetoNome } = useActiveContext();
+  const { projetoId, projetoNome, user } = useActiveContext();
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico"]);
+  const soMinhasTurmas = hasAnyRole(["professor", "auxiliar_pedagogico"]);
   const qc = useQueryClient();
-  const q = useQuery(turmasListOptions(projetoId));
+  const q = useQuery(
+    turmasListOptions(projetoId, soMinhasTurmas ? user?.id ?? null : null),
+  );
   const rows = q.data?.rows ?? [];
   const erro = q.data?.error ?? (q.isError ? String(q.error) : null);
 

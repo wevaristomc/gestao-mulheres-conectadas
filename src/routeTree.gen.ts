@@ -16,6 +16,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedWhatsappRouteImport } from './routes/_authenticated/whatsapp'
 import { Route as AuthenticatedTrocarSenhaRouteImport } from './routes/_authenticated/trocar-senha'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
+import { Route as AuthenticatedRelacaoHorasRouteImport } from './routes/_authenticated/relacao-horas'
 import { Route as AuthenticatedPendenciasRouteImport } from './routes/_authenticated/pendencias'
 import { Route as AuthenticatedPedagogicoRouteImport } from './routes/_authenticated/pedagogico'
 import { Route as AuthenticatedMteRouteImport } from './routes/_authenticated/mte'
@@ -51,6 +52,7 @@ import { Route as AuthenticatedMteBeneficiariasRouteImport } from './routes/_aut
 import { Route as AuthenticatedMteAvaRouteImport } from './routes/_authenticated/mte.ava'
 import { Route as AuthenticatedMteAulasRouteImport } from './routes/_authenticated/mte.aulas'
 import { Route as AuthenticatedFinanceiroRubricasRouteImport } from './routes/_authenticated/financeiro.rubricas'
+import { Route as AuthenticatedFinanceiroRelacoesHorasRouteImport } from './routes/_authenticated/financeiro.relacoes-horas'
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
@@ -103,6 +105,12 @@ const AuthenticatedRelatoriosRoute = AuthenticatedRelatoriosRouteImport.update({
   path: '/relatorios',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRelacaoHorasRoute =
+  AuthenticatedRelacaoHorasRouteImport.update({
+    id: '/relacao-horas',
+    path: '/relacao-horas',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPendenciasRoute = AuthenticatedPendenciasRouteImport.update({
   id: '/pendencias',
   path: '/pendencias',
@@ -303,6 +311,12 @@ const AuthenticatedFinanceiroRubricasRoute =
     path: '/rubricas',
     getParentRoute: () => AuthenticatedFinanceiroRoute,
   } as any)
+const AuthenticatedFinanceiroRelacoesHorasRoute =
+  AuthenticatedFinanceiroRelacoesHorasRouteImport.update({
+    id: '/relacoes-horas',
+    path: '/relacoes-horas',
+    getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
 const AuthenticatedFinanceiroOrcamentoRoute =
   AuthenticatedFinanceiroOrcamentoRouteImport.update({
     id: '/orcamento',
@@ -413,6 +427,7 @@ export interface FileRoutesByFullPath {
   '/mte': typeof AuthenticatedMteRouteWithChildren
   '/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/relatorios': typeof AuthenticatedRelatoriosRouteWithChildren
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
@@ -426,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/financeiro/relacoes-horas': typeof AuthenticatedFinanceiroRelacoesHorasRoute
   '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/ava': typeof AuthenticatedMteAvaRoute
@@ -466,6 +482,7 @@ export interface FileRoutesByTo {
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/drive': typeof AuthenticatedDriveRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
+  '/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
@@ -478,6 +495,7 @@ export interface FileRoutesByTo {
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/financeiro/relacoes-horas': typeof AuthenticatedFinanceiroRelacoesHorasRoute
   '/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/mte/ava': typeof AuthenticatedMteAvaRoute
@@ -524,6 +542,7 @@ export interface FileRoutesById {
   '/_authenticated/mte': typeof AuthenticatedMteRouteWithChildren
   '/_authenticated/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
+  '/_authenticated/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRouteWithChildren
   '/_authenticated/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/_authenticated/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
@@ -538,6 +557,7 @@ export interface FileRoutesById {
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
+  '/_authenticated/financeiro/relacoes-horas': typeof AuthenticatedFinanceiroRelacoesHorasRoute
   '/_authenticated/financeiro/rubricas': typeof AuthenticatedFinanceiroRubricasRoute
   '/_authenticated/mte/aulas': typeof AuthenticatedMteAulasRoute
   '/_authenticated/mte/ava': typeof AuthenticatedMteAvaRoute
@@ -586,6 +606,7 @@ export interface FileRouteTypes {
     | '/mte'
     | '/pedagogico'
     | '/pendencias'
+    | '/relacao-horas'
     | '/relatorios'
     | '/trocar-senha'
     | '/whatsapp'
@@ -599,6 +620,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/financeiro/relacoes-horas'
     | '/financeiro/rubricas'
     | '/mte/aulas'
     | '/mte/ava'
@@ -639,6 +661,7 @@ export interface FileRouteTypes {
     | '/captacao'
     | '/drive'
     | '/pendencias'
+    | '/relacao-horas'
     | '/trocar-senha'
     | '/'
     | '/administrativo/beneficios'
@@ -651,6 +674,7 @@ export interface FileRouteTypes {
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
+    | '/financeiro/relacoes-horas'
     | '/financeiro/rubricas'
     | '/mte/aulas'
     | '/mte/ava'
@@ -696,6 +720,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mte'
     | '/_authenticated/pedagogico'
     | '/_authenticated/pendencias'
+    | '/_authenticated/relacao-horas'
     | '/_authenticated/relatorios'
     | '/_authenticated/trocar-senha'
     | '/_authenticated/whatsapp'
@@ -710,6 +735,7 @@ export interface FileRouteTypes {
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
+    | '/_authenticated/financeiro/relacoes-horas'
     | '/_authenticated/financeiro/rubricas'
     | '/_authenticated/mte/aulas'
     | '/_authenticated/mte/ava'
@@ -799,6 +825,13 @@ declare module '@tanstack/react-router' {
       path: '/relatorios'
       fullPath: '/relatorios'
       preLoaderRoute: typeof AuthenticatedRelatoriosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/relacao-horas': {
+      id: '/_authenticated/relacao-horas'
+      path: '/relacao-horas'
+      fullPath: '/relacao-horas'
+      preLoaderRoute: typeof AuthenticatedRelacaoHorasRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/pendencias': {
@@ -1046,6 +1079,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceiroRubricasRouteImport
       parentRoute: typeof AuthenticatedFinanceiroRoute
     }
+    '/_authenticated/financeiro/relacoes-horas': {
+      id: '/_authenticated/financeiro/relacoes-horas'
+      path: '/relacoes-horas'
+      fullPath: '/financeiro/relacoes-horas'
+      preLoaderRoute: typeof AuthenticatedFinanceiroRelacoesHorasRouteImport
+      parentRoute: typeof AuthenticatedFinanceiroRoute
+    }
     '/_authenticated/financeiro/orcamento': {
       id: '/_authenticated/financeiro/orcamento'
       path: '/orcamento'
@@ -1214,6 +1254,7 @@ interface AuthenticatedFinanceiroRouteChildren {
   AuthenticatedFinanceiroDespesasRoute: typeof AuthenticatedFinanceiroDespesasRoute
   AuthenticatedFinanceiroFornecedoresRoute: typeof AuthenticatedFinanceiroFornecedoresRoute
   AuthenticatedFinanceiroOrcamentoRoute: typeof AuthenticatedFinanceiroOrcamentoRoute
+  AuthenticatedFinanceiroRelacoesHorasRoute: typeof AuthenticatedFinanceiroRelacoesHorasRoute
   AuthenticatedFinanceiroRubricasRoute: typeof AuthenticatedFinanceiroRubricasRoute
   AuthenticatedFinanceiroIndexRoute: typeof AuthenticatedFinanceiroIndexRoute
 }
@@ -1225,6 +1266,8 @@ const AuthenticatedFinanceiroRouteChildren: AuthenticatedFinanceiroRouteChildren
       AuthenticatedFinanceiroFornecedoresRoute,
     AuthenticatedFinanceiroOrcamentoRoute:
       AuthenticatedFinanceiroOrcamentoRoute,
+    AuthenticatedFinanceiroRelacoesHorasRoute:
+      AuthenticatedFinanceiroRelacoesHorasRoute,
     AuthenticatedFinanceiroRubricasRoute: AuthenticatedFinanceiroRubricasRoute,
     AuthenticatedFinanceiroIndexRoute: AuthenticatedFinanceiroIndexRoute,
   }
@@ -1368,6 +1411,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMteRoute: typeof AuthenticatedMteRouteWithChildren
   AuthenticatedPedagogicoRoute: typeof AuthenticatedPedagogicoRouteWithChildren
   AuthenticatedPendenciasRoute: typeof AuthenticatedPendenciasRoute
+  AuthenticatedRelacaoHorasRoute: typeof AuthenticatedRelacaoHorasRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRouteWithChildren
   AuthenticatedTrocarSenhaRoute: typeof AuthenticatedTrocarSenhaRoute
   AuthenticatedWhatsappRoute: typeof AuthenticatedWhatsappRouteWithChildren
@@ -1385,6 +1429,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMteRoute: AuthenticatedMteRouteWithChildren,
   AuthenticatedPedagogicoRoute: AuthenticatedPedagogicoRouteWithChildren,
   AuthenticatedPendenciasRoute: AuthenticatedPendenciasRoute,
+  AuthenticatedRelacaoHorasRoute: AuthenticatedRelacaoHorasRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRouteWithChildren,
   AuthenticatedTrocarSenhaRoute: AuthenticatedTrocarSenhaRoute,
   AuthenticatedWhatsappRoute: AuthenticatedWhatsappRouteWithChildren,

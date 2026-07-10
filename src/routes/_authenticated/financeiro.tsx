@@ -43,6 +43,7 @@ function FinanceiroLayout() {
     { to: "/financeiro/despesas", label: "Despesas" },
     { to: "/financeiro/fornecedores", label: "Fornecedores" },
     { to: "/financeiro/rubricas", label: "Rubricas" },
+    { to: "/financeiro/relacoes-horas", label: "Relações de Horas" },
   ];
 
   return (
