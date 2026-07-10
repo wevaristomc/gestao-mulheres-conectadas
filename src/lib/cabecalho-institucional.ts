@@ -89,40 +89,59 @@ export function renderCabecalhoInstitucional(
   const rightX = marginX + leftW;
   const rightW = usableW - leftW;
 
-  // Pré-cálculo de alturas do lado direito.
+  // Altura TOTAL fixa do cabeçalho institucional (~35% do A4). Nada de
+  // crescer conforme o número/proporção dos logos.
+  const ALTURA_TOTAL = 290;
+  const alturaTotal = ALTURA_TOTAL;
+
+  // Alturas compactas por tipo de linha. Se o texto quebrar, ampliamos a
+  // altura da linha correspondente proporcional ao nº de linhas.
   doc.setFont("helvetica", "bold");
   const alturas = linhas.map((l) => {
     if (l.tipo === "titulo") {
       doc.setFontSize(10.5);
-      const linhasTxt = doc.splitTextToSize(l.texto, rightW - 12) as string[];
-      return Math.max(28, linhasTxt.length * 13 + 8);
+      const n = (doc.splitTextToSize(l.texto, rightW - 12) as string[]).length;
+      return Math.max(28, n * 13 + 6);
     }
     if (l.tipo === "subtitulo") {
       doc.setFontSize(8.5);
-      const linhasTxt = doc.splitTextToSize(l.texto, rightW - 12) as string[];
-      return Math.max(20, linhasTxt.length * 10 + 6);
+      const n = (doc.splitTextToSize(l.texto, rightW - 12) as string[]).length;
+      return Math.max(18, n * 10 + 4);
     }
-    return 22;
+    if (l.tipo === "campo") {
+      doc.setFontSize(8.5);
+      const labelW = doc.getTextWidth(l.label) + 12;
+      const disponivel = rightW - labelW - 12;
+      doc.setFont("helvetica", "normal");
+      const n = disponivel > 40
+        ? (doc.splitTextToSize(l.valor || "", disponivel) as string[]).length
+        : 1;
+      doc.setFont("helvetica", "bold");
+      return n > 1 ? Math.max(30, n * 11 + 8) : 22;
+    }
+    return 24; // dois-campos
   });
-  let alturaTotal = alturas.reduce((a, b) => a + b, 0);
-
-  // Coluna esquerda: cada logo mantém sua proporção natural.
-  // A largura de todos os logos é fixa (~82% da coluna); a altura de cada
-  // slot é largura/aspect. A altura mínima do cabeçalho vira a soma dessas
-  // alturas naturais + gaps — assim logos "altos" (como o 3-MTEL/MTE) não
-  // ficam minúsculos por compartilharem a mesma altura de linha com logos
-  // largos.
-  const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
-  const gapLogos = 8;
-  const larguraSlot = leftW * 0.82;
-  const alturasLogos = logosValidos.map((l) => larguraSlot * (l.h / l.w));
-  const alturaLogosCol =
-    alturasLogos.reduce((a, b) => a + b, 0) + gapLogos * (logosValidos.length + 1);
-  if (alturaTotal < alturaLogosCol) {
-    const fator = alturaLogosCol / alturaTotal;
-    for (let i = 0; i < alturas.length; i += 1) alturas[i] = alturas[i] * fator;
-    alturaTotal = alturaLogosCol;
+  const somaRight = alturas.reduce((a, b) => a + b, 0);
+  if (somaRight < alturaTotal) {
+    // Distribui o excedente igualmente entre as linhas.
+    const extra = (alturaTotal - somaRight) / alturas.length;
+    for (let i = 0; i < alturas.length; i += 1) alturas[i] += extra;
+  } else if (somaRight > alturaTotal) {
+    const fator = alturaTotal / somaRight;
+    for (let i = 0; i < alturas.length; i += 1) alturas[i] *= fator;
   }
+
+  // ————— Coluna esquerda: 5 logos, shrink-to-fit dentro da altura fixa —————
+  const logosValidos = logos.filter((l): l is LogoInstitucional => Boolean(l));
+  const gapLogos = 6;
+  const larguraSlot = leftW * 0.75;
+  const naturalHs = logosValidos.map((l) => larguraSlot * (l.h / l.w));
+  const somaNatural = naturalHs.reduce((a, b) => a + b, 0);
+  const gapsTotal = gapLogos * (logosValidos.length + 1);
+  const disponivelLogos = alturaTotal - gapsTotal;
+  const escala =
+    somaNatural > 0 && somaNatural > disponivelLogos ? disponivelLogos / somaNatural : 1;
+  const alturasLogos = naturalHs.map((h) => h * escala);
 
   // ————— Coluna esquerda: caixa única com logos empilhados —————
   doc.setDrawColor(0);
@@ -130,11 +149,8 @@ export function renderCabecalhoInstitucional(
   doc.rect(marginX, yStart, leftW, alturaTotal);
 
   if (logosValidos.length > 0) {
-    // Distribui gaps extras uniformemente caso o lado direito seja mais alto
-    // que a soma natural dos logos.
     const totalLogosH = alturasLogos.reduce((a, b) => a + b, 0);
-    const gapEfetivo =
-      (alturaTotal - totalLogosH) / (logosValidos.length + 1);
+    const gapEfetivo = (alturaTotal - totalLogosH) / (logosValidos.length + 1);
     let yLogo = yStart + gapEfetivo;
     logosValidos.forEach((logo, i) => {
       const hw = larguraSlot;
@@ -220,23 +236,29 @@ function desenharCampo(
   doc.setFontSize(8.5);
   const baseY = y + h / 2 + 3;
   doc.text(label, x + 6, baseY);
-  const labelW = doc.getTextWidth(label) + 6;
+  const labelW = doc.getTextWidth(label);
   doc.setFont("helvetica", "normal");
-  const valorX = x + 6 + labelW;
-  const maxValorW = w - labelW - 12;
+  const cellRight = x + w;
+  const valorX = x + 6 + labelW + 4;
+  const maxValorW = cellRight - 6 - valorX;
   const valorTxt = String(valor ?? "");
   if (valorTxt) {
-    // Sequências de underscore ("_____") como placeholder devem caber
-    // exatamente na célula — jsPDF não quebra "_" com maxWidth, e o traço
-    // vazava para fora do quadro. Recalculamos quantos "_" cabem.
+    // Placeholder de linha em branco — desenhar como LINHA real, nunca como
+    // sequência de "_" (que jsPDF não quebra por maxWidth e vaza a célula).
     if (/^[_\s]+$/.test(valorTxt)) {
-      const oneW = Math.max(doc.getTextWidth("_"), 0.1);
-      const count = Math.max(1, Math.floor(maxValorW / oneW));
-      doc.text("_".repeat(count), valorX, baseY);
+      doc.setLineWidth(0.4);
+      if (maxValorW >= 30) {
+        doc.line(valorX, baseY + 1.5, valorX + maxValorW, baseY + 1.5);
+      } else {
+        // Espaço insuficiente ao lado do label → linha abaixo do label,
+        // dentro da célula.
+        const lineY = Math.min(y + h - 4, baseY + 10);
+        doc.line(x + 6, lineY, cellRight - 6, lineY);
+      }
     } else {
-      doc.text(valorTxt, valorX, baseY, { maxWidth: maxValorW });
+      doc.text(valorTxt, valorX, baseY, { maxWidth: Math.max(1, maxValorW) });
       if (sublinhar) {
-        const larg = Math.min(doc.getTextWidth(valorTxt), maxValorW);
+        const larg = Math.min(doc.getTextWidth(valorTxt), Math.max(1, maxValorW));
         doc.setLineWidth(0.4);
         doc.line(valorX, baseY + 1.5, valorX + larg, baseY + 1.5);
       }
