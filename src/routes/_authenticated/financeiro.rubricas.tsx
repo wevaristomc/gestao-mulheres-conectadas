@@ -82,6 +82,49 @@ function RubricasPage() {
       ) : null}
 
       <div className="rounded-md border">
+        <ul className="divide-y md:hidden">
+          {rubricas.map((r) => {
+            const previsto = toNumber(r.valor_previsto);
+            const executado = executadoPorRubrica.get(r.id) ?? 0;
+            const saldo = previsto - executado;
+            const pct = previsto > 0 ? (executado / previsto) * 100 : 0;
+            const isEdit = editId === r.id;
+            return (
+              <li key={r.id} className="p-3 space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words text-sm font-semibold">
+                      <span className="font-mono text-xs text-muted-foreground">{String(r.codigo ?? "—")}</span>
+                      {" · "}{String(r.descricao ?? "—")}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Executado <strong className="text-foreground">{formatBRL(executado)}</strong> de {formatBRL(previsto)} ({pct.toFixed(1)}%)
+                    </div>
+                    <div className={cn("text-xs", saldo < 0 && "text-destructive")}>
+                      Saldo: <strong>{formatBRL(saldo)}</strong>
+                    </div>
+                  </div>
+                  {isEdit ? (
+                    <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+                      {salvar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </Button>
+                  ) : (
+                    <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => { setEditId(r.id); setEditVal(String(previsto)); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                {isEdit ? (
+                  <Input value={editVal} onChange={(e) => setEditVal(e.target.value)} inputMode="decimal" placeholder="Previsto (R$)" />
+                ) : null}
+              </li>
+            );
+          })}
+          {!rubricas.length && !rubQ.isLoading ? (
+            <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma rubrica cadastrada.</li>
+          ) : null}
+        </ul>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -161,6 +204,7 @@ function RubricasPage() {
             ) : null}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );
