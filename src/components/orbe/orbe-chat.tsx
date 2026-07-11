@@ -78,7 +78,13 @@ export function OrbeChat({
 
   const enviarMut = useMutation({
     mutationFn: async (mensagem: string) =>
-      await enviar({ data: { conversa_id: conversaId, mensagem } }),
+      await enviar({
+        data: {
+          conversa_id: conversaId,
+          mensagem,
+          rota_atual: typeof window !== "undefined" ? window.location.pathname : null,
+        },
+      }),
     onMutate: (m) => {
       setMensagens((prev) => [...prev, { role: "user", content: m }]);
       onThinkingChange?.(true);
