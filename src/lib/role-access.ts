@@ -39,8 +39,18 @@ export type ModuleKey =
 const ALL: AppRole[] = [...APP_ROLES];
 
 export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
-  "visao-geral": ALL,
-  pendencias: ALL,
+  "visao-geral": [
+    "coordenador_geral",
+    "administrativo",
+    "coordenador_pedagogico",
+    "gestor_financeiro",
+  ],
+  pendencias: [
+    "coordenador_geral",
+    "administrativo",
+    "coordenador_pedagogico",
+    "gestor_financeiro",
+  ],
   pedagogico: [
     "coordenador_geral",
     "administrativo",
@@ -64,7 +74,11 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
   ],
   whatsapp: ["coordenador_geral", "administrativo", "coordenador_pedagogico"],
   "base-conhecimento": ALL,
-  drive: ALL,
+  drive: [
+    "coordenador_geral",
+    "administrativo",
+    "coordenador_pedagogico",
+  ],
   "relacao-horas": [
     "coordenador_geral",
     "administrativo",
@@ -84,4 +98,20 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
 export function canAccess(module: ModuleKey, role: AppRole | null): boolean {
   if (!role) return false;
   return MODULE_ACCESS[module].includes(role);
+}
+
+/**
+ * Rota-destino padrão para cada papel quando o usuário tenta abrir uma
+ * rota fora da matriz. Fail-closed: guarda de rota nunca deixa entrar.
+ */
+export function landingPathForRole(role: AppRole | null): string {
+  switch (role) {
+    case "professor":
+    case "auxiliar_pedagogico":
+      return "/pedagogico";
+    case "gestor_financeiro":
+      return "/financeiro";
+    default:
+      return "/";
+  }
 }
