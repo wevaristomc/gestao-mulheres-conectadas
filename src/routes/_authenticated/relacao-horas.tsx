@@ -15,6 +15,9 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { requireModuleAccess } from "@/lib/auth-guard";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
@@ -23,6 +26,7 @@ import {
   turmasDoUsuarioOptions, classificarTurno,
   type RelacaoStatus, type RelacaoItem,
 } from "@/lib/relacao-horas-queries";
+import { locaisOptions } from "@/lib/locais-queries";
 import { gerarPdfRelacaoHoras } from "@/lib/relacao-horas-pdf";
 
 export const Route = createFileRoute("/_authenticated/relacao-horas")({
@@ -59,15 +63,23 @@ function RelacaoHorasPage() {
   const listaQ = useQuery(minhasRelacoesOptions(user?.id ?? null));
   const detalheQ = useQuery(relacaoDetalheOptions(selecionada));
   const turmasQ = useQuery(turmasDoUsuarioOptions(user?.id ?? null));
+  const locaisQ = useQuery(locaisOptions(true));
 
   // Pré-preenche local se todas as turmas compartilham o mesmo
   useMemo(() => {
     if (local) return;
     const rows = turmasQ.data?.rows ?? [];
     if (rows.length === 0) return;
-    const locais = Array.from(new Set(rows.map((r) => r.local).filter(Boolean))) as string[];
-    if (locais.length === 1) setLocal(locais[0]);
+    const nomes = Array.from(new Set(rows.map((r) => r.local_nome).filter(Boolean))) as string[];
+    if (nomes.length === 1) setLocal(nomes[0]);
   }, [turmasQ.data, local]);
+
+  // Turmas do mês em locais diferentes?
+  const turmasMulti = (() => {
+    const rows = turmasQ.data?.rows ?? [];
+    const set = new Set(rows.map((r) => r.local_nome).filter(Boolean));
+    return set.size > 1;
+  })();
 
   const gerarMut = useMutation({
     mutationFn: async () => {
@@ -103,7 +115,7 @@ function RelacaoHorasPage() {
 
   async function onEditarItem(
     item: RelacaoItem,
-    campo: "hora_entrada" | "saida_almoco" | "retorno" | "hora_saida" | "conteudo",
+    campo: "hora_entrada" | "saida_almoco" | "retorno" | "hora_saida" | "conteudo" | "local_nome",
     valor: string,
   ) {
     if (!relacao) return;
@@ -117,6 +129,7 @@ function RelacaoHorasPage() {
         hora_saida: patch.hora_saida,
         valor_hora: Number(relacao.valor_hora),
         conteudo: patch.conteudo,
+        local_nome: patch.local_nome,
       });
       await recomputarTotais(relacao.id);
       qc.invalidateQueries({ queryKey: ["relacoes-horas", "detalhe", relacao.id] });
@@ -154,13 +167,28 @@ function RelacaoHorasPage() {
           </div>
           <div className="flex-1 min-w-[240px]">
             <Label htmlFor="local">Local de trabalho</Label>
-            <Input id="local" value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Ex.: Escola X" />
+            <Select value={local || "none"} onValueChange={(v) => setLocal(v === "none" ? "" : v)}>
+              <SelectTrigger id="local"><SelectValue placeholder="Selecione o local" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {(locaisQ.data?.rows ?? []).map((l) => (
+                  <SelectItem key={l.id} value={l.nome}>
+                    {l.nome}{l.municipio ? ` — ${l.municipio}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button onClick={() => gerarMut.mutate()} disabled={gerarMut.isPending}>
             {gerarMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
             Gerar do mês
           </Button>
         </div>
+        {turmasMulti && (
+          <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+            Suas turmas estão em locais diferentes. Cada linha da relação pode ter seu próprio local.
+          </div>
+        )}
         {(turmasQ.data?.rows ?? []).length > 0 && (
           <div className="mt-3 rounded border bg-muted/30 p-2 text-xs">
             <div className="mb-1 font-medium text-muted-foreground">Turmas vinculadas detectadas</div>
@@ -170,6 +198,7 @@ function RelacaoHorasPage() {
                   <b>Turma da {turnoNome[classificarTurno(t)]}:</b>{" "}
                   {t.codigo ?? t.nome ?? "—"} — {(t.hora_inicio ?? "").slice(0, 5)} às {(t.hora_fim ?? "").slice(0, 5)}
                   {" · R$ "}{Number(t.valor_hora).toFixed(2)}/h
+                  {t.local_nome ? ` · ${t.local_nome}` : ""}
                 </li>
               ))}
             </ul>
@@ -228,6 +257,7 @@ function RelacaoHorasPage() {
                     <TableRow>
                       <TableHead className="w-[100px]">Data</TableHead>
                       <TableHead>Dia</TableHead>
+                      {turmasMulti && <TableHead className="w-[160px]">Local</TableHead>}
                       <TableHead className="w-[110px]">Entrada</TableHead>
                       <TableHead className="w-[110px]">Saída Almoço</TableHead>
                       <TableHead className="w-[110px]">Retorno</TableHead>
@@ -246,6 +276,23 @@ function RelacaoHorasPage() {
                         <TableRow key={it.id}>
                           <TableCell>{it.data.split("-").reverse().join("/")}</TableCell>
                           <TableCell>{nomes[dow]}</TableCell>
+                          {turmasMulti && (
+                            <TableCell>
+                              <Select
+                                disabled={!isRascunho}
+                                value={it.local_nome ?? "none"}
+                                onValueChange={(v) => onEditarItem(it, "local_nome", v === "none" ? "" : v)}
+                              >
+                                <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">—</SelectItem>
+                                  {(locaisQ.data?.rows ?? []).map((l) => (
+                                    <SelectItem key={l.id} value={l.nome}>{l.nome}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          )}
                           <TableCell>
                             <Input type="time" disabled={!isRascunho}
                               defaultValue={it.hora_entrada ?? ""}
