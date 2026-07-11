@@ -1,14 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users,
   GraduationCap,
   Wallet,
   AlertCircle,
+  Milestone,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveContext } from "@/hooks/use-active-context";
@@ -18,6 +23,11 @@ import {
   kpiExecucaoOrcamentariaOptions,
   pendenciasAbertasCountOptions,
 } from "@/lib/dashboard-queries";
+import {
+  etapasListOptions, atividadesByEtapaOptions,
+  progresso, etapaAtual, isAtrasada,
+  ETAPA_STATUS_LABEL,
+} from "@/lib/etapas-queries";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
