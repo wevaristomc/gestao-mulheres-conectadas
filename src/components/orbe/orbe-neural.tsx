@@ -218,7 +218,7 @@ export function OrbeNeural() {
         aria-label="Abrir Orbe Neural"
         onClick={() => setOpen(true)}
         className={cn(
-          "fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center",
+          "fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center sm:bottom-6 sm:right-6 sm:h-16 sm:w-16",
           "rounded-full bg-background/80 backdrop-blur shadow-lg border border-primary/30",
           "hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-primary",
         )}
