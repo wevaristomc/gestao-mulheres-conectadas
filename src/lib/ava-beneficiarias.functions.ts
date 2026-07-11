@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 type Sugestao = {
   moodle_id: number;
@@ -41,7 +42,7 @@ async function assertCoordenador(supabase: {
 }
 
 export const listarSugestoesBeneficiariasDoAva = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }): Promise<{ sugestoes: Sugestao[] }> => {
     await assertCoordenador(context.supabase as never, context.userId);
 
@@ -75,7 +76,7 @@ export const listarSugestoesBeneficiariasDoAva = createServerFn({ method: "GET" 
   });
 
 export const criarBeneficiariasDoAva = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: { moodle_ids: number[] }) => {
     if (!input || !Array.isArray(input.moodle_ids)) throw new Error("moodle_ids obrigatório.");
     return { moodle_ids: input.moodle_ids.filter((n) => Number.isFinite(n)) };

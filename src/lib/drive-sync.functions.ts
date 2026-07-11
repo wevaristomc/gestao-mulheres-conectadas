@@ -3,6 +3,7 @@ import { z } from "zod";
 import JSZip from "jszip";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 // -----------------------------------------------------------------------------
 // Sincronização Google Drive → Base de Conhecimento
@@ -59,7 +60,7 @@ function classificarTipo(mimeType: string, nome: string): string {
 // ---------------------------------------------------------------------------
 
 export const driveSyncVarredura = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }) => {
     await assertCoordRole(context);
     const h = await import("@/lib/gdrive-helpers.server");
@@ -257,7 +258,7 @@ async function inserirDocumentoDrive(admin: any, params: {
 }
 
 export const driveSyncProcessar = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ProcessarInput.parse(v))
   .handler(async ({ data, context }) => {
     await assertCoordRole(context);
@@ -435,7 +436,7 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 
 export const driveSyncStatus = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async () => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
@@ -489,7 +490,7 @@ const ListaInput = z.object({
 });
 
 export const driveSyncLista = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ListaInput.parse(v))
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -514,7 +515,7 @@ export const driveSyncLista = createServerFn({ method: "POST" })
 const MarcarInput = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
 
 export const driveSyncMarcarTranscricao = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => MarcarInput.parse(v))
   .handler(async ({ data, context }) => {
     await assertCoordRole(context);
@@ -531,7 +532,7 @@ export const driveSyncMarcarTranscricao = createServerFn({ method: "POST" })
 const ReindexInput = z.object({ id: z.string().uuid() });
 
 export const driveSyncReindexar = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ReindexInput.parse(v))
   .handler(async ({ data, context }) => {
     await assertCoordRole(context);

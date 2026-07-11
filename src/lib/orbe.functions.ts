@@ -48,22 +48,34 @@ function limitar<T>(arr: T[]): T[] {
 }
 
 async function toolListarTurmas(admin: any) {
-  const { data } = await admin
+  return toolListarTurmasImpl(admin, {});
+}
+async function toolListarTurmasImpl(admin: any, args: any) {
+  let q = admin
     .from("turmas")
     .select("id, codigo_turma, nome_curso, ch_total, data_inicio, data_fim, vagas, projeto_id")
     .limit(MAX_LINHAS);
+  if (Array.isArray(args?.__turmas_escopo)) {
+    if (args.__turmas_escopo.length === 0) return { turmas: [] };
+    q = q.in("id", args.__turmas_escopo);
+  }
+  const { data } = await q;
   return { turmas: limitar((data ?? []) as any[]) };
 }
 
 async function toolDetalharTurma(admin: any, args: { codigo?: string }) {
   const codigo = String(args?.codigo ?? "").trim();
   if (!codigo) return { erro: "informe o código da turma" };
-  const { data: t } = await admin
+  let q = admin
     .from("turmas")
     .select("*")
-    .ilike("codigo_turma", `%${codigo}%`)
-    .limit(1)
-    .maybeSingle();
+    .ilike("codigo_turma", `%${codigo}%`);
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { encontrada: false, erro: "sem turmas no seu escopo" };
+    q = q.in("id", escopo);
+  }
+  const { data: t } = await q.limit(1).maybeSingle();
   if (!t) return { encontrada: false };
   const { count: nMatriculas } = await admin
     .from("matriculas")
@@ -80,6 +92,20 @@ async function toolBuscarBeneficiaria(admin: any, args: { termo?: string }) {
   const termo = String(args?.termo ?? "").trim();
   if (!termo) return { erro: "informe nome ou CPF" };
   const digits = termo.replace(/\D+/g, "");
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { resultados: [] };
+    // Restringe a beneficiárias matriculadas nas turmas do usuário.
+    const { data: matr } = await admin
+      .from("matriculas").select("beneficiaria_id").in("turma_id", escopo).limit(2000);
+    const ids = ((matr ?? []) as any[]).map((r) => r.beneficiaria_id).filter(Boolean);
+    if (ids.length === 0) return { resultados: [] };
+    let q = admin.from("beneficiarias").select("id, nome_completo, cpf, telefone, email").in("id", ids).limit(20);
+    if (digits.length >= 6) q = q.ilike("cpf", `%${digits}%`);
+    else q = q.ilike("nome_completo", `%${termo}%`);
+    const { data } = await q;
+    return { resultados: limitar((data ?? []) as any[]) };
+  }
   let q = admin.from("beneficiarias").select("id, nome_completo, cpf, telefone, email").limit(20);
   if (digits.length >= 6) q = q.ilike("cpf", `%${digits}%`);
   else q = q.ilike("nome_completo", `%${termo}%`);
@@ -90,9 +116,13 @@ async function toolBuscarBeneficiaria(admin: any, args: { termo?: string }) {
 async function toolMatriculasDaTurma(admin: any, args: { codigo?: string }) {
   const codigo = String(args?.codigo ?? "").trim();
   if (!codigo) return { erro: "informe o código da turma" };
-  const { data: t } = await admin
-    .from("turmas").select("id, codigo_turma, vagas")
-    .ilike("codigo_turma", `%${codigo}%`).limit(1).maybeSingle();
+  let tq = admin.from("turmas").select("id, codigo_turma, vagas").ilike("codigo_turma", `%${codigo}%`);
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { encontrada: false };
+    tq = tq.in("id", escopo);
+  }
+  const { data: t } = await tq.limit(1).maybeSingle();
   if (!t) return { encontrada: false };
   const { data } = await admin
     .from("matriculas")
@@ -111,13 +141,22 @@ async function toolPendencias(admin: any, args: { status?: string; prioridade?: 
 
 async function toolFrequenciaResumo(admin: any, args: { turma?: string }) {
   let turmaId: string | null = null;
+  const escopo = (args as any)?.__turmas_escopo as string[] | undefined;
   if (args?.turma) {
-    const { data: t } = await admin
-      .from("turmas").select("id").ilike("codigo_turma", `%${args.turma}%`).limit(1).maybeSingle();
+    let tq = admin.from("turmas").select("id").ilike("codigo_turma", `%${args.turma}%`);
+    if (Array.isArray(escopo)) {
+      if (escopo.length === 0) return { total_marcacoes: 0, presentes: 0, taxa_presenca: null };
+      tq = tq.in("id", escopo);
+    }
+    const { data: t } = await tq.limit(1).maybeSingle();
     turmaId = (t as any)?.id ?? null;
   }
   let q = admin.from("frequencia").select("presente, turma_id").limit(5000);
   if (turmaId) q = q.eq("turma_id", turmaId);
+  else if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { total_marcacoes: 0, presentes: 0, taxa_presenca: null };
+    q = q.in("turma_id", escopo);
+  }
   const { data } = await q;
   const rows = (data ?? []) as { presente: boolean }[];
   const total = rows.length;
@@ -164,7 +203,13 @@ async function toolMetasStatus(admin: any) {
 async function toolAulasDaTurma(admin: any, args: { codigo?: string }) {
   const codigo = String(args?.codigo ?? "").trim();
   if (!codigo) return { erro: "informe o código da turma" };
-  const { data: t } = await admin.from("turmas").select("id").ilike("codigo_turma", `%${codigo}%`).limit(1).maybeSingle();
+  let tq = admin.from("turmas").select("id").ilike("codigo_turma", `%${codigo}%`);
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { encontrada: false };
+    tq = tq.in("id", escopo);
+  }
+  const { data: t } = await tq.limit(1).maybeSingle();
   if (!t) return { encontrada: false };
   const { data } = await admin
     .from("aulas").select("id, data, ch, conteudo, instrutor")
@@ -281,7 +326,7 @@ function sugerirAjudaPorRota(rota: string): string | null {
 }
 
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
-  listar_turmas: (a) => toolListarTurmas(a),
+  listar_turmas: (a, x) => toolListarTurmasImpl(a, x ?? {}),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
   buscar_beneficiaria: (a, x) => toolBuscarBeneficiaria(a, x),
   matriculas_da_turma: (a, x) => toolMatriculasDaTurma(a, x),
@@ -418,6 +463,17 @@ export const orbeChat = createServerFn({ method: "POST" })
       .from("user_roles").select("role").eq("user_id", context.userId);
     const papeis = ((rolesRows ?? []) as any[]).map((r) => r.role);
     const podeFinanceiro = papeis.includes("coordenador_geral") || papeis.includes("gestor_financeiro");
+    const isInstrutor =
+      !papeis.some((p: string) =>
+        ["coordenador_geral", "coordenador_pedagogico", "administrativo"].includes(p),
+      ) && papeis.some((p: string) => ["professor", "auxiliar_pedagogico"].includes(p));
+    // Turmas do usuário via instrutor_turmas (apenas relevantes para instrutor)
+    let turmasEscopo: string[] = [];
+    if (isInstrutor) {
+      const { data: it } = await admin
+        .from("instrutor_turmas").select("turma_id").eq("user_id", context.userId);
+      turmasEscopo = ((it ?? []) as any[]).map((r) => r.turma_id);
+    }
 
     // Conversa (cria se necessário)
     let conversaId = data.conversa_id ?? null;
@@ -445,7 +501,24 @@ export const orbeChat = createServerFn({ method: "POST" })
     // Snapshot para o prompt
     const ctx = await snapshotContexto(admin);
     const dataHoje = new Date().toISOString().slice(0, 10);
-    const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => k !== "financeiro_resumo" || podeFinanceiro);
+    const FERRAMENTAS_INSTRUTOR = new Set([
+      "listar_turmas",
+      "detalhar_turma",
+      "matriculas_da_turma",
+      "aulas_da_turma",
+      "frequencia_resumo",
+      "buscar_beneficiaria",
+      "buscar_conhecimento",
+      "buscar_base_conhecimento",
+      "etapas_status",
+      "pendencias",
+      "ajuda_sistema",
+    ]);
+    const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => {
+      if (k === "financeiro_resumo" && !podeFinanceiro) return false;
+      if (isInstrutor && !FERRAMENTAS_INSTRUTOR.has(k)) return false;
+      return true;
+    });
 
     const rotaAtual = data.rota_atual?.trim() || null;
     const contextoAjuda = rotaAtual ? sugerirAjudaPorRota(rotaAtual) : null;
@@ -531,7 +604,19 @@ REGRAS DE TOOL-CALLING:
           mensagensLoop.push({ role: "user", content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(negado)}` });
           continue;
         }
-        const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, toolCall!.args ?? {}), { erro: "falha na ferramenta" });
+        if (isInstrutor && !FERRAMENTAS_INSTRUTOR.has(toolCall.tool)) {
+          const negado = { erro: "ferramenta fora do escopo do seu papel" };
+          await admin.from("orbe_mensagens").insert({
+            conversa_id: conversaId, role: "tool", tool_name: toolCall.tool, content: JSON.stringify(negado),
+          });
+          mensagensLoop.push({ role: "assistant", content: conteudo });
+          mensagensLoop.push({ role: "user", content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(negado)}` });
+          continue;
+        }
+        const argsFinais = isInstrutor
+          ? { ...(toolCall.args ?? {}), __turmas_escopo: turmasEscopo }
+          : (toolCall.args ?? {});
+        const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, argsFinais), { erro: "falha na ferramenta" });
         const resultadoStr = JSON.stringify(resultado).slice(0, MAX_TOOL_RESULT);
         await admin.from("orbe_mensagens").insert({
           conversa_id: conversaId, role: "tool", tool_name: toolCall.tool,

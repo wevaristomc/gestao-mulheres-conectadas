@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO_E_FINANCEIRO } from "@/lib/rbac-guard";
 import { executarAiRouter } from "@/lib/ia.functions";
 
 const Input = z.object({
@@ -18,7 +19,7 @@ const TITULOS: Record<string, string> = {
 };
 
 export const gerarAnaliseAba = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((v: unknown) => Input.parse(v))
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");

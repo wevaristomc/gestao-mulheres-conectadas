@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO_E_FINANCEIRO } from "@/lib/rbac-guard";
 
 // -----------------------------------------------------------------------------
 // AI Router (equivalente de "edge function" ai-router, implementado como server
@@ -294,7 +295,7 @@ async function checarAdmin(supabase: any, userId: string) {
 }
 
 export const aiChat = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) =>
     z.object({
       processo: z.string().min(1),
@@ -312,7 +313,7 @@ export const aiChat = createServerFn({ method: "POST" })
   });
 
 export const listarProvedores = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .handler(async ({ context }) => {
     await checarAdmin(context.supabase, context.userId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -332,7 +333,7 @@ export const listarProvedores = createServerFn({ method: "POST" })
   });
 
 export const salvarProvedor = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) =>
     z.object({
       id: z.string().uuid(),
@@ -358,7 +359,7 @@ export const salvarProvedor = createServerFn({ method: "POST" })
   });
 
 export const testarProvedor = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     await checarAdmin(context.supabase, context.userId);
@@ -405,7 +406,7 @@ export const testarProvedor = createServerFn({ method: "POST" })
   });
 
 export const listarPoliticas = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .handler(async ({ context }) => {
     await checarAdmin(context.supabase, context.userId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -416,7 +417,7 @@ export const listarPoliticas = createServerFn({ method: "POST" })
   });
 
 export const salvarPolitica = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) =>
     z.object({
       id: z.string().uuid(),
@@ -441,7 +442,7 @@ export const salvarPolitica = createServerFn({ method: "POST" })
   });
 
 export const listarConsumoIA = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) => z.object({ dias: z.number().int().min(1).max(90).optional() }).parse(input))
   .handler(async ({ data, context }) => {
     await checarAdmin(context.supabase, context.userId);
@@ -634,7 +635,7 @@ function parseJsonFlexivel(raw: string): any {
 }
 
 export const lerListaPresenca = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) =>
     z.object({
       imagens: z.array(z.object({

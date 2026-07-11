@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 // ---------------------------------------------------------------------------
 // Fase 3a — Rascunho estruturado (sem IA).
@@ -404,7 +405,7 @@ function rascunhoSecoes(ctx: ContextoParcial): Record<SecaoKey, { texto: string;
 // ---------------------------------------------------------------------------
 
 export const criarRascunhoParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => CriarInput.parse(v))
   .handler(async ({ data, context }) => {
     await validarAcessoProjeto(context.supabase, context.userId, data.projetoId);
@@ -441,7 +442,7 @@ export const criarRascunhoParcialObjeto = createServerFn({ method: "POST" })
   });
 
 export const regenerarContextoParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => RegerarInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -482,7 +483,7 @@ export const regenerarContextoParcialObjeto = createServerFn({ method: "POST" })
   });
 
 export const atualizarSecaoParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => AtualizarSecaoInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -512,7 +513,7 @@ export const atualizarSecaoParcialObjeto = createServerFn({ method: "POST" })
   });
 
 export const atualizarMetaParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => AtualizarMetaInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -542,7 +543,7 @@ export const atualizarMetaParcialObjeto = createServerFn({ method: "POST" })
   });
 
 export const excluirRascunhoParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ExcluirInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -561,7 +562,7 @@ export const excluirRascunhoParcialObjeto = createServerFn({ method: "POST" })
   });
 
 export const previewContextoParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => IdInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -641,7 +642,7 @@ function textoLimpo(s: string, max = 1200): string {
 }
 
 export const gerarSecaoParcialObjeto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => GerarInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -841,7 +842,7 @@ function parseInline(linha: string): InlineChunk[] {
 }
 
 export const exportarParcialObjetoDocx = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ExportarDocxInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");

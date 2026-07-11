@@ -3,6 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 export type CursoSemTurma = {
   moodle_id: number;
@@ -14,7 +15,7 @@ export type CursoSemTurma = {
 };
 
 export const listarCursosSemTurma = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }): Promise<{ cursos: CursoSemTurma[] }> => {
     // Restringe a coordenação (mesma regra do import).
     const roleQ = await context.supabase

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO_E_FINANCEIRO } from "@/lib/rbac-guard";
 
 const RegisterDocumentoInput = z.object({
   projetoId: z.string().uuid(),
@@ -36,7 +37,7 @@ const BuscarInput = z.object({
 });
 
 export const registerUploadedDocumento = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((v: unknown) => RegisterDocumentoInput.parse(v))
   .handler(async ({ data, context }) => {
     const missingColumn = (message: string): string | null => (
@@ -97,7 +98,7 @@ export const registerUploadedDocumento = createServerFn({ method: "POST" })
   });
 
 export const deleteDocumentoById = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((v: unknown) => DeleteDocumentoInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -207,7 +208,7 @@ export async function indexarDocumentoInterno(admin: any, documentoId: string): 
 }
 
 export const criarAnotacao = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((v: unknown) => CriarAnotacaoInput.parse(v))
   .handler(async ({ data, context }) => {
     await validarAcessoProjeto(context.supabase, context.userId, data.projetoId);
@@ -267,7 +268,7 @@ export const criarAnotacao = createServerFn({ method: "POST" })
   });
 
 export const indexarDocumento = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((v: unknown) => IndexarInput.parse(v))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { requireModuleAccess } from "@/lib/auth-guard";
 import {
   Users,
   GraduationCap,
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [{ title: "Visão Geral · Painel Mulheres Conectadas" }],
   }),
+  beforeLoad: () => requireModuleAccess("visao-geral"),
   component: VisaoGeralPage,
 });
 

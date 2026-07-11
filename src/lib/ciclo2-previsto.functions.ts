@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 export const CICLO2_MUNICIPIOS = [
   "Betim",
@@ -29,7 +30,7 @@ const OBSERVACAO_PREVISTA =
   "Turma prevista — condicionada à liberação da 2ª parcela (Ciclo 2)";
 
 export const criarTurmasCiclo2Previstas = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }): Promise<ResumoCiclo2> => {
     const roleQ = await context.supabase
       .from("user_roles")

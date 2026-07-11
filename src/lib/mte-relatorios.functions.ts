@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 const ViewInput = z.object({ view: z.enum([
   "vw_cronograma_execucao",
@@ -13,7 +14,7 @@ const ViewInput = z.object({ view: z.enum([
 ]) });
 
 export const consultarViewMTE = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input) => ViewInput.parse(input))
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -24,7 +25,7 @@ export const consultarViewMTE = createServerFn({ method: "POST" })
   });
 
 export const consultarExecucaoFisicoFinanceira = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async () => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
