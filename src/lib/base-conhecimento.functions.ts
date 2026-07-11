@@ -281,7 +281,7 @@ export const indexarDocumento = createServerFn({ method: "POST" })
   });
 
 export const buscarConhecimento = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
+  .middleware([requireSupabaseAuth])
   .inputValidator((v: unknown) => BuscarInput.parse(v))
   .handler(async ({ data, context }) => {
     await validarAcessoProjeto(context.supabase, context.userId, data.projetoId);
