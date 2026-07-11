@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   MessageCircle,
   Clock,
+  Milestone,
 } from "lucide-react";
 
 import {
@@ -41,6 +42,7 @@ type Item = {
 
 const PRIMARY: Item[] = [
   { key: "visao-geral", title: "Visão Geral", url: "/", icon: LayoutDashboard },
+  { key: "etapas", title: "Etapas do Projeto", url: "/etapas", icon: Milestone },
   { key: "pendencias", title: "Pendências", url: "/pendencias", icon: ListChecks },
 ];
 
