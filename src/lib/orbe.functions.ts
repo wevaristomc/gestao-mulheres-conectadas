@@ -207,6 +207,38 @@ async function toolBuscarConhecimento(admin: any, args: { query?: string; k?: nu
   }
 }
 
+async function toolEtapasStatus(admin: any) {
+  const { data: etapas } = await admin
+    .from("etapas")
+    .select("id, numero, titulo, status, data_inicio, data_fim")
+    .order("numero", { ascending: true });
+  const list = (etapas ?? []) as any[];
+  if (list.length === 0) return { etapas: [] };
+  const ids = list.map((e) => e.id);
+  const { data: ativs } = await admin
+    .from("etapa_atividades")
+    .select("id, etapa_id, grupo, titulo, status, prazo")
+    .in("etapa_id", ids);
+  const rows = (ativs ?? []) as any[];
+  const hoje = Date.now();
+  const porEtapa = list.map((e) => {
+    const own = rows.filter((r) => r.etapa_id === e.id);
+    const total = own.length;
+    const concluidas = own.filter((r) => r.status === "concluida").length;
+    const atrasadas = own
+      .filter((r) => r.status !== "concluida" && r.prazo && new Date(r.prazo + "T23:59:59").getTime() < hoje)
+      .map((r) => ({ grupo: r.grupo, titulo: r.titulo, prazo: r.prazo }));
+    return {
+      numero: e.numero, titulo: e.titulo, status: e.status,
+      periodo: `${e.data_inicio ?? "?"} → ${e.data_fim ?? "?"}`,
+      progresso_pct: total === 0 ? 0 : Math.round((concluidas / total) * 100),
+      total, concluidas,
+      atividades_atrasadas: atrasadas.slice(0, 20),
+    };
+  });
+  return { etapas: porEtapa };
+}
+
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   listar_turmas: (a) => toolListarTurmas(a),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
@@ -221,6 +253,7 @@ const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   relatorio_deq_resumo: (a) => toolDeqResumo(a),
   buscar_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
   buscar_base_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
+  etapas_status: (a) => toolEtapasStatus(a),
 };
 
 const TOOL_DESCRICOES = `
@@ -235,7 +268,8 @@ const TOOL_DESCRICOES = `
 - metas_status: indicadores/metas cadastradas.
 - aulas_da_turma({codigo}): aulas realizadas da turma.
 - relatorio_deq_resumo: contagem de chunks DEQ indexados.
-- buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).`.trim();
+- buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
+- etapas_status: etapas do projeto com progresso e atividades atrasadas.`.trim();
 
 async function snapshotContexto(admin: any) {
   const nTurmas = await safe(async () => (await admin.from("turmas").select("id", { count: "exact", head: true })).count ?? 0, 0);
@@ -265,6 +299,37 @@ async function snapshotContexto(admin: any) {
       .order("criado_em", { ascending: false }).limit(10);
     return (data ?? []) as any[];
   }, []);
+  const etapaAtualResumo = await safe(async () => {
+    const { data: etapas } = await admin
+      .from("etapas")
+      .select("id, numero, titulo, status, data_inicio, data_fim")
+      .order("numero", { ascending: true });
+    const list = (etapas ?? []) as any[];
+    const atual =
+      list.find((e) => e.status === "em_andamento") ??
+      list.find((e) => e.status === "prestacao_contas") ??
+      list[0];
+    if (!atual) return null;
+    const { data: ativs } = await admin
+      .from("etapa_atividades")
+      .select("id, grupo, titulo, status, prazo")
+      .eq("etapa_id", atual.id);
+    const rows = (ativs ?? []) as any[];
+    const hoje = Date.now();
+    const total = rows.length;
+    const concluidas = rows.filter((r) => r.status === "concluida").length;
+    const atrasadas = rows
+      .filter((r) => r.status !== "concluida" && r.prazo && new Date(r.prazo + "T23:59:59").getTime() < hoje)
+      .map((r) => ({ grupo: r.grupo, titulo: r.titulo, prazo: r.prazo }));
+    return {
+      numero: atual.numero, titulo: atual.titulo, status: atual.status,
+      periodo: `${atual.data_inicio ?? "?"} → ${atual.data_fim ?? "?"}`,
+      total, concluidas,
+      progresso_pct: total === 0 ? 0 : Math.round((concluidas / total) * 100),
+      atrasadas_count: atrasadas.length,
+      atrasadas: atrasadas.slice(0, 10),
+    };
+  }, null);
   return {
     projeto: "Mulheres Conectadas / QUINTA ARTE — Termo de Fomento 01025/2025",
     turmas: nTurmas,
@@ -275,6 +340,7 @@ async function snapshotContexto(admin: any) {
     ch_realizada: chRealizada,
     pendencias_abertas: pendenciasAbertas,
     meta_ciclo1: { previsto: 300, atual: nBenef },
+    etapa_atual: etapaAtualResumo,
     ultimas_acoes: ultimasAcoes,
   };
 }
