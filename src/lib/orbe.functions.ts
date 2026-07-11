@@ -240,6 +240,29 @@ async function toolEtapasStatus(admin: any) {
   return { etapas: porEtapa };
 }
 
+async function toolAjudaSistema(args: { topico?: string }) {
+  const termo = String(args?.topico ?? "").trim();
+  if (!termo) {
+    return {
+      guias: GUIAS.map((g) => ({ slug: g.slug, titulo: g.titulo, resumo: g.resumo })),
+      exemplo: "Chame com args.topico='frequência', 'cotações', 'DEQ', 'assinatura digital' etc.",
+    };
+  }
+  const r = buscarAjuda(termo);
+  const guias = r.guias.slice(0, 3).map((g) => ({
+    titulo: g.titulo,
+    resumo: g.resumo,
+    passos: g.passos.map((p) => ({ titulo: p.titulo, detalhe: p.detalhe })),
+    regras: g.regras,
+    erros_comuns: g.erros_comuns ?? [],
+  }));
+  const campos = r.entries.slice(0, 6).map((e) => ({
+    id: e.id, titulo: e.titulo, explicacao: e.explicacao, exemplo: e.exemplo ?? null,
+  }));
+  const faq = r.faq.slice(0, 5);
+  return { guias, campos, faq };
+}
+
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   listar_turmas: (a) => toolListarTurmas(a),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
