@@ -27,8 +27,16 @@ async function assertCoordRole(context: { userId: string; supabase: any }) {
   if (!ok) throw new Response("Forbidden: sem permissão para sincronizar o Drive.", { status: 403 });
 }
 
-const MAX_BATCH = 5;
+const MAX_BATCH = 3;
 const MAX_AUDIO_BYTES = 24 * 1024 * 1024; // 24MB
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isRateLimitError(msg: string): boolean {
+  return /\b429\b|rate ?limit|quota|too many requests/i.test(msg);
+}
 
 function classificarTipo(mimeType: string, nome: string): string {
   const m = (mimeType || "").toLowerCase();
@@ -397,12 +405,20 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
         processados += 1;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        // 429 do Google Drive / provedores de IA → mantém como pendente para nova tentativa.
+        const novoStatus = isRateLimitError(msg) ? "pendente" : "erro";
         await admin
           .from("drive_arquivos")
-          .update({ status: "erro", erro: msg.slice(0, 500), processado_em: new Date().toISOString() })
+          .update({
+            status: novoStatus,
+            erro: msg.slice(0, 800),
+            processado_em: new Date().toISOString(),
+          })
           .eq("id", id);
-        erros += 1;
+        if (novoStatus === "erro") erros += 1;
       }
+      // pequeno respiro entre itens (protege quotas do Drive/IA)
+      await sleep(300);
     }
 
     // Restam pendentes?
