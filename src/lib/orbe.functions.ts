@@ -268,8 +268,8 @@ const TOOL_DESCRICOES = `
 - metas_status: indicadores/metas cadastradas.
 - aulas_da_turma({codigo}): aulas realizadas da turma.
 - relatorio_deq_resumo: contagem de chunks DEQ indexados.
-- buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).`.trim();
-// nota: etapas_status disponível como ferramenta somente-leitura.
+- buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
+- etapas_status: etapas do projeto com progresso e atividades atrasadas.`.trim();
 
 async function snapshotContexto(admin: any) {
   const nTurmas = await safe(async () => (await admin.from("turmas").select("id", { count: "exact", head: true })).count ?? 0, 0);
