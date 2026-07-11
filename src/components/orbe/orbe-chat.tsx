@@ -23,17 +23,23 @@ const ATALHOS = [
   "Pendências críticas",
   "Situação das turmas",
   "Riscos da meta ciclo 1",
+  "Como preencher frequência?",
+  "Como funciona a prestação de contas?",
+  "O que falta na etapa atual?",
 ];
 
 const BRIEFING_KEY = "orbe.briefing.ultimo_dia";
 
 export function OrbeChat({
   open, onOpenChange, onThinkingChange, onRecordingChange,
+  pendingPrompt, onPendingPromptConsumed,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onThinkingChange?: (v: boolean) => void;
   onRecordingChange?: (v: boolean) => void;
+  pendingPrompt?: string | null;
+  onPendingPromptConsumed?: () => void;
 }) {
   const [aba, setAba] = useState<"chat" | "notif">("chat");
   const [conversaId, setConversaId] = useState<string | null>(null);
