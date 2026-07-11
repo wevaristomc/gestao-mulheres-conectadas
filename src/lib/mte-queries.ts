@@ -30,6 +30,7 @@ export type TurmaMTE = {
   data_fim: string | null;
   municipio: string | null;
   local_endereco: string | null;
+  local_id: string | null;
   contato_local_nome: string | null;
   contato_local_telefone: string | null;
   ciclo: number | null;
@@ -142,6 +143,7 @@ export async function upsertTurmaMTE(input: Partial<TurmaMTE> & { id?: string })
     data_fim: input.data_fim || null,
     municipio: input.municipio ?? null,
     local_endereco: input.local_endereco ?? null,
+    local_id: input.local_id ?? null,
     contato_local_nome: input.contato_local_nome ?? null,
     contato_local_telefone: input.contato_local_telefone ?? null,
     ciclo: input.ciclo ?? null,
@@ -149,10 +151,20 @@ export async function upsertTurmaMTE(input: Partial<TurmaMTE> & { id?: string })
   };
   if (input.instrumento_id) payload.instrumento_id = input.instrumento_id;
   if (input.id) {
-    const { error } = await supabase.from("turmas").update(payload).eq("id", input.id);
+    let { error } = await supabase.from("turmas").update(payload).eq("id", input.id);
+    if (error && /column .*local_id.* does not exist/i.test(error.message)) {
+      const { local_id: _drop, ...rest } = payload as any;
+      const r = await supabase.from("turmas").update(rest).eq("id", input.id);
+      error = r.error;
+    }
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await supabase.from("turmas").insert(payload);
+    let { error } = await supabase.from("turmas").insert(payload);
+    if (error && /column .*local_id.* does not exist/i.test(error.message)) {
+      const { local_id: _drop, ...rest } = payload as any;
+      const r = await supabase.from("turmas").insert(rest);
+      error = r.error;
+    }
     if (error) throw new Error(error.message);
   }
 }
