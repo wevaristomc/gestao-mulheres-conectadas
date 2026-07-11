@@ -1,6 +1,6 @@
 import { redirect } from "@tanstack/react-router";
 
-import { canAccess, type AppRole, type ModuleKey } from "@/lib/role-access";
+import { canAccess, landingPathForRole, type AppRole, type ModuleKey } from "@/lib/role-access";
 
 const ROLE_CACHE_KEY = "mc.active_role";
 
@@ -66,14 +66,12 @@ export function setCachedRole(role: AppRole | null) {
 export function requireModuleAccess(module: ModuleKey) {
   requireSession();
   const role = getCachedRole();
-  // Fail-open when the role isn't cached yet: the guard runs synchronously in
-  // `beforeLoad`, but the role is hydrated asynchronously by
-  // `ActiveContextProvider` after the session resolves. Redirecting here would
-  // cause a race where a valid user is bounced to "/" on hard refresh / direct
-  // navigation. The authoritative check remains server-side (RLS + server fns);
-  // the page itself renders a "sem permissão" state once the role is known.
+  // Fail-open only quando o papel ainda não foi hidratado (evita bounce
+  // em hard refresh). Server-side (RLS + server fns) continua sendo a
+  // verdade. Assim que o papel está em cache, bloqueamos toda rota fora
+  // da matriz e mandamos para o destino padrão do papel.
   if (role === null) return;
   if (!canAccess(module, role)) {
-    throw redirect({ to: "/" });
+    throw redirect({ to: landingPathForRole(role) });
   }
 }
