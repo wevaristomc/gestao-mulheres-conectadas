@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executarAiRouter, executarTranscricaoRouter } from "@/lib/ia.functions";
+import { AJUDA, GUIAS, FAQ, buscarAjuda } from "@/data/ajuda-conteudo";
 
 const PROCESSO = "orbe_assistente";
 const PROCESSO_TRANSCRICAO = "orbe_transcricao";
