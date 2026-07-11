@@ -23,17 +23,23 @@ const ATALHOS = [
   "Pendências críticas",
   "Situação das turmas",
   "Riscos da meta ciclo 1",
+  "Como preencher frequência?",
+  "Como funciona a prestação de contas?",
+  "O que falta na etapa atual?",
 ];
 
 const BRIEFING_KEY = "orbe.briefing.ultimo_dia";
 
 export function OrbeChat({
   open, onOpenChange, onThinkingChange, onRecordingChange,
+  pendingPrompt, onPendingPromptConsumed,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onThinkingChange?: (v: boolean) => void;
   onRecordingChange?: (v: boolean) => void;
+  pendingPrompt?: string | null;
+  onPendingPromptConsumed?: () => void;
 }) {
   const [aba, setAba] = useState<"chat" | "notif">("chat");
   const [conversaId, setConversaId] = useState<string | null>(null);
@@ -72,7 +78,13 @@ export function OrbeChat({
 
   const enviarMut = useMutation({
     mutationFn: async (mensagem: string) =>
-      await enviar({ data: { conversa_id: conversaId, mensagem } }),
+      await enviar({
+        data: {
+          conversa_id: conversaId,
+          mensagem,
+          rota_atual: typeof window !== "undefined" ? window.location.pathname : null,
+        },
+      }),
     onMutate: (m) => {
       setMensagens((prev) => [...prev, { role: "user", content: m }]);
       onThinkingChange?.(true);
@@ -122,6 +134,18 @@ export function OrbeChat({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [mensagens, enviarMut.isPending]);
+
+  // Quando o painel abre com uma pergunta pré-preenchida (HelpPoint / página de Ajuda),
+  // envia automaticamente ao Orbe.
+  useEffect(() => {
+    if (!open || !pendingPrompt) return;
+    setInput("");
+    setConversaId(null);
+    setMensagens([]);
+    enviarMut.mutate(pendingPrompt);
+    onPendingPromptConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pendingPrompt]);
 
   async function iniciarGravacao() {
     if (gravando || transcrevendo) return;

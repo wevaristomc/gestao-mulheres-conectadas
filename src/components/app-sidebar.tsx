@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Clock,
   Milestone,
+  HelpCircle,
 } from "lucide-react";
 
 import {
@@ -60,6 +61,7 @@ const MODULOS: Item[] = [
 const APOIO: Item[] = [
   { key: "base-conhecimento", title: "Base de Conhecimento", url: "/base-conhecimento", icon: BookOpen },
   { key: "drive", title: "Drive do Projeto", url: "/drive", icon: HardDrive },
+  { key: "ajuda", title: "Ajuda", url: "/ajuda", icon: HelpCircle },
   { key: "configuracoes", title: "Configurações", url: "/configuracoes", icon: Settings },
 ];
 

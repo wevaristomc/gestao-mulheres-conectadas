@@ -55,6 +55,7 @@ function PedagogicoIndex() {
   return (
     <div>
       <PageHeader
+        helpId="turma.codigo"
         title="Pedagógico"
         description={
           projetoNome

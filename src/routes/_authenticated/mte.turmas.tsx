@@ -48,6 +48,7 @@ function TurmasMteIndex() {
   return (
     <div>
       <PageHeader
+        helpId="turma.codigo"
         title="Turmas — Cronograma MTE"
         description="17 campos exigidos pelo Termo de Fomento MTE/SEMP nº 01025/2025."
         actions={

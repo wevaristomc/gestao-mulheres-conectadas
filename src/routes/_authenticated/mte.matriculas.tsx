@@ -87,6 +87,7 @@ function MatriculasIndex() {
   return (
     <div>
       <PageHeader
+        helpId="importacao.moodle"
         title="Matrículas"
         description="Vincule beneficiárias a turmas e acompanhe frequência para certificação MTE."
         actions={

@@ -31,6 +31,7 @@ function AvaDashboard() {
   return (
     <div className="space-y-4">
       <PageHeader
+        helpId="importacao.moodle"
         title="Dashboard AVA (Moodle)"
         description="Cruzamento entre alunos do AVA, beneficiárias e turmas."
       />

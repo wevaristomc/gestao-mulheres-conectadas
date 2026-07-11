@@ -54,6 +54,7 @@ function BeneficiariasIndex() {
   return (
     <div>
       <PageHeader
+        helpId="beneficiaria.cpf"
         title="Beneficiárias"
         description="Cadastro de mulheres atendidas pelo projeto (Termo de Fomento MTE)."
         actions={

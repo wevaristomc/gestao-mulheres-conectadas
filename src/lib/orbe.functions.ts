@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executarAiRouter, executarTranscricaoRouter } from "@/lib/ia.functions";
+import { AJUDA, GUIAS, FAQ, buscarAjuda } from "@/data/ajuda-conteudo";
 
 const PROCESSO = "orbe_assistente";
 const PROCESSO_TRANSCRICAO = "orbe_transcricao";
@@ -239,6 +240,46 @@ async function toolEtapasStatus(admin: any) {
   return { etapas: porEtapa };
 }
 
+async function toolAjudaSistema(args: { topico?: string }) {
+  const termo = String(args?.topico ?? "").trim();
+  if (!termo) {
+    return {
+      guias: GUIAS.map((g) => ({ slug: g.slug, titulo: g.titulo, resumo: g.resumo })),
+      exemplo: "Chame com args.topico='frequência', 'cotações', 'DEQ', 'assinatura digital' etc.",
+    };
+  }
+  const r = buscarAjuda(termo);
+  const guias = r.guias.slice(0, 3).map((g) => ({
+    titulo: g.titulo,
+    resumo: g.resumo,
+    passos: g.passos.map((p) => ({ titulo: p.titulo, detalhe: p.detalhe })),
+    regras: g.regras,
+    erros_comuns: g.erros_comuns ?? [],
+  }));
+  const campos = r.entries.slice(0, 6).map((e) => ({
+    id: e.id, titulo: e.titulo, explicacao: e.explicacao, exemplo: e.exemplo ?? null,
+  }));
+  const faq = r.faq.slice(0, 5);
+  return { guias, campos, faq };
+}
+
+function sugerirAjudaPorRota(rota: string): string | null {
+  const r = rota.toLowerCase();
+  let slug: string | null = null;
+  if (r.startsWith("/pedagogico")) slug = "pedagogico";
+  else if (r.startsWith("/mte")) slug = "mte";
+  else if (r.startsWith("/financeiro") || r.startsWith("/relacao-horas")) slug = "financeiro";
+  else if (r.startsWith("/etapas")) slug = "etapas";
+  else if (r.startsWith("/relatorios")) slug = "relatorios";
+  else if (r.startsWith("/ajuda")) slug = "primeiros-passos";
+  if (!slug) return null;
+  const g = GUIAS.find((x) => x.slug === slug);
+  if (!g) return null;
+  const passos = g.passos.slice(0, 4).map((p) => `- ${p.titulo}: ${p.detalhe ?? ""}`).join("\n");
+  const regras = g.regras.slice(0, 4).map((x) => `- ${x}`).join("\n");
+  return `Guia "${g.titulo}"\nPassos:\n${passos}\nRegras:\n${regras}`;
+}
+
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   listar_turmas: (a) => toolListarTurmas(a),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
@@ -254,6 +295,7 @@ const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   buscar_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
   buscar_base_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
   etapas_status: (a) => toolEtapasStatus(a),
+  ajuda_sistema: (_a, x) => toolAjudaSistema(x),
 };
 
 const TOOL_DESCRICOES = `
@@ -269,7 +311,8 @@ const TOOL_DESCRICOES = `
 - aulas_da_turma({codigo}): aulas realizadas da turma.
 - relatorio_deq_resumo: contagem de chunks DEQ indexados.
 - buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
-- etapas_status: etapas do projeto com progresso e atividades atrasadas.`.trim();
+- etapas_status: etapas do projeto com progresso e atividades atrasadas.
+- ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".`.trim();
 
 async function snapshotContexto(admin: any) {
   const nTurmas = await safe(async () => (await admin.from("turmas").select("id", { count: "exact", head: true })).count ?? 0, 0);
@@ -363,6 +406,7 @@ export const orbeChat = createServerFn({ method: "POST" })
     z.object({
       conversa_id: z.string().uuid().nullable().optional(),
       mensagem: z.string().min(1),
+      rota_atual: z.string().nullable().optional(),
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -403,8 +447,19 @@ export const orbeChat = createServerFn({ method: "POST" })
     const dataHoje = new Date().toISOString().slice(0, 10);
     const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => k !== "financeiro_resumo" || podeFinanceiro);
 
-    const systemPrompt = `Você é o Orbe — assistente do Projeto Mulheres Conectadas / QUINTA ARTE (Termo de Fomento 01025/2025).
+    const rotaAtual = data.rota_atual?.trim() || null;
+    const contextoAjuda = rotaAtual ? sugerirAjudaPorRota(rotaAtual) : null;
+
+    const systemPrompt = `Você é o Orbe — assistente do Projeto Mulheres Conectadas / QUINTA ARTE (Termo de Fomento 01025/2025) E o SUPORTE OFICIAL do painel.
 Data de hoje: ${dataHoje}. Papéis do usuário: ${papeis.join(", ") || "sem papel"}.
+${rotaAtual ? `Tela atual do usuário: ${rotaAtual}. Se a pergunta for sobre uso do sistema, priorize a ajuda dessa tela.` : ""}
+${contextoAjuda ? `Guia relevante da tela atual:\n${contextoAjuda}` : ""}
+
+Você tem DOIS papéis:
+1) ANALISTA do projeto: interpreta indicadores, pendências, frequência, execução orçamentária, DEQ e etapas — usa as ferramentas de dados quando necessário.
+2) SUPORTE do sistema: explica COMO USAR o painel (passo a passo, preenchimentos, botões), as REGRAS do programa (frequência mínima 75%, 3 cotações obrigatórias, identificação PMQ em toda evidência, SEI para documentos oficiais no MTE, TransfereGov para a proposta 058916/2025, DEQ com itens IV/V/VI em PDF pesquisável, assinatura digital com hash SHA-256) e os fluxos por papel.
+Para dúvidas de uso/regra, chame SEMPRE a ferramenta ajuda_sistema antes de responder — não invente instruções.
+
 Snapshot do projeto (JSON):\n${JSON.stringify(ctx)}
 
 FERRAMENTAS DISPONÍVEIS (somente leitura, no máx. ${MAX_LINHAS} linhas):

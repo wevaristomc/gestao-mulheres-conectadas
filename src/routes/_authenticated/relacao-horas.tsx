@@ -155,6 +155,7 @@ function RelacaoHorasPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        helpId="relacao.assinatura_digital"
         title="Relação de Horas"
         description="Gere sua folha de horas mensal a partir das aulas ministradas e envie ao financeiro."
       />

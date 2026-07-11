@@ -75,6 +75,7 @@ function EtapasPage() {
   return (
     <div>
       <PageHeader
+        helpId="etapas.status"
         title="Etapas do Projeto"
         description="Planejamento, execução e prestação de contas por etapa."
       />

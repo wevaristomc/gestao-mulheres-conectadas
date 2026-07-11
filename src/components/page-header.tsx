@@ -1,18 +1,24 @@
 import type { ReactNode } from "react";
+import { HelpPoint } from "@/components/ajuda/help-point";
 
 export function PageHeader({
   title,
   description,
   actions,
+  helpId,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
+  helpId?: string;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+          {title}
+          {helpId ? <HelpPoint id={helpId} size={16} /> : null}
+        </h1>
         {description ? (
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         ) : null}

@@ -126,6 +126,7 @@ function EvidenciasIndex() {
   return (
     <div>
       <PageHeader
+        helpId="evidencia.pmq"
         title="Evidências"
         description="Fotos, listas de presença, materiais didáticos e demais comprovantes exigidos pelo MTE."
       />

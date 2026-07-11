@@ -49,6 +49,7 @@ function FinanceiroLayout() {
   return (
     <div>
       <PageHeader
+        helpId="cotacoes.tres"
         title="Financeiro"
         description="Orçamento previsto vs executado, fornecedores e despesas do projeto."
       />
