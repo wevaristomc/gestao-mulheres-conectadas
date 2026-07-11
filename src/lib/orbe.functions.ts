@@ -255,6 +255,7 @@ const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   buscar_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
   buscar_base_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
   etapas_status: (a) => toolEtapasStatus(a),
+  ajuda_sistema: (_a, x) => toolAjudaSistema(x),
 };
 
 const TOOL_DESCRICOES = `
