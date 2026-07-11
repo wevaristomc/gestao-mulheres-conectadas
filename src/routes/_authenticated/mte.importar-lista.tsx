@@ -280,6 +280,7 @@ function ImportarListaPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        helpId="importacao.lista_pdf"
         title="Importar Documento (PDF)"
         description="Selecione o tipo de documento — a IA extrai os dados, você confere e grava."
       />
