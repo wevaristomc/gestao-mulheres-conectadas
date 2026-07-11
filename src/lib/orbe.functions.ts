@@ -294,7 +294,8 @@ const TOOL_DESCRICOES = `
 - aulas_da_turma({codigo}): aulas realizadas da turma.
 - relatorio_deq_resumo: contagem de chunks DEQ indexados.
 - buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
-- etapas_status: etapas do projeto com progresso e atividades atrasadas.`.trim();
+- etapas_status: etapas do projeto com progresso e atividades atrasadas.
+- ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".`.trim();
 
 async function snapshotContexto(admin: any) {
   const nTurmas = await safe(async () => (await admin.from("turmas").select("id", { count: "exact", head: true })).count ?? 0, 0);
