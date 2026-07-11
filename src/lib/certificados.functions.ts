@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO_E_FINANCEIRO } from "@/lib/rbac-guard";
 
 const Input = z.object({
   turmaId: z.string().uuid(),
@@ -14,7 +15,7 @@ export type CertificadoEmitido = {
 };
 
 export const gerarLoteCertificados = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((input) => Input.parse(input))
   .handler(async ({ data, context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -68,7 +69,7 @@ export const gerarLoteCertificados = createServerFn({ method: "POST" })
 const CarregarInput = z.object({ turmaId: z.string().uuid() });
 
 export const carregarElegiveisCertificado = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
   .inputValidator((i) => CarregarInput.parse(i))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
