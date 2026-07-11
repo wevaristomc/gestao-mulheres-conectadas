@@ -48,22 +48,34 @@ function limitar<T>(arr: T[]): T[] {
 }
 
 async function toolListarTurmas(admin: any) {
-  const { data } = await admin
+  return toolListarTurmasImpl(admin, {});
+}
+async function toolListarTurmasImpl(admin: any, args: any) {
+  let q = admin
     .from("turmas")
     .select("id, codigo_turma, nome_curso, ch_total, data_inicio, data_fim, vagas, projeto_id")
     .limit(MAX_LINHAS);
+  if (Array.isArray(args?.__turmas_escopo)) {
+    if (args.__turmas_escopo.length === 0) return { turmas: [] };
+    q = q.in("id", args.__turmas_escopo);
+  }
+  const { data } = await q;
   return { turmas: limitar((data ?? []) as any[]) };
 }
 
 async function toolDetalharTurma(admin: any, args: { codigo?: string }) {
   const codigo = String(args?.codigo ?? "").trim();
   if (!codigo) return { erro: "informe o código da turma" };
-  const { data: t } = await admin
+  let q = admin
     .from("turmas")
     .select("*")
-    .ilike("codigo_turma", `%${codigo}%`)
-    .limit(1)
-    .maybeSingle();
+    .ilike("codigo_turma", `%${codigo}%`);
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { encontrada: false, erro: "sem turmas no seu escopo" };
+    q = q.in("id", escopo);
+  }
+  const { data: t } = await q.limit(1).maybeSingle();
   if (!t) return { encontrada: false };
   const { count: nMatriculas } = await admin
     .from("matriculas")
@@ -80,6 +92,20 @@ async function toolBuscarBeneficiaria(admin: any, args: { termo?: string }) {
   const termo = String(args?.termo ?? "").trim();
   if (!termo) return { erro: "informe nome ou CPF" };
   const digits = termo.replace(/\D+/g, "");
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { resultados: [] };
+    // Restringe a beneficiárias matriculadas nas turmas do usuário.
+    const { data: matr } = await admin
+      .from("matriculas").select("beneficiaria_id").in("turma_id", escopo).limit(2000);
+    const ids = ((matr ?? []) as any[]).map((r) => r.beneficiaria_id).filter(Boolean);
+    if (ids.length === 0) return { resultados: [] };
+    let q = admin.from("beneficiarias").select("id, nome_completo, cpf, telefone, email").in("id", ids).limit(20);
+    if (digits.length >= 6) q = q.ilike("cpf", `%${digits}%`);
+    else q = q.ilike("nome_completo", `%${termo}%`);
+    const { data } = await q;
+    return { resultados: limitar((data ?? []) as any[]) };
+  }
   let q = admin.from("beneficiarias").select("id, nome_completo, cpf, telefone, email").limit(20);
   if (digits.length >= 6) q = q.ilike("cpf", `%${digits}%`);
   else q = q.ilike("nome_completo", `%${termo}%`);
@@ -90,9 +116,13 @@ async function toolBuscarBeneficiaria(admin: any, args: { termo?: string }) {
 async function toolMatriculasDaTurma(admin: any, args: { codigo?: string }) {
   const codigo = String(args?.codigo ?? "").trim();
   if (!codigo) return { erro: "informe o código da turma" };
-  const { data: t } = await admin
-    .from("turmas").select("id, codigo_turma, vagas")
-    .ilike("codigo_turma", `%${codigo}%`).limit(1).maybeSingle();
+  let tq = admin.from("turmas").select("id, codigo_turma, vagas").ilike("codigo_turma", `%${codigo}%`);
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { encontrada: false };
+    tq = tq.in("id", escopo);
+  }
+  const { data: t } = await tq.limit(1).maybeSingle();
   if (!t) return { encontrada: false };
   const { data } = await admin
     .from("matriculas")
@@ -111,13 +141,22 @@ async function toolPendencias(admin: any, args: { status?: string; prioridade?: 
 
 async function toolFrequenciaResumo(admin: any, args: { turma?: string }) {
   let turmaId: string | null = null;
+  const escopo = (args as any)?.__turmas_escopo as string[] | undefined;
   if (args?.turma) {
-    const { data: t } = await admin
-      .from("turmas").select("id").ilike("codigo_turma", `%${args.turma}%`).limit(1).maybeSingle();
+    let tq = admin.from("turmas").select("id").ilike("codigo_turma", `%${args.turma}%`);
+    if (Array.isArray(escopo)) {
+      if (escopo.length === 0) return { total_marcacoes: 0, presentes: 0, taxa_presenca: null };
+      tq = tq.in("id", escopo);
+    }
+    const { data: t } = await tq.limit(1).maybeSingle();
     turmaId = (t as any)?.id ?? null;
   }
   let q = admin.from("frequencia").select("presente, turma_id").limit(5000);
   if (turmaId) q = q.eq("turma_id", turmaId);
+  else if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { total_marcacoes: 0, presentes: 0, taxa_presenca: null };
+    q = q.in("turma_id", escopo);
+  }
   const { data } = await q;
   const rows = (data ?? []) as { presente: boolean }[];
   const total = rows.length;
@@ -164,7 +203,13 @@ async function toolMetasStatus(admin: any) {
 async function toolAulasDaTurma(admin: any, args: { codigo?: string }) {
   const codigo = String(args?.codigo ?? "").trim();
   if (!codigo) return { erro: "informe o código da turma" };
-  const { data: t } = await admin.from("turmas").select("id").ilike("codigo_turma", `%${codigo}%`).limit(1).maybeSingle();
+  let tq = admin.from("turmas").select("id").ilike("codigo_turma", `%${codigo}%`);
+  const escopo = (args as any)?.__turmas_escopo;
+  if (Array.isArray(escopo)) {
+    if (escopo.length === 0) return { encontrada: false };
+    tq = tq.in("id", escopo);
+  }
+  const { data: t } = await tq.limit(1).maybeSingle();
   if (!t) return { encontrada: false };
   const { data } = await admin
     .from("aulas").select("id, data, ch, conteudo, instrutor")
