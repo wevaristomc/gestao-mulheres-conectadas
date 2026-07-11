@@ -1,81 +1,62 @@
+## Diagnóstico
 
-Trabalho grande em duas frentes independentes. Toda a DDL vai concentrada em `docs/migrations/rbac-e-relacao-horas.sql` — idempotente, você aplica no banco real. O código do app é ajustado no mesmo turno.
+**1. HTTP 429 (Google Drive)** — `gwFetch` em `src/lib/gdrive-helpers.server.ts` faz cada chamada sem retry. Uma varredura profunda dispara centenas de `listChildren`/`getMeta` em sequência rápida e o gateway devolve 429; o erro sobe direto e aborta a varredura inteira. O download em massa (`downloadFileBase64`) e o picker (`listGdrive`/`searchGdrive`) sofrem o mesmo problema.
 
-## A. RBAC efetivo
+**2. "Falha ao registrar documento"** — em `inserirDocumentoDrive` (drive-sync.functions.ts) o retry só sabe tratar erro de "coluna inexistente". Qualquer outra falha (NOT NULL, chave estrangeira, RLS, mensagem 429 no OCR retornando texto vazio, etc.) cai no `throw` genérico com pouca informação. O erro real fica escondido em `drive_arquivos.erro` truncado e não aparece na UI de forma útil.
 
-### Matriz (fonte única em `src/lib/role-access.ts`)
-- `coordenador_geral`, `administrativo` → TODOS os módulos.
-- `gestor_financeiro` → Visão Geral, Pendências, Financeiro, Relatórios (leitura), Relação de Horas (aprovação), Base de Conhecimento, Drive.
-- `coordenador_pedagogico` → Visão Geral, Pendências, Pedagógico, MTE, Relatórios, WhatsApp, Base, Drive.
-- `professor`, `auxiliar_pedagogico` → Visão Geral, Pendências, Pedagógico (só suas turmas), Base, Drive, Relação de Horas (própria).
+**3. Botão "Sincronizar agora" sem feedback** — o `disabled` depende de `progresso`, que só é setado *depois* que `varreduraFn()` termina. Enquanto a varredura roda (pode ser 10–60s) o botão continua clicável, sem spinner e sem barra de progresso; parece "morto". O toast `loading` existe mas fica escondido em canto de tela.
 
-Ajustes em `MODULE_ACCESS` + novo módulo `relacao-horas`. Sidebar já lê `canAccess`, então filtra sozinha. `requireModuleAccess` continua guardando cada rota.
+**4. Botão "Importar do Drive"** — abre o `GDrivePicker`, que chama `listGdrive`. Se o gateway devolve 429 na primeira chamada, o dialog exibe erro interno mas pode dar impressão de que "não funciona". Depois de corrigir o backoff, ele volta a listar.
 
-### Filtro por turma para professor/auxiliar
-Nas telas de Pedagógico que listam turmas (`pedagogico.index`, seletor de turmas) e MTE quando aplicável: quando `role ∈ {professor, auxiliar_pedagogico}`, aplicar `WHERE turma_id IN (SELECT turma_id FROM instrutor_turmas WHERE user_id = auth.uid())`. Fazer isso no client (queries do TanStack) para não depender de novas server-fns.
+## Correções
 
-Nas rotas `/_authenticated/pedagogico/turmas/$id/*`, no `beforeLoad` (ou no componente), checar se o professor tem vínculo com aquela turma — se não, redirect para `/pedagogico`.
+### A. Retry com backoff no gateway do Drive — `src/lib/gdrive-helpers.server.ts`
+- Envolver `gwFetch` num helper `withRetry` que:
+  - Repete em `429` e `5xx` (até 5 tentativas).
+  - Respeita `Retry-After` do header quando presente.
+  - Backoff exponencial com jitter: 500ms, 1s, 2s, 4s, 8s (cap 10s).
+  - Não repete em `4xx` que não seja 429.
+- Adicionar throttle mínimo (~120ms) entre chamadas dentro de `listRecursive` para evitar disparar o próximo rate-limit imediatamente.
+- Aumentar `pageSize` de `listChildren` para 500 (menos requests para o mesmo total).
 
-### RLS (na migração)
-Criar helper `has_role_any(_roles app_role[])` (security definer). Substituir políticas "USING true" nas tabelas:
+### B. `driveSyncVarredura` mais resiliente — `src/lib/drive-sync.functions.ts`
+- Pequeno `sleep(150ms)` entre páginas de upsert também.
+- Se `listRecursive` falhar no meio, gravar em `drive_sync_estado.resumo` o erro e o total parcial já catalogado, para o usuário ver.
 
-- Financeiro (`despesas`, `fornecedores`, `orcamento_itens`, `rubricas`, `cotacoes`, `cotacao_propostas`): SELECT/INSERT/UPDATE/DELETE para `gestor_financeiro | coordenador_geral | administrativo`.
-- Pedagógico sensível (`aulas`, `frequencia`, `presencas`, `matriculas`, `evidencias_aula` se existir): coordenação total (`coordenador_geral | administrativo | coordenador_pedagogico`); professor/auxiliar SELECT/INSERT/UPDATE somente para linhas cuja `turma_id` está em `instrutor_turmas` do próprio user.
-- Demais tabelas gerais: SELECT para `authenticated`, escrita para coordenação.
+### C. `driveSyncProcessar` — melhor tratamento de falhas
+- Envolver cada extração (OCR/transcrição/download) num try interno que salva mensagem detalhada em `drive_arquivos.erro` (sem truncar a causa raiz; até 800 chars).
+- Se `inserirDocumentoDrive` falhar, propagar a mensagem real (ex.: "null value in column X", "row-level security", "duplicate key") em vez de apenas "Falha ao registrar documento".
+- Detectar 429 no OCR de PDF/imagem e marcar o item como `pendente` (não `erro`) para tentar de novo depois — evita "queimar" o arquivo.
+- Reduzir `MAX_BATCH` de 5 para 3 e adicionar `sleep(300ms)` entre itens.
 
-Server functions continuam usando service_role → não afetadas.
+### D. UI do painel — `src/components/base-conhecimento/drive-sync-panel.tsx`
+- Trocar o `async function rodarSincronizacao` por `useMutation` (`syncMutation`) para ter `isPending` confiável.
+- `disabled={!projetoId || syncMutation.isPending}` + spinner grande no botão enquanto roda.
+- Inserir uma **barra de progresso visível** logo abaixo do KPI (não só toast): "Varrendo Drive…" → "Catalogados N arquivos" → "Processados X de Y — restam Z", com `<Progress>` do shadcn.
+- Exibir erro do backend em card destacado quando `syncMutation.error` (não só toast) para o usuário conseguir ler.
+- Rodar até 10 lotes (em vez de 5) enquanto `restantes > 0`, com pequeno delay entre eles.
+- Remover o auto-sync silencioso das primeiras 6h que pode competir com o clique manual (só dispara se `!syncMutation.isPending`).
 
-Toda a DDL é `DROP POLICY IF EXISTS ... ; CREATE POLICY ...` para ser idempotente.
+### E. "Importar do Drive" — sem alteração de comportamento, apenas se beneficia do backoff
+- Confirmar que o picker abre; após A, as listagens deixam de falhar por 429. Não mexer no fluxo.
 
-## B. Módulo Relação de Horas
+## Não muda
+- Migração `docs/migrations/drive-sync.sql` (já aplicada).
+- Esquema de `documentos` / `drive_arquivos` / `ia_politicas`.
+- Ferramenta do Orbe `buscar_base_conhecimento`.
+- Fluxos de RBAC, upload manual, anotações.
 
-### Schema (na mesma migração)
+## Arquivos a alterar
+
+```text
+src/lib/gdrive-helpers.server.ts        (retry/backoff + throttle)
+src/lib/drive-sync.functions.ts         (mensagens de erro, MAX_BATCH, 429→pendente, sleeps)
+src/components/base-conhecimento/drive-sync-panel.tsx  (mutation, barra de progresso, banner de erro)
 ```
-relacoes_horas(id, user_id→auth.users, mes_referencia date, local_trabalho text,
-  status text check in (rascunho,enviada,aprovada,rejeitada) default rascunho,
-  total_horas numeric, valor_hora numeric, valor_total numeric,
-  assinatura_nome text, assinatura_hash text, assinado_em, enviado_em,
-  avaliado_por uuid, avaliado_em, observacao_avaliacao,
-  criado_em, atualizado_em)
-UNIQUE (user_id, mes_referencia)
 
-relacoes_horas_itens(id, relacao_id fk ON DELETE CASCADE, data date,
-  hora_entrada time, hora_saida time, total_horas numeric, valor_dia numeric)
-```
-
-`ALTER TABLE instrutor_turmas ADD COLUMN IF NOT EXISTS valor_hora numeric DEFAULT 40.00`.
-
-RLS:
-- Professor gerencia as próprias (`user_id = auth.uid()`), mas NÃO pode UPDATE/DELETE após `status ∈ (enviada, aprovada)`.
-- `gestor_financeiro | coordenador_geral | administrativo`: SELECT total, UPDATE só de `status`, `avaliado_por`, `avaliado_em`, `observacao_avaliacao`.
-
-Trigger `updated_at` padrão.
-
-### Server functions em `src/lib/relacao-horas.functions.ts`
-- `gerarRascunho({ mes })` → busca aulas do próprio user no mês (via `aulas` + `instrutor_turmas`) e cria/atualiza rascunho + itens. Um item por aula: data, hora_entrada=hora_inicio, hora_saida=hora_fim, total_horas=diff, valor_dia=total×valor_hora (média das turmas).
-- `salvarItens({ relacaoId, itens })` — só quando status=rascunho.
-- `assinarEEnviar({ relacaoId, nomeAssinatura })` → calcula SHA-256 sobre JSON canônico (`{ user_id, itens, timestamp }`), grava assinatura, muda status→enviada, cria row em `notificacoes` para gestores financeiros.
-- `aprovar({ relacaoId, observacao? })` / `rejeitar({ relacaoId, observacao })` — protegidas por `has_role_any(['gestor_financeiro','coordenador_geral','administrativo'])`, criam notificação para o professor.
-- `listarMinhas`, `listarPendentesFinanceiro`, `obterRelacao(id)`.
-
-### Telas
-- `/_authenticated/relacao-horas` (professor) — lista das próprias, seletor de mês, botão "Gerar do mês", editor de itens em tabela (dias 1..N do mês, dias sem aula em branco, sábado/domingo destacados), botão "Assinar e enviar" abre `Dialog` com input de nome + confirmação.
-- `/_authenticated/financeiro/relacoes-horas` — lista `status=enviada` com badges, dialog de visualização (PDF preview) + aprovar/rejeitar com textarea de observação.
-- Adicionar aba "Relações de Horas" em `financeiro.tsx`.
-
-### PDF (`src/lib/relacao-horas-pdf.ts` usando `jspdf` já presente)
-Título "Relação de Horas", "Prof.: {nome}", "Local de trabalho: {local}". Tabela: DATA | DIA DA SEMANA | HORA ENTRADA | HORA SAÍDA | Total Horas | Valor Hora Dia (R$). Header azul `#5B8BD0`, células de data também azul; sábados/domingos linha inteira azul sem horas. Rodapé com Σ horas e Σ R$. Bloco "Assinado digitalmente por {nome} em {data} — hash {8 primeiros}". Linha de assinatura do financeiro. Todos os dias do mês em sequência.
-
-### Sidebar
-Nova entrada "Relação de Horas" (icon `Clock`) no grupo apoio/módulos, visível para professor/auxiliar/gestor_financeiro/coordenador_geral/administrativo.
-
-## Fora do escopo
-- Não vou refatorar sign-in/oauth.
-- Não vou tocar server functions existentes.
-- Não vou aplicar DDL — você aplica `docs/migrations/rbac-e-relacao-horas.sql`.
-
-## Critério de aceite
-- Login como coordenador_geral: tudo funciona como hoje.
-- Login como gestor_financeiro: só vê Financeiro/Relatórios/Relação de Horas (aprovação).
-- Login como professor: só vê suas turmas; pode gerar/assinar Relação de Horas; PDF sai igual ao modelo.
-- `bun run typecheck` limpo.
+## Critérios de aceite
+- Clicar "Sincronizar agora" mostra imediatamente spinner + barra de progresso; botão fica desabilitado até terminar.
+- Erros 429 do Google Drive não abortam mais a varredura; aparecem no máximo como atraso.
+- Itens que falham exibem a causa real (não "Falha ao registrar documento" genérico).
+- "Importar do Drive" abre o picker e lista pastas sem erro em execução normal.
+- Typecheck limpo.
