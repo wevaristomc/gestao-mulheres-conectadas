@@ -98,6 +98,41 @@ function FornecedoresTab() {
         </div>
       ) : (
         <div className="rounded-md border">
+          <ul className="divide-y md:hidden">
+            {q.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="p-3"><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56" /></li>
+              ))
+            ) : ordenados.length === 0 ? (
+              <li className="p-6 text-center text-sm text-muted-foreground">Nenhum fornecedor cadastrado.</li>
+            ) : ordenados.map((r) => (
+              <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="break-words text-sm font-semibold">
+                    {(pickFirst(r, ["nome", "razao_social", "fantasia"]) as string) ?? "—"}
+                  </div>
+                  <div className="break-words text-xs text-muted-foreground">
+                    CNPJ: {(pickFirst(r, ["cnpj", "documento"]) as string) ?? "—"}
+                  </div>
+                  <div className="break-words text-xs text-muted-foreground">
+                    {(pickFirst(r, ["email", "contato_email"]) as string) ?? "—"}
+                    {(pickFirst(r, ["telefone", "fone", "contato_telefone"]) as string)
+                      ? ` • ${pickFirst(r, ["telefone", "fone", "contato_telefone"])}`
+                      : ""}
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setEditando(r)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setConfirmarExcluir(r.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -155,6 +190,7 @@ function FornecedoresTab() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 
