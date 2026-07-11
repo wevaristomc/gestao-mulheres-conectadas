@@ -326,7 +326,7 @@ function sugerirAjudaPorRota(rota: string): string | null {
 }
 
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
-  listar_turmas: (a) => toolListarTurmas(a),
+  listar_turmas: (a, x) => toolListarTurmasImpl(a, x ?? {}),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
   buscar_beneficiaria: (a, x) => toolBuscarBeneficiaria(a, x),
   matriculas_da_turma: (a, x) => toolMatriculasDaTurma(a, x),
