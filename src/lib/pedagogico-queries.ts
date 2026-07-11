@@ -231,6 +231,10 @@ export async function upsertTurma(input: UpsertTurmaInput) {
     return supabase.from("turmas").insert(payload);
   };
   let res = await write("nome");
+  if (res.error && /column .*local_id.* does not exist/i.test(res.error.message)) {
+    delete base.local_id;
+    res = await write("nome");
+  }
   if (res.error && /column .*(nome).* does not exist/i.test(res.error.message)) {
     res = await write("titulo");
   }
