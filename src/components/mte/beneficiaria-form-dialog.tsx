@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { MUNICIPIOS, upsertBeneficiaria, type Beneficiaria } from "@/lib/mte-queries";
 import { formatCpf, formatPhone, isValidCpf, onlyDigits } from "@/lib/cpf";
+import { HelpPoint } from "@/components/ajuda/help-point";
 
 const GENEROS = ["Feminino", "Masculino", "Não-binário", "Prefere não informar"] as const;
 const RACAS = ["Branca", "Preta", "Parda", "Amarela", "Indígena", "Prefere não informar"] as const;
@@ -84,7 +85,7 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
             <Input value={form.nome ?? ""} onChange={(e) => set("nome", e.target.value)} />
           </Field>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="CPF *">
+            <Field label="CPF *" helpId="beneficiaria.cpf">
               <Input
                 value={formatCpf(form.cpf ?? "")}
                 onChange={(e) => set("cpf", onlyDigits(e.target.value))}
@@ -105,7 +106,7 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Raça / cor">
+            <Field label="Raça / cor" helpId="beneficiaria.raca">
               <Select value={form.raca ?? ""} onValueChange={(v) => set("raca", v)}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
@@ -127,7 +128,7 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="NIS">
+            <Field label="NIS" helpId="beneficiaria.nis">
               <Input value={form.nis ?? ""} onChange={(e) => set("nis", e.target.value)} />
             </Field>
             <Field label="Banco">
@@ -146,7 +147,10 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
 
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
-              <Label className="text-sm">PcD (pessoa com deficiência)</Label>
+              <Label className="text-sm inline-flex items-center gap-1">
+                PcD (pessoa com deficiência)
+                <HelpPoint id="beneficiaria.pcd" />
+              </Label>
               <p className="text-xs text-muted-foreground">Marque se a beneficiária for PcD.</p>
             </div>
             <Switch checked={!!form.pcd} onCheckedChange={(v) => set("pcd", v)} />
@@ -159,7 +163,10 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
 
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
-              <Label className="text-sm">Beneficiária de programa social</Label>
+              <Label className="text-sm inline-flex items-center gap-1">
+                Beneficiária de programa social
+                <HelpPoint id="beneficiaria.programa_social" />
+              </Label>
               <p className="text-xs text-muted-foreground">Ex.: Bolsa Família, BPC.</p>
             </div>
             <Switch
@@ -186,10 +193,13 @@ export function BeneficiariaFormDialog({ open, onOpenChange, beneficiaria }: Pro
   );
 }
 
-function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+function Field({ label, children, full, helpId }: { label: string; children: React.ReactNode; full?: boolean; helpId?: string }) {
   return (
     <div className={`grid gap-1.5 ${full ? "md:col-span-2" : ""}`}>
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      <Label className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1">
+        {label}
+        {helpId ? <HelpPoint id={helpId} /> : null}
+      </Label>
       {children}
     </div>
   );
