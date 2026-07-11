@@ -99,11 +99,11 @@ function MatriculasIndex() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="grid gap-1.5">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="grid w-full gap-1.5 sm:w-auto">
           <label className="text-xs font-medium text-muted-foreground">Turma</label>
           <Select value={effectiveTurma} onValueChange={setTurmaId}>
-            <SelectTrigger className="w-[320px]">
+            <SelectTrigger className="w-full sm:w-[320px]">
               <SelectValue placeholder={turmas.length ? "Selecione a turma" : "Nenhuma turma cadastrada"} />
             </SelectTrigger>
             <SelectContent>
@@ -116,7 +116,7 @@ function MatriculasIndex() {
           </Select>
         </div>
 
-        <div className="ml-auto flex gap-4 text-xs">
+        <div className="flex flex-wrap gap-2 text-xs sm:ml-auto sm:gap-4">
           <Counter label="Inscritas" value={counters.inscritas} />
           <Counter label="Cursando" value={counters.cursando} />
           <Counter label="Concluintes" value={counters.concluintes} tone="green" />
@@ -125,6 +125,55 @@ function MatriculasIndex() {
       </div>
 
       <div className="rounded-md border">
+        {/* Mobile cards */}
+        <ul className="divide-y md:hidden">
+          {!effectiveTurma ? (
+            <li className="p-6 text-center text-sm text-muted-foreground">Selecione uma turma.</li>
+          ) : q.isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <li key={i} className="p-3"><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56" /></li>
+            ))
+          ) : rows.length === 0 ? (
+            <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma matrícula nesta turma.</li>
+          ) : rows.map((r) => {
+            const freq = r.frequencia_percentual;
+            const abaixo = typeof freq === "number" && freq < 75;
+            return (
+              <li key={r.id} className={`flex min-w-0 items-start justify-between gap-2 p-3 ${abaixo ? "bg-destructive/5" : ""}`}>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="break-words text-sm font-semibold">{r.beneficiaria?.nome ?? "—"}</div>
+                  <div className="text-xs text-muted-foreground">CPF: {r.beneficiaria?.cpf ? formatCpf(r.beneficiaria.cpf) : "—"}</div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {statusBadge(r.status)}
+                    {typeof freq === "number" ? (
+                      <span className={`inline-flex items-center gap-1 font-medium ${abaixo ? "text-destructive" : "text-muted-foreground"}`}>
+                        {abaixo ? <AlertTriangle className="h-3 w-3" /> : null}
+                        {freq.toFixed(1)}%
+                      </span>
+                    ) : null}
+                    {r.data_inscricao ? <span className="text-muted-foreground">{r.data_inscricao}</span> : null}
+                  </div>
+                  {r.ficha_inscricao_url ? (
+                    <a href={r.ficha_inscricao_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      Abrir ficha <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : null}
+                </div>
+                {canWrite ? (
+                  <div className="flex shrink-0 gap-1">
+                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setEditing(r); setDialogOpen(true); }} title="Editar">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => setDeleting(r)} title="Excluir">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -208,6 +257,7 @@ function MatriculasIndex() {
             })}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {effectiveTurma ? (
