@@ -418,6 +418,17 @@ export const orbeChat = createServerFn({ method: "POST" })
       .from("user_roles").select("role").eq("user_id", context.userId);
     const papeis = ((rolesRows ?? []) as any[]).map((r) => r.role);
     const podeFinanceiro = papeis.includes("coordenador_geral") || papeis.includes("gestor_financeiro");
+    const isInstrutor =
+      !papeis.some((p: string) =>
+        ["coordenador_geral", "coordenador_pedagogico", "administrativo"].includes(p),
+      ) && papeis.some((p: string) => ["professor", "auxiliar_pedagogico"].includes(p));
+    // Turmas do usuário via instrutor_turmas (apenas relevantes para instrutor)
+    let turmasEscopo: string[] = [];
+    if (isInstrutor) {
+      const { data: it } = await admin
+        .from("instrutor_turmas").select("turma_id").eq("user_id", context.userId);
+      turmasEscopo = ((it ?? []) as any[]).map((r) => r.turma_id);
+    }
 
     // Conversa (cria se necessário)
     let conversaId = data.conversa_id ?? null;
@@ -445,7 +456,24 @@ export const orbeChat = createServerFn({ method: "POST" })
     // Snapshot para o prompt
     const ctx = await snapshotContexto(admin);
     const dataHoje = new Date().toISOString().slice(0, 10);
-    const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => k !== "financeiro_resumo" || podeFinanceiro);
+    const FERRAMENTAS_INSTRUTOR = new Set([
+      "listar_turmas",
+      "detalhar_turma",
+      "matriculas_da_turma",
+      "aulas_da_turma",
+      "frequencia_resumo",
+      "buscar_beneficiaria",
+      "buscar_conhecimento",
+      "buscar_base_conhecimento",
+      "etapas_status",
+      "pendencias",
+      "ajuda_sistema",
+    ]);
+    const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => {
+      if (k === "financeiro_resumo" && !podeFinanceiro) return false;
+      if (isInstrutor && !FERRAMENTAS_INSTRUTOR.has(k)) return false;
+      return true;
+    });
 
     const rotaAtual = data.rota_atual?.trim() || null;
     const contextoAjuda = rotaAtual ? sugerirAjudaPorRota(rotaAtual) : null;
@@ -531,7 +559,19 @@ REGRAS DE TOOL-CALLING:
           mensagensLoop.push({ role: "user", content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(negado)}` });
           continue;
         }
-        const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, toolCall!.args ?? {}), { erro: "falha na ferramenta" });
+        if (isInstrutor && !FERRAMENTAS_INSTRUTOR.has(toolCall.tool)) {
+          const negado = { erro: "ferramenta fora do escopo do seu papel" };
+          await admin.from("orbe_mensagens").insert({
+            conversa_id: conversaId, role: "tool", tool_name: toolCall.tool, content: JSON.stringify(negado),
+          });
+          mensagensLoop.push({ role: "assistant", content: conteudo });
+          mensagensLoop.push({ role: "user", content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(negado)}` });
+          continue;
+        }
+        const argsFinais = isInstrutor
+          ? { ...(toolCall.args ?? {}), __turmas_escopo: turmasEscopo }
+          : (toolCall.args ?? {});
+        const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, argsFinais), { erro: "falha na ferramenta" });
         const resultadoStr = JSON.stringify(resultado).slice(0, MAX_TOOL_RESULT);
         await admin.from("orbe_mensagens").insert({
           conversa_id: conversaId, role: "tool", tool_name: toolCall.tool,
