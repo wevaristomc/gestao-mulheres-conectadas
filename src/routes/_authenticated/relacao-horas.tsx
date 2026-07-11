@@ -20,6 +20,7 @@ import { useActiveContext } from "@/hooks/use-active-context";
 import {
   minhasRelacoesOptions, relacaoDetalheOptions,
   gerarRascunhoDoMes, salvarItem, assinarEEnviar, recomputarTotais,
+  turmasDoUsuarioOptions, classificarTurno,
   type RelacaoStatus, type RelacaoItem,
 } from "@/lib/relacao-horas-queries";
 import { gerarPdfRelacaoHoras } from "@/lib/relacao-horas-pdf";
@@ -57,6 +58,16 @@ function RelacaoHorasPage() {
 
   const listaQ = useQuery(minhasRelacoesOptions(user?.id ?? null));
   const detalheQ = useQuery(relacaoDetalheOptions(selecionada));
+  const turmasQ = useQuery(turmasDoUsuarioOptions(user?.id ?? null));
+
+  // Pré-preenche local se todas as turmas compartilham o mesmo
+  useMemo(() => {
+    if (local) return;
+    const rows = turmasQ.data?.rows ?? [];
+    if (rows.length === 0) return;
+    const locais = Array.from(new Set(rows.map((r) => r.local).filter(Boolean))) as string[];
+    if (locais.length === 1) setLocal(locais[0]);
+  }, [turmasQ.data, local]);
 
   const gerarMut = useMutation({
     mutationFn: async () => {
@@ -90,15 +101,22 @@ function RelacaoHorasPage() {
   const itens = detalheQ.data?.itens ?? [];
   const isRascunho = relacao?.status === "rascunho";
 
-  async function onEditarItem(item: RelacaoItem, campo: "hora_entrada" | "hora_saida", valor: string) {
+  async function onEditarItem(
+    item: RelacaoItem,
+    campo: "hora_entrada" | "saida_almoco" | "retorno" | "hora_saida" | "conteudo",
+    valor: string,
+  ) {
     if (!relacao) return;
-    const patch: RelacaoItem = { ...item, [campo]: valor || null };
+    const patch: RelacaoItem = { ...item, [campo]: valor || null } as RelacaoItem;
     try {
       await salvarItem({
         id: item.id,
         hora_entrada: patch.hora_entrada,
+        saida_almoco: patch.saida_almoco,
+        retorno: patch.retorno,
         hora_saida: patch.hora_saida,
         valor_hora: Number(relacao.valor_hora),
+        conteudo: patch.conteudo,
       });
       await recomputarTotais(relacao.id);
       qc.invalidateQueries({ queryKey: ["relacoes-horas", "detalhe", relacao.id] });
@@ -114,9 +132,12 @@ function RelacaoHorasPage() {
       relacao,
       itens,
       professorNome: relacao.assinatura_nome || user?.email || "—",
+      turmas: turmasQ.data?.rows ?? [],
     });
     doc.save(`relacao-horas-${relacao.mes_referencia.slice(0, 7)}.pdf`);
   }
+
+  const turnoNome: Record<string, string> = { manha: "manhã", tarde: "tarde", noite: "noite" };
 
   return (
     <div className="space-y-6">
@@ -140,6 +161,20 @@ function RelacaoHorasPage() {
             Gerar do mês
           </Button>
         </div>
+        {(turmasQ.data?.rows ?? []).length > 0 && (
+          <div className="mt-3 rounded border bg-muted/30 p-2 text-xs">
+            <div className="mb-1 font-medium text-muted-foreground">Turmas vinculadas detectadas</div>
+            <ul className="space-y-1">
+              {turmasQ.data!.rows.map((t) => (
+                <li key={t.turma_id}>
+                  <b>Turma da {turnoNome[classificarTurno(t)]}:</b>{" "}
+                  {t.codigo ?? t.nome ?? "—"} — {(t.hora_inicio ?? "").slice(0, 5)} às {(t.hora_fim ?? "").slice(0, 5)}
+                  {" · R$ "}{Number(t.valor_hora).toFixed(2)}/h
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
@@ -193,40 +228,51 @@ function RelacaoHorasPage() {
                     <TableRow>
                       <TableHead className="w-[100px]">Data</TableHead>
                       <TableHead>Dia</TableHead>
-                      <TableHead className="w-[120px]">Entrada</TableHead>
-                      <TableHead className="w-[120px]">Saída</TableHead>
-                      <TableHead className="w-[100px]">Horas</TableHead>
-                      <TableHead className="w-[120px]">Valor</TableHead>
+                      <TableHead className="w-[110px]">Entrada</TableHead>
+                      <TableHead className="w-[110px]">Saída Almoço</TableHead>
+                      <TableHead className="w-[110px]">Retorno</TableHead>
+                      <TableHead className="w-[110px]">Saída</TableHead>
+                      <TableHead className="w-[70px]">Horas</TableHead>
+                      <TableHead className="w-[110px]">Valor</TableHead>
+                      <TableHead>Conteúdo</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {itens.map((it) => {
                       const dt = new Date(it.data + "T12:00:00");
                       const dow = dt.getDay();
-                      const isWknd = dow === 0 || dow === 6;
                       const nomes = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
                       return (
-                        <TableRow key={it.id} className={isWknd ? "bg-muted/40" : ""}>
+                        <TableRow key={it.id}>
                           <TableCell>{it.data.split("-").reverse().join("/")}</TableCell>
                           <TableCell>{nomes[dow]}</TableCell>
                           <TableCell>
-                            <Input
-                              type="time"
-                              disabled={!isRascunho || isWknd}
+                            <Input type="time" disabled={!isRascunho}
                               defaultValue={it.hora_entrada ?? ""}
-                              onBlur={(e) => onEditarItem(it, "hora_entrada", e.target.value)}
-                            />
+                              onBlur={(e) => onEditarItem(it, "hora_entrada", e.target.value)} />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="time"
-                              disabled={!isRascunho || isWknd}
+                            <Input type="time" disabled={!isRascunho}
+                              defaultValue={it.saida_almoco ?? ""}
+                              onBlur={(e) => onEditarItem(it, "saida_almoco", e.target.value)} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="time" disabled={!isRascunho}
+                              defaultValue={it.retorno ?? ""}
+                              onBlur={(e) => onEditarItem(it, "retorno", e.target.value)} />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="time" disabled={!isRascunho}
                               defaultValue={it.hora_saida ?? ""}
-                              onBlur={(e) => onEditarItem(it, "hora_saida", e.target.value)}
-                            />
+                              onBlur={(e) => onEditarItem(it, "hora_saida", e.target.value)} />
                           </TableCell>
                           <TableCell>{Number(it.total_horas || 0).toFixed(2)}</TableCell>
                           <TableCell>{Number(it.valor_dia || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
+                          <TableCell>
+                            <Input disabled={!isRascunho}
+                              defaultValue={it.conteudo ?? ""}
+                              onBlur={(e) => onEditarItem(it, "conteudo", e.target.value)} />
+                          </TableCell>
                         </TableRow>
                       );
                     })}

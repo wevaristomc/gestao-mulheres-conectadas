@@ -12,6 +12,7 @@ export type RelacaoHoras = {
   total_horas: number;
   valor_hora: number;
   valor_total: number;
+  dias_trabalhados: number;
   assinatura_nome: string | null;
   assinatura_hash: string | null;
   assinado_em: string | null;
@@ -28,10 +29,71 @@ export type RelacaoItem = {
   relacao_id: string;
   data: string; // YYYY-MM-DD
   hora_entrada: string | null;
+  saida_almoco: string | null;
+  retorno: string | null;
   hora_saida: string | null;
   total_horas: number;
   valor_dia: number;
+  conteudo: string | null;
 };
+
+export type TurmaVinculo = {
+  turma_id: string;
+  codigo: string | null;
+  nome: string | null;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  turno: string | null;
+  valor_hora: number;
+  local: string | null;
+};
+
+function turnoLabel(t: TurmaVinculo): "manha" | "tarde" | "noite" {
+  const raw = (t.turno ?? "").toLowerCase();
+  if (raw.includes("manh")) return "manha";
+  if (raw.includes("tard")) return "tarde";
+  if (raw.includes("noit")) return "noite";
+  const hi = t.hora_inicio ?? "";
+  const h = Number(hi.slice(0, 2) || 0);
+  if (h < 12) return "manha";
+  if (h < 18) return "tarde";
+  return "noite";
+}
+
+export function classificarTurno(t: TurmaVinculo): "manha" | "tarde" | "noite" {
+  return turnoLabel(t);
+}
+
+export function turmasDoUsuarioOptions(userId: string | null) {
+  return queryOptions({
+    queryKey: ["relacoes-horas", "turmas-usuario", userId],
+    enabled: !!userId,
+    queryFn: async (): Promise<{ rows: TurmaVinculo[]; error?: string }> => {
+      if (!userId) return { rows: [] };
+      const vinc = await supabase
+        .from("instrutor_turmas")
+        .select("turma_id, valor_hora")
+        .eq("user_id", userId);
+      if (vinc.error) return { rows: [], error: vinc.error.message };
+      const ids = (vinc.data ?? []).map((r: any) => r.turma_id as string);
+      if (ids.length === 0) return { rows: [] };
+      const t = await supabase.from("turmas").select("*").in("id", ids);
+      if (t.error) return { rows: [], error: t.error.message };
+      const valorMap = new Map((vinc.data ?? []).map((r: any) => [r.turma_id, Number(r.valor_hora ?? 40)]));
+      const rows: TurmaVinculo[] = ((t.data ?? []) as any[]).map((r) => ({
+        turma_id: String(r.id),
+        codigo: (r.codigo_turma ?? r.codigo ?? null) as string | null,
+        nome: (r.nome ?? r.titulo ?? null) as string | null,
+        hora_inicio: (r.hora_inicio ?? null) as string | null,
+        hora_fim: (r.hora_fim ?? null) as string | null,
+        turno: (r.turno ?? r.periodo ?? null) as string | null,
+        valor_hora: valorMap.get(String(r.id)) ?? 40,
+        local: (r.local ?? r.local_aula ?? r.endereco ?? null) as string | null,
+      }));
+      return { rows };
+    },
+  });
+}
 
 export function minhasRelacoesOptions(userId: string | null) {
   return queryOptions({
@@ -96,22 +158,18 @@ function primeiroDiaMes(mes: string): string {
   return `${mes}-01`;
 }
 
-function diasDoMes(mes: string): string[] {
-  const [y, m] = mes.split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();
-  const out: string[] = [];
-  for (let d = 1; d <= last; d++) {
-    out.push(`${mes}-${String(d).padStart(2, "0")}`);
-  }
-  return out;
+function diffMinutos(a: string | null, b: string | null): number {
+  if (!a || !b) return 0;
+  const [ah, am] = a.split(":").map(Number);
+  const [bh, bm] = b.split(":").map(Number);
+  return Math.max(0, bh * 60 + bm - (ah * 60 + am));
 }
-
-function diffHoras(entrada: string | null, saida: string | null): number {
-  if (!entrada || !saida) return 0;
-  const [eh, em] = entrada.split(":").map(Number);
-  const [sh, sm] = saida.split(":").map(Number);
-  const mins = sh * 60 + sm - (eh * 60 + em);
-  return Math.max(0, Math.round((mins / 60) * 100) / 100);
+function toHoras(mins: number): number {
+  return Math.round((mins / 60) * 100) / 100;
+}
+function timeHM(t: string | null): string | null {
+  if (!t) return null;
+  return t.length >= 5 ? t.slice(0, 5) : t;
 }
 
 export async function gerarRascunhoDoMes(params: {
@@ -124,26 +182,49 @@ export async function gerarRascunhoDoMes(params: {
   const inicio = `${params.mes}-01`;
   const fim = `${params.mes}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 
-  // Turmas do professor + valor_hora
+  // Turmas do professor (com metadados) + valor_hora
   const vinc = await supabase
     .from("instrutor_turmas")
     .select("turma_id, valor_hora")
     .eq("user_id", params.userId);
   if (vinc.error) throw new Error(vinc.error.message);
-  const turmas = (vinc.data ?? []) as { turma_id: string; valor_hora: number | null }[];
-  const turmaValor = new Map(turmas.map((t) => [t.turma_id, Number(t.valor_hora ?? 40)]));
-  const valorMedio = turmas.length
-    ? turmas.reduce((s, t) => s + Number(t.valor_hora ?? 40), 0) / turmas.length
+  const vincRows = (vinc.data ?? []) as { turma_id: string; valor_hora: number | null }[];
+  const turmaValor = new Map(vincRows.map((t) => [t.turma_id, Number(t.valor_hora ?? 40)]));
+  const valorMedio = vincRows.length
+    ? vincRows.reduce((s, t) => s + Number(t.valor_hora ?? 40), 0) / vincRows.length
     : 40;
+
+  const turmasMeta = new Map<string, { codigo: string | null; hi: string | null; hf: string | null }>();
+  if (vincRows.length > 0) {
+    const t = await supabase
+      .from("turmas")
+      .select("id, codigo_turma, hora_inicio, hora_fim")
+      .in("id", vincRows.map((t) => t.turma_id));
+    if (!t.error) {
+      for (const r of (t.data ?? []) as any[]) {
+        turmasMeta.set(String(r.id), {
+          codigo: (r.codigo_turma ?? null) as string | null,
+          hi: (r.hora_inicio ?? null) as string | null,
+          hf: (r.hora_fim ?? null) as string | null,
+        });
+      }
+    }
+  }
 
   // Aulas dentro do período nas turmas do professor
   let aulas: any[] = [];
-  if (turmas.length > 0) {
-    // A tabela pode ter "data_aula" ou "data" — tenta os dois
+  if (vincRows.length > 0) {
+    // Tenta com conteudo_programatico; se coluna não existir, refaz sem
     let res = await supabase
       .from("aulas")
-      .select("id, turma_id, data, data_aula, hora_inicio, hora_fim")
-      .in("turma_id", turmas.map((t) => t.turma_id));
+      .select("id, turma_id, data, data_aula, hora_inicio, hora_fim, conteudo_programatico, conteudo, titulo, ch_prevista, duracao")
+      .in("turma_id", vincRows.map((t) => t.turma_id));
+    if (res.error && /does not exist/i.test(res.error.message)) {
+      res = await supabase
+        .from("aulas")
+        .select("*")
+        .in("turma_id", vincRows.map((t) => t.turma_id));
+    }
     if (res.error) throw new Error(res.error.message);
     aulas = (res.data ?? []).filter((a: any) => {
       const d: string = (a.data_aula ?? a.data ?? "").slice(0, 10);
@@ -186,43 +267,86 @@ export async function gerarRascunhoDoMes(params: {
     relacaoId = (ins.data as any).id;
   }
 
-  // Agrega aulas por dia
-  type Item = { data: string; entrada: string | null; saida: string | null; total: number; valor: number };
-  const porDia = new Map<string, Item>();
+  // Agrupa aulas por dia (multi-turma)
+  type AulaCanon = {
+    turma_id: string;
+    hi: string; // HH:MM
+    hf: string; // HH:MM
+    horas: number;
+    conteudo: string;
+    valor: number;
+  };
+  const porDia = new Map<string, AulaCanon[]>();
   for (const a of aulas) {
     const d: string = (a.data_aula ?? a.data ?? "").slice(0, 10);
     if (!d) continue;
-    const he: string | null = (a.hora_inicio ?? null) as any;
-    const hs: string | null = (a.hora_fim ?? null) as any;
-    const total = diffHoras(he, hs);
+    const meta = turmasMeta.get(a.turma_id);
+    const hi = timeHM(a.hora_inicio ?? meta?.hi ?? null);
+    const hf = timeHM(a.hora_fim ?? meta?.hf ?? null);
+    if (!hi || !hf) continue;
+    let horas = toHoras(diffMinutos(hi, hf));
+    if (horas <= 0) horas = Number(a.ch_prevista ?? a.duracao ?? 0) || 0;
+    if (horas <= 0) continue;
     const vh = turmaValor.get(a.turma_id) ?? valorMedio;
-    const valor = Math.round(total * vh * 100) / 100;
-    const cur = porDia.get(d);
-    if (!cur) {
-      porDia.set(d, { data: d, entrada: he, saida: hs, total, valor });
-    } else {
-      // se houver múltiplas aulas no mesmo dia, mantém primeira entrada e última saída, soma horas/valor
-      cur.entrada = cur.entrada ?? he;
-      cur.saida = hs ?? cur.saida;
-      cur.total = Math.round((cur.total + total) * 100) / 100;
-      cur.valor = Math.round((cur.valor + valor) * 100) / 100;
-    }
+    const conteudo = String(a.conteudo_programatico ?? a.conteudo ?? a.titulo ?? "").trim();
+    const canon: AulaCanon = {
+      turma_id: a.turma_id,
+      hi,
+      hf,
+      horas,
+      conteudo,
+      valor: Math.round(horas * vh * 100) / 100,
+    };
+    const arr = porDia.get(d);
+    if (arr) arr.push(canon);
+    else porDia.set(d, [canon]);
   }
 
-  // Insere itens para todos os dias do mês (dias sem aula ficam vazios)
-  const rows = diasDoMes(params.mes).map((d) => {
-    const it = porDia.get(d);
+  // Monta linhas por dia trabalhado (apenas dias com aula)
+  const dias = Array.from(porDia.keys()).sort();
+  const rows = dias.map((d) => {
+    const aulasDia = porDia.get(d)!.slice().sort((x, y) => x.hi.localeCompare(y.hi));
+    const primeira = aulasDia[0];
+    const ultima = aulasDia[aulasDia.length - 1];
+    let saida_almoco: string | null = null;
+    let retorno: string | null = null;
+    if (aulasDia.length >= 2) {
+      saida_almoco = primeira.hf;
+      retorno = aulasDia[1].hi;
+    }
+    const totalH = Math.round(aulasDia.reduce((s, x) => s + x.horas, 0) * 100) / 100;
+    const totalV = Math.round(aulasDia.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+    const conteudo = aulasDia
+      .map((x) => (x.conteudo ? `${x.conteudo} (${x.horas.toFixed(0)}h)` : `(${x.horas.toFixed(0)}h)`))
+      .join(" + ");
     return {
       relacao_id: relacaoId,
       data: d,
-      hora_entrada: it?.entrada ?? null,
-      hora_saida: it?.saida ?? null,
-      total_horas: it?.total ?? 0,
-      valor_dia: it?.valor ?? 0,
+      hora_entrada: primeira.hi,
+      saida_almoco,
+      retorno,
+      hora_saida: ultima.hf,
+      total_horas: totalH,
+      valor_dia: totalV,
+      conteudo,
     };
   });
-  const ins2 = await supabase.from("relacoes_horas_itens" as any).insert(rows);
-  if (ins2.error) throw new Error(ins2.error.message);
+  if (rows.length > 0) {
+    // Se colunas novas ainda não foram aplicadas, faz fallback silencioso
+    let ins2 = await supabase.from("relacoes_horas_itens" as any).insert(rows);
+    if (ins2.error && /column .*(saida_almoco|retorno|conteudo).* does not exist/i.test(ins2.error.message)) {
+      const legacy = rows.map((r) => ({
+        relacao_id: r.relacao_id,
+        data: r.data,
+        hora_entrada: r.hora_entrada,
+        hora_saida: r.hora_saida,
+        total_horas: r.total_horas,
+        valor_dia: r.valor_dia,
+      }));
+      ins2 = await supabase.from("relacoes_horas_itens" as any).insert(legacy);
+    }
+    if (ins2.error) throw new Error(ins2.error.message);
+  }
 
   await recomputarTotais(relacaoId);
   return { relacaoId };
@@ -234,29 +358,62 @@ export async function recomputarTotais(relacaoId: string) {
     .select("total_horas, valor_dia")
     .eq("relacao_id", relacaoId);
   if (itens.error) throw new Error(itens.error.message);
-  const totalH = (itens.data ?? []).reduce((s: number, r: any) => s + Number(r.total_horas ?? 0), 0);
-  const totalV = (itens.data ?? []).reduce((s: number, r: any) => s + Number(r.valor_dia ?? 0), 0);
-  await supabase.from("relacoes_horas" as any).update({
+  const rows = (itens.data ?? []) as any[];
+  const totalH = rows.reduce((s, r) => s + Number(r.total_horas ?? 0), 0);
+  const totalV = rows.reduce((s, r) => s + Number(r.valor_dia ?? 0), 0);
+  const dias = rows.filter((r) => Number(r.total_horas ?? 0) > 0).length;
+  const patch: Record<string, unknown> = {
     total_horas: Math.round(totalH * 100) / 100,
     valor_total: Math.round(totalV * 100) / 100,
-  }).eq("id", relacaoId);
+    dias_trabalhados: dias,
+  };
+  let upd = await supabase.from("relacoes_horas" as any).update(patch).eq("id", relacaoId);
+  if (upd.error && /column .*dias_trabalhados.* does not exist/i.test(upd.error.message)) {
+    delete patch.dias_trabalhados;
+    upd = await supabase.from("relacoes_horas" as any).update(patch).eq("id", relacaoId);
+  }
+  if (upd.error) throw new Error(upd.error.message);
 }
 
 export async function salvarItem(item: {
   id: string;
   hora_entrada: string | null;
+  saida_almoco?: string | null;
+  retorno?: string | null;
   hora_saida: string | null;
   valor_hora: number;
+  conteudo?: string | null;
 }) {
-  const total = diffHoras(item.hora_entrada, item.hora_saida);
+  // Total = manhã (entrada→saida_almoco) + tarde (retorno→saida). Sem almoço, entrada→saida.
+  const manha = item.saida_almoco
+    ? diffMinutos(item.hora_entrada, item.saida_almoco)
+    : 0;
+  const tarde = item.retorno
+    ? diffMinutos(item.retorno, item.hora_saida)
+    : 0;
+  const direto = item.saida_almoco || item.retorno ? 0 : diffMinutos(item.hora_entrada, item.hora_saida);
+  const total = toHoras(manha + tarde + direto);
   const valor = Math.round(total * item.valor_hora * 100) / 100;
-  const { error } = await supabase.from("relacoes_horas_itens" as any).update({
+  const payload: Record<string, unknown> = {
     hora_entrada: item.hora_entrada,
+    saida_almoco: item.saida_almoco ?? null,
+    retorno: item.retorno ?? null,
     hora_saida: item.hora_saida,
     total_horas: total,
     valor_dia: valor,
-  }).eq("id", item.id);
-  if (error) throw new Error(error.message);
+  };
+  if (item.conteudo !== undefined) payload.conteudo = item.conteudo;
+  let res = await supabase.from("relacoes_horas_itens" as any).update(payload).eq("id", item.id);
+  if (res.error && /column .*(saida_almoco|retorno|conteudo).* does not exist/i.test(res.error.message)) {
+    const legacy = {
+      hora_entrada: item.hora_entrada,
+      hora_saida: item.hora_saida,
+      total_horas: total,
+      valor_dia: valor,
+    };
+    res = await supabase.from("relacoes_horas_itens" as any).update(legacy).eq("id", item.id);
+  }
+  if (res.error) throw new Error(res.error.message);
 }
 
 async function sha256Hex(s: string): Promise<string> {

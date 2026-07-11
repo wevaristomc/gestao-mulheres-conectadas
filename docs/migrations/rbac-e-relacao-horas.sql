@@ -298,3 +298,18 @@ BEGIN
 END $$;
 
 COMMIT;
+
+-- ============================================================================
+-- Relação de Horas — Modelo oficial (multi-turma no mesmo dia)
+-- ============================================================================
+BEGIN;
+
+ALTER TABLE public.relacoes_horas_itens
+  ADD COLUMN IF NOT EXISTS saida_almoco time,
+  ADD COLUMN IF NOT EXISTS retorno time,
+  ADD COLUMN IF NOT EXISTS conteudo text;
+
+ALTER TABLE public.relacoes_horas
+  ADD COLUMN IF NOT EXISTS dias_trabalhados int NOT NULL DEFAULT 0;
+
+COMMIT;
