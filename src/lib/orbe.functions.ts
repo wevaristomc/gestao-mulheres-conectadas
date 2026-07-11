@@ -263,6 +263,23 @@ async function toolAjudaSistema(args: { topico?: string }) {
   return { guias, campos, faq };
 }
 
+function sugerirAjudaPorRota(rota: string): string | null {
+  const r = rota.toLowerCase();
+  let slug: string | null = null;
+  if (r.startsWith("/pedagogico")) slug = "pedagogico";
+  else if (r.startsWith("/mte")) slug = "mte";
+  else if (r.startsWith("/financeiro") || r.startsWith("/relacao-horas")) slug = "financeiro";
+  else if (r.startsWith("/etapas")) slug = "etapas";
+  else if (r.startsWith("/relatorios")) slug = "relatorios";
+  else if (r.startsWith("/ajuda")) slug = "primeiros-passos";
+  if (!slug) return null;
+  const g = GUIAS.find((x) => x.slug === slug);
+  if (!g) return null;
+  const passos = g.passos.slice(0, 4).map((p) => `- ${p.titulo}: ${p.detalhe ?? ""}`).join("\n");
+  const regras = g.regras.slice(0, 4).map((x) => `- ${x}`).join("\n");
+  return `Guia "${g.titulo}"\nPassos:\n${passos}\nRegras:\n${regras}`;
+}
+
 const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   listar_turmas: (a) => toolListarTurmas(a),
   detalhar_turma: (a, x) => toolDetalharTurma(a, x),
