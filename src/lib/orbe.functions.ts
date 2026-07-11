@@ -299,6 +299,37 @@ async function snapshotContexto(admin: any) {
       .order("criado_em", { ascending: false }).limit(10);
     return (data ?? []) as any[];
   }, []);
+  const etapaAtualResumo = await safe(async () => {
+    const { data: etapas } = await admin
+      .from("etapas")
+      .select("id, numero, titulo, status, data_inicio, data_fim")
+      .order("numero", { ascending: true });
+    const list = (etapas ?? []) as any[];
+    const atual =
+      list.find((e) => e.status === "em_andamento") ??
+      list.find((e) => e.status === "prestacao_contas") ??
+      list[0];
+    if (!atual) return null;
+    const { data: ativs } = await admin
+      .from("etapa_atividades")
+      .select("id, grupo, titulo, status, prazo")
+      .eq("etapa_id", atual.id);
+    const rows = (ativs ?? []) as any[];
+    const hoje = Date.now();
+    const total = rows.length;
+    const concluidas = rows.filter((r) => r.status === "concluida").length;
+    const atrasadas = rows
+      .filter((r) => r.status !== "concluida" && r.prazo && new Date(r.prazo + "T23:59:59").getTime() < hoje)
+      .map((r) => ({ grupo: r.grupo, titulo: r.titulo, prazo: r.prazo }));
+    return {
+      numero: atual.numero, titulo: atual.titulo, status: atual.status,
+      periodo: `${atual.data_inicio ?? "?"} → ${atual.data_fim ?? "?"}`,
+      total, concluidas,
+      progresso_pct: total === 0 ? 0 : Math.round((concluidas / total) * 100),
+      atrasadas_count: atrasadas.length,
+      atrasadas: atrasadas.slice(0, 10),
+    };
+  }, null);
   return {
     projeto: "Mulheres Conectadas / QUINTA ARTE — Termo de Fomento 01025/2025",
     turmas: nTurmas,
@@ -309,6 +340,7 @@ async function snapshotContexto(admin: any) {
     ch_realizada: chRealizada,
     pendencias_abertas: pendenciasAbertas,
     meta_ciclo1: { previsto: 300, atual: nBenef },
+    etapa_atual: etapaAtualResumo,
     ultimas_acoes: ultimasAcoes,
   };
 }
