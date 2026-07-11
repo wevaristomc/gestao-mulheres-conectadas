@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -69,7 +70,13 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [busca, setBusca] = useState("");
-  const [progresso, setProgresso] = useState<{ done: number; restantes: number } | null>(null);
+  const [progresso, setProgresso] = useState<{
+    fase: "varredura" | "processamento" | "concluido";
+    done: number;
+    total: number;
+    restantes: number;
+    mensagem: string;
+  } | null>(null);
   const [videosSelecionados, setVideosSelecionados] = useState<Set<string>>(new Set());
 
   const statusQ = useQuery({
@@ -93,36 +100,67 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
   const arquivos: Arquivo[] = (listaQ.data?.rows as Arquivo[] | undefined) ?? [];
   const aguardando = useMemo(() => arquivos.filter((a) => a.status === "aguardando_selecao"), [arquivos]);
 
-  async function rodarSincronizacao() {
-    if (!projetoId) { toast.error("Selecione um projeto ativo."); return; }
-    const toastId = "drive-sync";
-    toast.loading("Varrendo Drive…", { id: toastId });
-    try {
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!projetoId) throw new Error("Selecione um projeto ativo.");
+      setProgresso({ fase: "varredura", done: 0, total: 0, restantes: 0, mensagem: "Varrendo o Drive…" });
       const r = await varreduraFn();
-      toast.loading(`${r.total} arquivos catalogados. Processando fila…`, { id: toastId });
+      const total = r.total ?? 0;
+      setProgresso({
+        fase: "processamento",
+        done: 0,
+        total,
+        restantes: total,
+        mensagem: `${total} arquivos catalogados. Processando fila…`,
+      });
       let done = 0;
-      for (let i = 0; i < 5; i += 1) {
+      for (let i = 0; i < 10; i += 1) {
         const p = await processarFn({ data: { projetoId } });
         done += p.processados + p.ignorados + p.erros;
-        setProgresso({ done, restantes: p.restantes });
-        toast.loading(`Processados ${done} — restam ${p.restantes}`, { id: toastId });
+        setProgresso({
+          fase: "processamento",
+          done,
+          total: Math.max(total, done + p.restantes),
+          restantes: p.restantes,
+          mensagem: `Processados ${done} · restam ${p.restantes}`,
+        });
         if (p.restantes === 0) break;
+        await new Promise((res) => setTimeout(res, 400));
       }
-      toast.success("Sincronização concluída", { id: toastId });
+      setProgresso({
+        fase: "concluido",
+        done,
+        total: Math.max(total, done),
+        restantes: 0,
+        mensagem: "Sincronização concluída",
+      });
+      return { done };
+    },
+    onSuccess: (r) => {
+      toast.success(`Sincronização concluída (${r.done} arquivos processados)`);
       qc.invalidateQueries({ queryKey: ["drive-sync-status"] });
       qc.invalidateQueries({ queryKey: ["drive-sync-lista"] });
-      qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha na sincronização", { id: toastId });
-    } finally {
-      setProgresso(null);
-    }
+      if (projetoId) qc.invalidateQueries({ queryKey: ["base-conhecimento", "documentos", projetoId] });
+    },
+    onError: (e: Error) => {
+      toast.error(e.message || "Falha na sincronização");
+    },
+  });
+
+  const isSyncing = syncMutation.isPending;
+  const syncError = syncMutation.error instanceof Error ? syncMutation.error.message : null;
+
+  function rodarSincronizacao() {
+    if (isSyncing) return;
+    syncMutation.reset();
+    syncMutation.mutate();
   }
 
   // Auto-sync (1x a cada 6h) — dispara em background ao abrir a tela.
   useEffect(() => {
     if (!projetoId) return;
     if (!statusQ.data) return;
+    if (isSyncing) return;
     const ultima = statusQ.data.estado?.ultima_varredura ? new Date(statusQ.data.estado.ultima_varredura).getTime() : 0;
     const seisHoras = 6 * 60 * 60 * 1000;
     if (Date.now() - ultima < seisHoras) return;
@@ -139,7 +177,7 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projetoId, statusQ.data?.estado?.ultima_varredura]);
+  }, [projetoId, statusQ.data?.estado?.ultima_varredura, isSyncing]);
 
   const marcarVideos = useMutation({
     mutationFn: (ids: string[]) => marcarFn({ data: { ids } }),
@@ -179,12 +217,32 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" onClick={rodarSincronizacao} disabled={!projetoId || !!progresso}>
-              {progresso ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
-              Sincronizar agora
+            <Button size="sm" onClick={rodarSincronizacao} disabled={!projetoId || isSyncing}>
+              {isSyncing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}
+              {isSyncing ? "Sincronizando…" : "Sincronizar agora"}
             </Button>
           </div>
         </div>
+        {progresso && (isSyncing || progresso.fase !== "concluido") ? (
+          <div className="mb-3 rounded-md border bg-muted/40 p-3">
+            <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+              <span>{progresso.mensagem}</span>
+            </div>
+            <Progress
+              value={progresso.total > 0 ? Math.min(100, (progresso.done / progresso.total) * 100) : (isSyncing ? 8 : 0)}
+              className="h-2"
+            />
+          </div>
+        ) : null}
+        {syncError ? (
+          <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+            <div className="mb-0.5 flex items-center gap-1.5 font-medium">
+              <AlertCircle className="h-3.5 w-3.5" /> Falha na sincronização
+            </div>
+            <div className="whitespace-pre-wrap break-words">{syncError}</div>
+          </div>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi label="Indexados" value={String(cs.indexado ?? 0)} />
           <Kpi label="Pendentes" value={String((cs.pendente ?? 0) + (cs.processando ?? 0))} />
