@@ -96,12 +96,6 @@ export function gerarPdfRelacaoHoras(input: {
     "Valor da hora:",
     fmtBRL(Number(input.relacao.valor_hora)),
   ]);
-  linhas.push([
-    "Local:",
-    input.relacao.local_trabalho ?? "—",
-    "Período:",
-    mesExtenso(input.relacao.mes_referencia),
-  ]);
 
   const turmas = (input.turmas ?? []).slice().sort((a, b) => {
     const ta = classificarTurno(a);
@@ -110,6 +104,45 @@ export function gerarPdfRelacaoHoras(input: {
     return ord[ta] - ord[tb];
   });
   const turnoLabel: Record<string, string> = { manha: "manhã", tarde: "tarde", noite: "noite" };
+  // Determina locais distintos a partir dos itens (fonte da verdade)
+  const itensTrabalhados = input.itens.filter((i) => Number(i.total_horas) > 0);
+  const locaisPresentes = Array.from(
+    new Set(itensTrabalhados.map((i) => i.local_nome).filter(Boolean) as string[]),
+  );
+  const multiLocal = locaisPresentes.length > 1;
+
+  // Locais mapeados por nome → município (via turmas)
+  const localMun = new Map<string, string | null>();
+  for (const t of turmas) {
+    if (t.local_nome) localMun.set(t.local_nome, t.local_municipio ?? null);
+  }
+
+  if (!multiLocal) {
+    const nome = locaisPresentes[0] ?? input.relacao.local_trabalho ?? "—";
+    const mun = localMun.get(nome ?? "") ?? null;
+    linhas.push([
+      "Local:",
+      mun ? `${nome} - ${mun}` : nome,
+      "Período:",
+      mesExtenso(input.relacao.mes_referencia),
+    ]);
+  } else {
+    // Locais: A - munA (manhã) / B - munB (noite)
+    const partes: string[] = [];
+    for (const t of turmas) {
+      if (!t.local_nome) continue;
+      const tn = turnoLabel[classificarTurno(t)];
+      const mun = t.local_municipio ?? "";
+      partes.push(`${t.local_nome}${mun ? " - " + mun : ""} (${tn})`);
+    }
+    linhas.push([
+      "Locais:",
+      partes.join(" / ") || locaisPresentes.join(" / "),
+      "Período:",
+      mesExtenso(input.relacao.mes_referencia),
+    ]);
+  }
+
   if (turmas.length === 1) {
     const t = turmas[0];
     linhas.push([
@@ -149,9 +182,10 @@ export function gerarPdfRelacaoHoras(input: {
   y += 6;
 
   // Tabela
-  const cols = [
+  const baseCols = [
     { label: "DATA", w: 56 },
     { label: "DIA DA SEMANA", w: 90 },
+    ...(multiLocal ? [{ label: "LOCAL", w: 100 }] : []),
     { label: "ENTRADA", w: 58 },
     { label: "SAÍDA ALMOÇO", w: 66 },
     { label: "RETORNO", w: 58 },
@@ -160,6 +194,7 @@ export function gerarPdfRelacaoHoras(input: {
     { label: "VALOR DO DIA", w: 78 },
     { label: "CONTEÚDO TRABALHADO", w: 0 },
   ];
+  const cols = baseCols;
   const used = cols.reduce((s, c) => s + c.w, 0);
   cols[cols.length - 1].w = pageW - margin * 2 - used;
 
@@ -189,7 +224,7 @@ export function gerarPdfRelacaoHoras(input: {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
 
-  const itensTrabalhados = input.itens.filter((i) => Number(i.total_horas) > 0);
+  // itensTrabalhados já calculado acima
 
   const drawRow = (item: RelacaoItem) => {
     const dt = new Date(item.data + "T12:00:00");
@@ -214,6 +249,7 @@ export function gerarPdfRelacaoHoras(input: {
     const cells = [
       fmtDataBR(item.data),
       DIAS_SEMANA[dow],
+      ...(multiLocal ? [shortLocal(item.local_nome ?? "")] : []),
       hm(item.hora_entrada),
       hm(item.saida_almoco),
       hm(item.retorno),
@@ -247,18 +283,23 @@ export function gerarPdfRelacaoHoras(input: {
   doc.rect(margin, y, pageW - margin * 2, rowH, "FD");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  const wLabel = cols.slice(0, 6).reduce((s, c) => s + c.w, 0);
+  // "TOTAL DO MÊS" ocupa até (mas exclui) a coluna HORAS.
+  const horasIdx = cols.findIndex((c) => c.label === "HORAS");
+  const wLabel = cols.slice(0, horasIdx).reduce((s, c) => s + c.w, 0);
   doc.text("TOTAL DO MÊS", margin + wLabel / 2, y + rowH - 6, { align: "center" });
   let xt = margin + wLabel;
+  const cHoras = cols[horasIdx];
+  const cValor = cols[horasIdx + 1];
+  const cCont = cols[horasIdx + 2];
   doc.line(xt, y, xt, y + rowH);
-  doc.text(fmtHoras(Number(input.relacao.total_horas)), xt + cols[6].w / 2, y + rowH - 6, { align: "center" });
-  xt += cols[6].w;
+  doc.text(fmtHoras(Number(input.relacao.total_horas)), xt + cHoras.w / 2, y + rowH - 6, { align: "center" });
+  xt += cHoras.w;
   doc.line(xt, y, xt, y + rowH);
-  doc.text(fmtBRL(Number(input.relacao.valor_total)), xt + cols[7].w / 2, y + rowH - 6, { align: "center" });
-  xt += cols[7].w;
+  doc.text(fmtBRL(Number(input.relacao.valor_total)), xt + cValor.w / 2, y + rowH - 6, { align: "center" });
+  xt += cValor.w;
   doc.line(xt, y, xt, y + rowH);
   const dias = Number((input.relacao as any).dias_trabalhados ?? itensTrabalhados.length);
-  doc.text(`${dias} dias trabalhados`, xt + cols[8].w / 2, y + rowH - 6, { align: "center" });
+  doc.text(`${dias} dias trabalhados`, xt + cCont.w / 2, y + rowH - 6, { align: "center" });
   y += rowH + 12;
 
   // Observação
@@ -285,33 +326,38 @@ export function gerarPdfRelacaoHoras(input: {
     y += lines.length * 11 + 8;
   }
 
-  // Rodapé — assinaturas
-  const sigY = Math.max(y + 20, pageH - 80);
+  // Rodapé — assinaturas: Professor + 1 linha "Responsável pelo local" por local distinto
+  const sigY = Math.max(y + 20, pageH - 90);
   doc.setDrawColor(120);
-  const lineW = 220;
-  const leftX = margin + 20;
-  const rightX = pageW - margin - 20 - lineW;
-  doc.line(leftX, sigY, leftX + lineW, sigY);
-  doc.line(rightX, sigY, rightX + lineW, sigY);
+  const lineW = 200;
+  const localsForSig = locaisPresentes.length > 0 ? locaisPresentes : [input.relacao.local_trabalho ?? "—"];
+  const slots = [{ label: "Professor", nomeExtra: input.professorNome }]
+    .concat(localsForSig.map((n) => ({ label: `Responsável — ${n}`, nomeExtra: "" })));
+  const totalW = slots.length * lineW + (slots.length - 1) * 20;
+  const startX = Math.max(margin, (pageW - totalW) / 2);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text("Professor", leftX + lineW / 2, sigY + 12, { align: "center" });
-  doc.text("Responsável pelo local", rightX + lineW / 2, sigY + 12, { align: "center" });
+  slots.forEach((s, i) => {
+    const x = startX + i * (lineW + 20);
+    doc.line(x, sigY, x + lineW, sigY);
+    doc.text(s.label, x + lineW / 2, sigY + 12, { align: "center" });
+  });
 
   if (input.relacao.assinatura_nome && input.relacao.assinado_em) {
     const hashShort = (input.relacao.assinatura_hash ?? "").slice(0, 8);
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.5);
     doc.setTextColor(90);
+    const x = startX;
     doc.text(
       `Assinado digitalmente por ${input.relacao.assinatura_nome}`,
-      leftX + lineW / 2,
+      x + lineW / 2,
       sigY + 24,
       { align: "center" },
     );
     doc.text(
       `em ${fmtDataHoraBR(input.relacao.assinado_em)} — hash ${hashShort}`,
-      leftX + lineW / 2,
+      x + lineW / 2,
       sigY + 34,
       { align: "center" },
     );
@@ -319,4 +365,15 @@ export function gerarPdfRelacaoHoras(input: {
   }
 
   return doc;
+}
+
+function shortLocal(nome: string): string {
+  if (!nome) return "";
+  // Corta parênteses e reduz para uma abreviação legível
+  const semParen = nome.replace(/\s*\(.*?\)\s*$/, "").trim();
+  if (semParen.length <= 18) return semParen;
+  // pega iniciais das palavras maiores
+  const parts = semParen.split(/\s+/).filter((w) => w.length > 2);
+  if (parts.length >= 2) return parts.slice(0, 3).map((w) => w[0]?.toUpperCase()).join("");
+  return semParen.slice(0, 18) + "…";
 }
