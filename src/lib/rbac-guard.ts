@@ -10,6 +10,49 @@
  */
 
 import type { AppRole } from "@/lib/role-access";
+import { createMiddleware } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { createClient } from "@supabase/supabase-js";
+
+/**
+ * Middleware para server functions que exige o usuário autenticado e
+ * checa se o papel dele está no conjunto informado. Deve ser usado APÓS
+ * `requireSupabaseAuth`. Ex.:
+ *
+ *   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+ *
+ * Se `requireSupabaseAuth` não estiver na cadeia, cria seu próprio cliente
+ * (fail-closed com 401 se não houver bearer).
+ */
+export function requirePapel(papeis: AppRole[]) {
+  return createMiddleware({ type: "function" }).server(async ({ next, context }: any) => {
+    let supabase = context?.supabase;
+    let userId = context?.userId as string | undefined;
+    if (!supabase || !userId) {
+      const request = getRequest();
+      const authHeader = request.headers.get("authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        throw new Response("Unauthorized", { status: 401 });
+      }
+      const token = authHeader.slice("Bearer ".length);
+      const url = "https://yqvocpnvunaprpmhlswn.supabase.co";
+      const key =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxdm9jcG52dW5hcHJwbWhsc3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NDk4MDIsImV4cCI6MjA5ODIyNTgwMn0.L8FQRfI2M7RAGdTPsyNvHWXEWqmywtfHKP-65eyljwE";
+      supabase = createClient(url, key, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await supabase.auth.getUser(token);
+      if (error || !data.user) throw new Response("Unauthorized", { status: 401 });
+      userId = data.user.id;
+    }
+    const papel = await papelDoUsuario(supabase, userId!);
+    if (!papel || !papeis.includes(papel)) {
+      throw new Error("Sem permissão para esta ação");
+    }
+    return next({ context: { supabase, userId, papel } });
+  });
+}
 
 /** Fetch o papel de maior privilégio do usuário atual (via user_roles). */
 export async function papelDoUsuario(
