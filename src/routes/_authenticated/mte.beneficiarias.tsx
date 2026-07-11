@@ -71,7 +71,7 @@ function BeneficiariasIndex() {
         }
       />
 
-      <div className="mb-3 relative max-w-sm">
+      <div className="mb-3 relative w-full max-w-sm">
         <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={busca}
@@ -82,6 +82,42 @@ function BeneficiariasIndex() {
       </div>
 
       <div className="rounded-md border">
+        {/* Mobile cards */}
+        <ul className="divide-y md:hidden">
+          {q.isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <li key={i} className="p-3"><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56" /></li>
+            ))
+          ) : rows.length === 0 ? (
+            <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma beneficiária encontrada.</li>
+          ) : rows.map((b) => (
+            <li key={b.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="break-words text-sm font-semibold">{b.nome}</div>
+                <div className="text-xs text-muted-foreground">CPF: {formatCpf(b.cpf)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {(b.municipio ?? "—")}{b.telefone ? ` • ${formatPhone(b.telefone)}` : ""}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {b.pcd ? <Badge variant="secondary" className="text-[10px]">PcD</Badge> : null}
+                  {b.beneficiaria_programa_social ? <Badge variant="secondary" className="text-[10px]">Prog. social</Badge> : null}
+                  {b.raca ? <Badge variant="outline" className="text-[10px]">{b.raca}</Badge> : null}
+                </div>
+              </div>
+              {canWrite ? (
+                <div className="flex shrink-0 gap-1">
+                  <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setEditing(b); setDialogOpen(true); }} title="Editar">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => setDeleting(b)} title="Excluir">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -137,6 +173,7 @@ function BeneficiariasIndex() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <BeneficiariaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} beneficiaria={editing} />

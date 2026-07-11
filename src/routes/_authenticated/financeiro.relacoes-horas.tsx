@@ -85,6 +85,30 @@ function FinanceiroRelacoesPage() {
     <div className="space-y-4">
       <div className="rounded-lg border bg-card">
         <div className="border-b p-3 text-sm font-medium">Relações enviadas</div>
+        <ul className="divide-y md:hidden">
+          {(listaQ.data?.rows ?? []).map((r) => (
+            <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold">{r.mes_referencia.slice(0, 7)}</span>
+                  {statusBadge(r.status)}
+                </div>
+                <div className="break-words text-xs text-muted-foreground">{r.assinatura_nome ?? "—"}</div>
+                <div className="text-xs text-muted-foreground">
+                  {Number(r.total_horas).toFixed(2)}h • {Number(r.valor_total).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </div>
+                <div className="text-xs text-muted-foreground">{r.enviado_em ? new Date(r.enviado_em).toLocaleString("pt-BR") : "—"}</div>
+              </div>
+              <Button size="sm" variant="outline" className="h-10 shrink-0" onClick={() => { setAberta(r.id); setObs(r.observacao_avaliacao ?? ""); }}>
+                Abrir
+              </Button>
+            </li>
+          ))}
+          {(listaQ.data?.rows ?? []).length === 0 && (
+            <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma relação enviada.</li>
+          )}
+        </ul>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -118,6 +142,7 @@ function FinanceiroRelacoesPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={!!aberta} onOpenChange={(o) => !o && setAberta(null)}>

@@ -136,11 +136,11 @@ function PendenciasPage() {
         description="Itens sinalizados pelo sistema aguardando ação da equipe."
       />
 
-      <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm flex flex-wrap items-center gap-3">
-        <FileText className="h-4 w-4 text-primary shrink-0" />
-        <div className="flex-1 min-w-64">
+      <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm flex flex-wrap items-start gap-3 sm:items-center">
+        <FileText className="mt-0.5 h-4 w-4 text-primary shrink-0" />
+        <div className="min-w-0 flex-1 basis-full sm:basis-64">
           <div className="font-medium">Ofício SEI nº 49148/2026 (doc. 9151564)</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="break-words text-xs text-muted-foreground">
             Processo 19968.200342/2025-94 · {PENDENCIAS_OFICIO_49148.length} pendências
             (idempotente — não duplica por título).
           </div>
@@ -149,6 +149,7 @@ function PendenciasPage() {
           size="sm"
           onClick={() => seedMut.mutate()}
           disabled={seedMut.isPending}
+          className="w-full sm:w-auto"
         >
           {seedMut.isPending ? (
             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -169,9 +170,9 @@ function PendenciasPage() {
         </div>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="w-full sm:w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -182,7 +183,7 @@ function PendenciasPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="relative flex-1 min-w-64">
+        <div className="relative w-full flex-1 sm:min-w-64">
           <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={busca}
@@ -191,7 +192,7 @@ function PendenciasPage() {
             className="pl-8"
           />
         </div>
-        <div className="ml-auto text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground sm:ml-auto">
           {query.isLoading ? "Carregando…" : `${rowsFiltradas.length} registro(s)`}
         </div>
       </div>
@@ -206,6 +207,34 @@ function PendenciasPage() {
         </div>
       ) : (
         <div className="rounded-md border">
+          {/* Mobile cards */}
+          <ul className="divide-y md:hidden">
+            {query.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="p-3"><Skeleton className="h-4 w-32" /><Skeleton className="mt-2 h-3 w-full" /></li>
+              ))
+            ) : rowsFiltradas.length === 0 ? (
+              <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma pendência para o filtro atual.</li>
+            ) : rowsFiltradas.map((r) => {
+              const p = (r.payload ?? {}) as Record<string, unknown>;
+              const prioridade = typeof p.prioridade === "string" ? p.prioridade : undefined;
+              const responsavel = typeof p.responsavel === "string" ? p.responsavel : "—";
+              const prazo = typeof p.prazo === "string" ? p.prazo : null;
+              return (
+                <li key={r.id} className="p-3 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={statusVariant(r.status)} className="capitalize">{r.status.replace("_", " ")}</Badge>
+                    {prioridade ? <Badge variant={prioridadeVariant(prioridade)} className="text-[10px]">{prioridade}</Badge> : null}
+                  </div>
+                  <div className="break-words text-sm">{payloadResumo(r.payload)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Responsável: {responsavel} • Prazo: {fmtDataCurta(prazo)} • {fmtData(r.criado_em)}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -269,6 +298,7 @@ function PendenciasPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
     </div>

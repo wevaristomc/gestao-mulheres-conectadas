@@ -220,6 +220,36 @@ function EvidenciasIndex() {
       ) : null}
 
       <div className="rounded-md border">
+        <ul className="divide-y md:hidden">
+          {!effectiveTurma ? (
+            <li className="p-6 text-center text-sm text-muted-foreground">Selecione uma turma.</li>
+          ) : q.isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <li key={i} className="p-3"><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56" /></li>
+            ))
+          ) : rows.length === 0 ? (
+            <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma evidência.</li>
+          ) : rows.map((r) => (
+            <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="capitalize">{r.tipo.replace(/_/g, " ")}</Badge>
+                  <span className="text-xs text-muted-foreground">{r.created_at ? new Date(r.created_at).toLocaleDateString("pt-BR") : "—"}</span>
+                </div>
+                <div className="break-words text-sm">{r.descricao ?? "—"}</div>
+                <a href={r.arquivo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all text-xs text-primary hover:underline">
+                  {r.arquivo_nome ?? "abrir"} <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+              {canWrite ? (
+                <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => setDeleting(r)} title="Excluir">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -262,6 +292,7 @@ function EvidenciasIndex() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>

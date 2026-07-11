@@ -142,6 +142,47 @@ function DespesasTab() {
         </div>
       ) : (
         <div className="rounded-md border">
+          {/* Mobile cards */}
+          <ul className="divide-y md:hidden">
+            {q.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="p-3"><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56" /></li>
+              ))
+            ) : ordenadas.length === 0 ? (
+              <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma despesa lançada.</li>
+            ) : ordenadas.map((r) => {
+              const fornecedorId = pickFirst(r, ["fornecedor_id"]);
+              const orcId = pickFirst(r, ["orcamento_item_id", "item_orcamento_id"]);
+              const status = pickFirst(r, ["status", "situacao"]);
+              return (
+                <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="break-words text-sm font-semibold">
+                      {(pickFirst(r, ["descricao", "titulo", "historico"]) as string) ?? "—"}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      <span className="tabular-nums">{formatarData(pickFirst(r, ["data", "data_pagamento", "created_at"]))}</span>
+                      <span className="font-semibold text-foreground tabular-nums">{formatBRL(toNumber(r.valor))}</span>
+                      {status ? <Badge variant={statusVariant(status)} className="capitalize">{status}</Badge> : null}
+                    </div>
+                    <div className="break-words text-xs text-muted-foreground">
+                      {orcId ? (orcamentoMap.get(orcId) ?? "—") : "—"}
+                      {fornecedorId ? ` • ${fornecedoresMap.get(fornecedorId) ?? ""}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setEditando(r)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setConfirmarExcluir(r.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -218,6 +259,7 @@ function DespesasTab() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 
