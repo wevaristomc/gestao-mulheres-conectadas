@@ -170,4 +170,16 @@
     font-family: var(--font-display);
     letter-spacing: -0.01em;
   }
+
+  html, body {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Ensure interactive controls hit the 44px touch target on small screens. */
+  @media (max-width: 640px) {
+    button, [role="button"], a.btn, .touch-target {
+      min-height: 40px;
+    }
+  }
 }
