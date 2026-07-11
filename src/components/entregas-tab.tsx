@@ -184,6 +184,45 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
         </div>
       ) : (
         <div className="rounded-md border">
+          <ul className="divide-y md:hidden">
+            {listQ.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="p-3"><Skeleton className="h-4 w-40" /></li>
+              ))
+            ) : rows.length === 0 ? (
+              <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma entrega registrada.</li>
+            ) : rows.map((r) => {
+              const cursista = (r.cursistas as Row | null | undefined) ?? null;
+              const turma = (r.turmas as Row | null | undefined) ?? null;
+              const cursistaNome = pickFirst(cursista, ["nome", "nome_completo"]) ?? (r.cursista_id as string | undefined) ?? "—";
+              const turmaNome = pickFirst(turma, ["nome", "titulo"]) ?? null;
+              return (
+                <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="break-words text-sm font-semibold">{(r.descricao as string) ?? "—"}</div>
+                    <div className="break-words text-xs text-muted-foreground">
+                      {cursistaNome}{turmaNome ? ` • ${turmaNome}` : ""}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{formatarData(r.data_entrega as string)}</span>
+                      {r.quantidade != null ? <span>Qtd: {String(r.quantidade)}</span> : null}
+                      {mostrarValor && r.valor != null ? <span>{formatBRL(Number(r.valor))}</span> : null}
+                      <Badge variant="secondary" className="capitalize">{(r.status as string) ?? "—"}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => abrirEditar(r)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => { if (confirm("Remover esta entrega?")) deleteMut.mutate(r.id); }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -268,6 +307,7 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 
