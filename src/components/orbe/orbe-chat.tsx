@@ -129,6 +129,18 @@ export function OrbeChat({
     }
   }, [mensagens, enviarMut.isPending]);
 
+  // Quando o painel abre com uma pergunta pré-preenchida (HelpPoint / página de Ajuda),
+  // envia automaticamente ao Orbe.
+  useEffect(() => {
+    if (!open || !pendingPrompt) return;
+    setInput("");
+    setConversaId(null);
+    setMensagens([]);
+    enviarMut.mutate(pendingPrompt);
+    onPendingPromptConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pendingPrompt]);
+
   async function iniciarGravacao() {
     if (gravando || transcrevendo) return;
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
