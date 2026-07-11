@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -45,6 +46,7 @@ function FrequenciaTab() {
   const countByAula = countQ.data?.byAula ?? {};
 
   const [comprovando, setComprovando] = useState<Row | null>(null);
+  const [aulaMobile, setAulaMobile] = useState<string | null>(null);
 
   const aulas = useMemo(
     () =>
@@ -143,12 +145,104 @@ function FrequenciaTab() {
     );
   }
 
+  const aulaMobileSelId =
+    aulaMobile ?? (aulas[0]?.id as string | undefined) ?? null;
+  const aulaMobileSel = aulas.find((a) => a.id === aulaMobileSelId) ?? aulas[0];
+
   return (
-    <div className="rounded-md border overflow-auto">
+    <div className="space-y-3">
+      {/* Mobile: chooser + vertical list with big P/F toggles */}
+      <div className="rounded-md border md:hidden">
+        <div className="border-b p-2">
+          <label className="text-xs font-medium text-muted-foreground">Aula</label>
+          <select
+            className="mt-1 block w-full rounded-md border bg-background px-2 py-2 text-sm"
+            value={aulaMobileSel?.id ?? ""}
+            onChange={(e) => setAulaMobile(e.target.value)}
+          >
+            {aulas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {formatarData(pickFirst(a, ["data"]))} — {String(pickFirst(a, ["titulo", "tema", "assunto"]) ?? "Aula")}
+              </option>
+            ))}
+          </select>
+          {aulaMobileSel ? (
+            <button
+              type="button"
+              onClick={() => setComprovando(aulaMobileSel)}
+              className="mt-2 inline-flex items-center gap-1 rounded px-1 py-1 text-xs text-muted-foreground hover:bg-muted"
+            >
+              {(countByAula[aulaMobileSel.id] ?? 0) > 0 ? (
+                <>
+                  <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <span className="text-emerald-700">{countByAula[aulaMobileSel.id]} evidência(s)</span>
+                </>
+              ) : (
+                <>
+                  <Paperclip className="h-3.5 w-3.5" />
+                  <span>Anexar comprovação</span>
+                </>
+              )}
+            </button>
+          ) : null}
+        </div>
+        <ul className="divide-y">
+          {cursistas.map((m) => {
+            const key = `${aulaMobileSel?.id}:${m.id}`;
+            const presente = aulaMobileSel ? (freqIndex.get(key) ?? false) : false;
+            return (
+              <li key={m.id} className="flex min-w-0 items-center justify-between gap-2 p-3">
+                <div className="min-w-0 flex-1 break-words text-sm font-medium">
+                  {nomeCursista(m)}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={presente ? "default" : "outline"}
+                    className="h-10 min-w-12 px-3"
+                    disabled={!aulaMobileSel || marcar.isPending}
+                    onClick={() =>
+                      aulaMobileSel &&
+                      marcar.mutate({
+                        aula_id: aulaMobileSel.id,
+                        matricula_id: m.id,
+                        presente: true,
+                      })
+                    }
+                  >
+                    P
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={!presente ? "secondary" : "outline"}
+                    className="h-10 min-w-12 px-3"
+                    disabled={!aulaMobileSel || marcar.isPending}
+                    onClick={() =>
+                      aulaMobileSel &&
+                      marcar.mutate({
+                        aula_id: aulaMobileSel.id,
+                        matricula_id: m.id,
+                        presente: false,
+                      })
+                    }
+                  >
+                    F
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* Desktop / tablet: matrix table with sticky name column */}
+      <div className="hidden rounded-md border overflow-auto md:block">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky left-0 bg-background min-w-[220px]">Cursista</TableHead>
+            <TableHead className="sticky left-0 z-10 bg-background min-w-[220px]">Cursista</TableHead>
             {aulas.map((a) => (
               <TableHead key={a.id} className="text-center whitespace-nowrap">
                 <div className="text-xs font-medium">{formatarData(pickFirst(a, ["data"]))}</div>
@@ -180,7 +274,7 @@ function FrequenciaTab() {
         <TableBody>
           {cursistas.map((m) => (
             <TableRow key={m.id}>
-              <TableCell className="sticky left-0 bg-background font-medium">
+              <TableCell className="sticky left-0 z-10 bg-background font-medium">
                 {nomeCursista(m)}
               </TableCell>
               {aulas.map((a) => {
@@ -206,6 +300,8 @@ function FrequenciaTab() {
           ))}
         </TableBody>
       </Table>
+      </div>
+
       {comprovando ? (
         <AulaComprovacaoDialog
           open={!!comprovando}

@@ -33,6 +33,42 @@ function CursistasTab() {
 
   return (
     <div className="rounded-md border">
+      {/* Mobile: card list — desktop: table */}
+      <ul className="divide-y md:hidden">
+        {q.isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <li key={i} className="p-3">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="mt-2 h-3 w-56" />
+            </li>
+          ))
+        ) : rows.length === 0 ? (
+          <li className="p-6 text-center text-sm text-muted-foreground">
+            Nenhuma cursista matriculada nesta turma.
+          </li>
+        ) : (
+          rows.map((m: Row) => {
+            const cursista = (m.cursistas as Row | null | undefined) ?? null;
+            const nome =
+              pickFirst(cursista, ["nome", "nome_completo"]) ??
+              pickFirst(m, ["nome"]) ??
+              (m.cursista_id as string) ??
+              m.id;
+            const email = pickFirst(cursista, ["email"]) ?? pickFirst(m, ["email"]) ?? "—";
+            const status = pickFirst(m, ["status", "situacao"]) ?? "ativa";
+            return (
+              <li key={m.id} className="flex min-w-0 items-start justify-between gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{nome}</div>
+                  <div className="truncate text-xs text-muted-foreground">{email}</div>
+                </div>
+                <Badge variant="secondary" className="shrink-0 capitalize">{status}</Badge>
+              </li>
+            );
+          })
+        )}
+      </ul>
+      <div className="hidden md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -79,6 +115,7 @@ function CursistasTab() {
           )}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
