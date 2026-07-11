@@ -2,16 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  AlertTriangle,
-  Plus,
-  Trash2,
-  Pencil,
-  ExternalLink,
-} from "lucide-react";
+import { Clock, AlertTriangle, Plus, Trash2, Pencil, ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -479,6 +470,3 @@ function AtividadeDialog({
     </Dialog>
   );
 }
-
-// Re-export helpers used by the dashboard card
-export { CheckCircle2, Circle };
