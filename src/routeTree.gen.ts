@@ -58,6 +58,7 @@ import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './route
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
 import { Route as AuthenticatedConfiguracoesPermissoesRouteImport } from './routes/_authenticated/configuracoes.permissoes'
+import { Route as AuthenticatedConfiguracoesLocaisRouteImport } from './routes/_authenticated/configuracoes.locais'
 import { Route as AuthenticatedConfiguracoesInstrutorTurmasRouteImport } from './routes/_authenticated/configuracoes.instrutor-turmas'
 import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_authenticated/configuracoes.ia'
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
@@ -347,6 +348,12 @@ const AuthenticatedConfiguracoesPermissoesRoute =
     path: '/permissoes',
     getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedConfiguracoesLocaisRoute =
+  AuthenticatedConfiguracoesLocaisRouteImport.update({
+    id: '/locais',
+    path: '/locais',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
 const AuthenticatedConfiguracoesInstrutorTurmasRoute =
   AuthenticatedConfiguracoesInstrutorTurmasRouteImport.update({
     id: '/instrutor-turmas',
@@ -436,6 +443,7 @@ export interface FileRoutesByFullPath {
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  '/configuracoes/locais': typeof AuthenticatedConfiguracoesLocaisRoute
   '/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
@@ -490,6 +498,7 @@ export interface FileRoutesByTo {
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  '/configuracoes/locais': typeof AuthenticatedConfiguracoesLocaisRoute
   '/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
@@ -552,6 +561,7 @@ export interface FileRoutesById {
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/_authenticated/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  '/_authenticated/configuracoes/locais': typeof AuthenticatedConfiguracoesLocaisRoute
   '/_authenticated/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
@@ -615,6 +625,7 @@ export interface FileRouteTypes {
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
     | '/configuracoes/instrutor-turmas'
+    | '/configuracoes/locais'
     | '/configuracoes/permissoes'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
@@ -669,6 +680,7 @@ export interface FileRouteTypes {
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
     | '/configuracoes/instrutor-turmas'
+    | '/configuracoes/locais'
     | '/configuracoes/permissoes'
     | '/configuracoes/usuarios'
     | '/financeiro/despesas'
@@ -730,6 +742,7 @@ export interface FileRouteTypes {
     | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/ia'
     | '/_authenticated/configuracoes/instrutor-turmas'
+    | '/_authenticated/configuracoes/locais'
     | '/_authenticated/configuracoes/permissoes'
     | '/_authenticated/configuracoes/usuarios'
     | '/_authenticated/financeiro/despesas'
@@ -1121,6 +1134,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesPermissoesRouteImport
       parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
+    '/_authenticated/configuracoes/locais': {
+      id: '/_authenticated/configuracoes/locais'
+      path: '/locais'
+      fullPath: '/configuracoes/locais'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesLocaisRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
     '/_authenticated/configuracoes/instrutor-turmas': {
       id: '/_authenticated/configuracoes/instrutor-turmas'
       path: '/instrutor-turmas'
@@ -1228,6 +1248,7 @@ const AuthenticatedAdministrativoRouteWithChildren =
 interface AuthenticatedConfiguracoesRouteChildren {
   AuthenticatedConfiguracoesIaRoute: typeof AuthenticatedConfiguracoesIaRoute
   AuthenticatedConfiguracoesInstrutorTurmasRoute: typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
+  AuthenticatedConfiguracoesLocaisRoute: typeof AuthenticatedConfiguracoesLocaisRoute
   AuthenticatedConfiguracoesPermissoesRoute: typeof AuthenticatedConfiguracoesPermissoesRoute
   AuthenticatedConfiguracoesUsuariosRoute: typeof AuthenticatedConfiguracoesUsuariosRoute
   AuthenticatedConfiguracoesIndexRoute: typeof AuthenticatedConfiguracoesIndexRoute
@@ -1238,6 +1259,8 @@ const AuthenticatedConfiguracoesRouteChildren: AuthenticatedConfiguracoesRouteCh
     AuthenticatedConfiguracoesIaRoute: AuthenticatedConfiguracoesIaRoute,
     AuthenticatedConfiguracoesInstrutorTurmasRoute:
       AuthenticatedConfiguracoesInstrutorTurmasRoute,
+    AuthenticatedConfiguracoesLocaisRoute:
+      AuthenticatedConfiguracoesLocaisRoute,
     AuthenticatedConfiguracoesPermissoesRoute:
       AuthenticatedConfiguracoesPermissoesRoute,
     AuthenticatedConfiguracoesUsuariosRoute:
