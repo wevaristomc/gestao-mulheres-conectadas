@@ -389,6 +389,7 @@ export const orbeChat = createServerFn({ method: "POST" })
     z.object({
       conversa_id: z.string().uuid().nullable().optional(),
       mensagem: z.string().min(1),
+      rota_atual: z.string().nullable().optional(),
     }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -429,8 +430,19 @@ export const orbeChat = createServerFn({ method: "POST" })
     const dataHoje = new Date().toISOString().slice(0, 10);
     const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => k !== "financeiro_resumo" || podeFinanceiro);
 
-    const systemPrompt = `Você é o Orbe — assistente do Projeto Mulheres Conectadas / QUINTA ARTE (Termo de Fomento 01025/2025).
+    const rotaAtual = data.rota_atual?.trim() || null;
+    const contextoAjuda = rotaAtual ? sugerirAjudaPorRota(rotaAtual) : null;
+
+    const systemPrompt = `Você é o Orbe — assistente do Projeto Mulheres Conectadas / QUINTA ARTE (Termo de Fomento 01025/2025) E o SUPORTE OFICIAL do painel.
 Data de hoje: ${dataHoje}. Papéis do usuário: ${papeis.join(", ") || "sem papel"}.
+${rotaAtual ? `Tela atual do usuário: ${rotaAtual}. Se a pergunta for sobre uso do sistema, priorize a ajuda dessa tela.` : ""}
+${contextoAjuda ? `Guia relevante da tela atual:\n${contextoAjuda}` : ""}
+
+Você tem DOIS papéis:
+1) ANALISTA do projeto: interpreta indicadores, pendências, frequência, execução orçamentária, DEQ e etapas — usa as ferramentas de dados quando necessário.
+2) SUPORTE do sistema: explica COMO USAR o painel (passo a passo, preenchimentos, botões), as REGRAS do programa (frequência mínima 75%, 3 cotações obrigatórias, identificação PMQ em toda evidência, SEI para documentos oficiais no MTE, TransfereGov para a proposta 058916/2025, DEQ com itens IV/V/VI em PDF pesquisável, assinatura digital com hash SHA-256) e os fluxos por papel.
+Para dúvidas de uso/regra, chame SEMPRE a ferramenta ajuda_sistema antes de responder — não invente instruções.
+
 Snapshot do projeto (JSON):\n${JSON.stringify(ctx)}
 
 FERRAMENTAS DISPONÍVEIS (somente leitura, no máx. ${MAX_LINHAS} linhas):
