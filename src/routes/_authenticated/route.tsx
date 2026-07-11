@@ -26,7 +26,7 @@ function AuthenticatedLayout() {
         <SidebarInset className="bg-background">
           <AppTopbar />
           <BackendNotice />
-          <main className="flex-1 px-6 py-6">
+          <main className="flex-1 px-3 py-4 md:px-6 md:py-6">
             <Outlet />
           </main>
           <OrbeNeural />
