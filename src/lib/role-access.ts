@@ -73,7 +73,14 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "gestor_financeiro",
   ],
   whatsapp: ["coordenador_geral", "administrativo", "coordenador_pedagogico"],
-  "base-conhecimento": ALL,
+  "base-conhecimento": [
+    "coordenador_geral",
+    "administrativo",
+    "coordenador_pedagogico",
+    "gestor_financeiro",
+    "professor",
+    "auxiliar_pedagogico",
+  ],
   drive: [
     "coordenador_geral",
     "administrativo",
