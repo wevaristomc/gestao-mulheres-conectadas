@@ -32,6 +32,7 @@ export type ModuleKey =
   | "drive"
   | "relacao-horas"
   | "financeiro-relacoes-horas"
+  | "etapas"
   | "configuracoes";
 
 const ALL: AppRole[] = [...APP_ROLES];
@@ -74,6 +75,7 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "administrativo",
     "gestor_financeiro",
   ],
+  etapas: ALL,
   configuracoes: ["coordenador_geral", "administrativo"],
 };
 
