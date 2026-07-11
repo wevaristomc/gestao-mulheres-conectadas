@@ -313,3 +313,77 @@ ALTER TABLE public.relacoes_horas
   ADD COLUMN IF NOT EXISTS dias_trabalhados int NOT NULL DEFAULT 0;
 
 COMMIT;
+
+-- ============================================================================
+-- Locais de trabalho (usado em Relação de Horas e Turmas)
+-- ============================================================================
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS public.locais (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome text NOT NULL,
+  endereco text,
+  municipio text,
+  ativo boolean NOT NULL DEFAULT true,
+  criado_em timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.locais TO authenticated;
+GRANT ALL ON public.locais TO service_role;
+
+ALTER TABLE public.locais ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "locais_read" ON public.locais;
+CREATE POLICY "locais_read" ON public.locais FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "locais_write" ON public.locais;
+CREATE POLICY "locais_write" ON public.locais FOR ALL TO authenticated
+  USING (public.has_role_any(auth.uid(), ARRAY['coordenador_geral','administrativo','coordenador_pedagogico']))
+  WITH CHECK (public.has_role_any(auth.uid(), ARRAY['coordenador_geral','administrativo','coordenador_pedagogico']));
+
+CREATE UNIQUE INDEX IF NOT EXISTS locais_nome_uk ON public.locais (nome);
+
+-- Seed idempotente
+INSERT INTO public.locais (nome, endereco, municipio)
+SELECT 'Centro Popular de Cultura Frei Estanislau (CPC)',
+       'Rua Cambuci, 130 – Bairro Santo Antônio / Jardim Teresópolis',
+       'Betim'
+WHERE NOT EXISTS (SELECT 1 FROM public.locais WHERE nome = 'Centro Popular de Cultura Frei Estanislau (CPC)');
+
+INSERT INTO public.locais (nome, endereco, municipio)
+SELECT 'CDL Juatuba',
+       'Rua José Monteiro, 440 – Centro',
+       'Juatuba'
+WHERE NOT EXISTS (SELECT 1 FROM public.locais WHERE nome = 'CDL Juatuba');
+
+-- Vínculo turmas → locais
+ALTER TABLE public.turmas
+  ADD COLUMN IF NOT EXISTS local_id uuid REFERENCES public.locais(id);
+
+-- Backfill por heurística sobre local_endereco
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='turmas' AND column_name='local_endereco') THEN
+    UPDATE public.turmas t
+    SET local_id = l.id
+    FROM public.locais l
+    WHERE t.local_id IS NULL
+      AND l.nome = 'Centro Popular de Cultura Frei Estanislau (CPC)'
+      AND (t.local_endereco ILIKE '%Frei Estanislau%' OR t.local_endereco ILIKE '%CPC%');
+
+    UPDATE public.turmas t
+    SET local_id = l.id
+    FROM public.locais l
+    WHERE t.local_id IS NULL
+      AND l.nome = 'CDL Juatuba'
+      AND (t.local_endereco ILIKE '%CDL%' OR t.local_endereco ILIKE '%José Monteiro%');
+  END IF;
+END $$;
+
+-- Itens da relação de horas: qual turma e qual local (multi-local no mesmo dia)
+ALTER TABLE public.relacoes_horas_itens
+  ADD COLUMN IF NOT EXISTS turma_id uuid REFERENCES public.turmas(id),
+  ADD COLUMN IF NOT EXISTS local_nome text;
+
+COMMIT;

@@ -35,6 +35,8 @@ export type RelacaoItem = {
   total_horas: number;
   valor_dia: number;
   conteudo: string | null;
+  turma_id: string | null;
+  local_nome: string | null;
 };
 
 export type TurmaVinculo = {
@@ -46,6 +48,9 @@ export type TurmaVinculo = {
   turno: string | null;
   valor_hora: number;
   local: string | null;
+  local_id: string | null;
+  local_nome: string | null;
+  local_municipio: string | null;
 };
 
 function turnoLabel(t: TurmaVinculo): "manha" | "tarde" | "noite" {
@@ -79,6 +84,23 @@ export function turmasDoUsuarioOptions(userId: string | null) {
       if (ids.length === 0) return { rows: [] };
       const t = await supabase.from("turmas").select("*").in("id", ids);
       if (t.error) return { rows: [], error: t.error.message };
+      // Carrega locais referenciados
+      const localIds = Array.from(
+        new Set(
+          ((t.data ?? []) as any[])
+            .map((r) => r.local_id)
+            .filter((v): v is string => !!v),
+        ),
+      );
+      let locaisMap = new Map<string, { nome: string; municipio: string | null }>();
+      if (localIds.length > 0) {
+        const l = await supabase.from("locais" as any).select("id, nome, municipio").in("id", localIds);
+        if (!l.error) {
+          for (const r of (l.data ?? []) as any[]) {
+            locaisMap.set(String(r.id), { nome: r.nome, municipio: r.municipio ?? null });
+          }
+        }
+      }
       const valorMap = new Map((vinc.data ?? []).map((r: any) => [r.turma_id, Number(r.valor_hora ?? 40)]));
       const rows: TurmaVinculo[] = ((t.data ?? []) as any[]).map((r) => ({
         turma_id: String(r.id),
@@ -89,6 +111,9 @@ export function turmasDoUsuarioOptions(userId: string | null) {
         turno: (r.turno ?? r.periodo ?? null) as string | null,
         valor_hora: valorMap.get(String(r.id)) ?? 40,
         local: (r.local ?? r.local_aula ?? r.endereco ?? null) as string | null,
+        local_id: (r.local_id ?? null) as string | null,
+        local_nome: r.local_id ? locaisMap.get(String(r.local_id))?.nome ?? null : null,
+        local_municipio: r.local_id ? locaisMap.get(String(r.local_id))?.municipio ?? null : null,
       }));
       return { rows };
     },
@@ -195,17 +220,34 @@ export async function gerarRascunhoDoMes(params: {
     : 40;
 
   const turmasMeta = new Map<string, { codigo: string | null; hi: string | null; hf: string | null }>();
+  const turmaLocal = new Map<string, { local_id: string | null; local_nome: string | null; local_municipio: string | null }>();
   if (vincRows.length > 0) {
     const t = await supabase
       .from("turmas")
-      .select("id, codigo_turma, hora_inicio, hora_fim")
+      .select("id, codigo_turma, hora_inicio, hora_fim, local_id, local_endereco")
       .in("id", vincRows.map((t) => t.turma_id));
     if (!t.error) {
+      const lids = Array.from(new Set(((t.data ?? []) as any[]).map((r) => r.local_id).filter(Boolean)));
+      const locaisMap = new Map<string, { nome: string; municipio: string | null }>();
+      if (lids.length > 0) {
+        const l = await supabase.from("locais" as any).select("id, nome, municipio").in("id", lids);
+        if (!l.error) {
+          for (const r of (l.data ?? []) as any[]) {
+            locaisMap.set(String(r.id), { nome: r.nome, municipio: r.municipio ?? null });
+          }
+        }
+      }
       for (const r of (t.data ?? []) as any[]) {
         turmasMeta.set(String(r.id), {
           codigo: (r.codigo_turma ?? null) as string | null,
           hi: (r.hora_inicio ?? null) as string | null,
           hf: (r.hora_fim ?? null) as string | null,
+        });
+        const li = r.local_id ? locaisMap.get(String(r.local_id)) : null;
+        turmaLocal.set(String(r.id), {
+          local_id: (r.local_id ?? null) as string | null,
+          local_nome: li?.nome ?? (r.local_endereco ? String(r.local_endereco).slice(0, 80) : null),
+          local_municipio: li?.municipio ?? null,
         });
       }
     }
@@ -275,6 +317,7 @@ export async function gerarRascunhoDoMes(params: {
     horas: number;
     conteudo: string;
     valor: number;
+    local_nome: string | null;
   };
   const porDia = new Map<string, AulaCanon[]>();
   for (const a of aulas) {
@@ -289,6 +332,7 @@ export async function gerarRascunhoDoMes(params: {
     if (horas <= 0) continue;
     const vh = turmaValor.get(a.turma_id) ?? valorMedio;
     const conteudo = String(a.conteudo_programatico ?? a.conteudo ?? a.titulo ?? "").trim();
+    const loc = turmaLocal.get(a.turma_id);
     const canon: AulaCanon = {
       turma_id: a.turma_id,
       hi,
@@ -296,6 +340,7 @@ export async function gerarRascunhoDoMes(params: {
       horas,
       conteudo,
       valor: Math.round(horas * vh * 100) / 100,
+      local_nome: loc?.local_nome ?? null,
     };
     const arr = porDia.get(d);
     if (arr) arr.push(canon);
@@ -319,6 +364,21 @@ export async function gerarRascunhoDoMes(params: {
     const conteudo = aulasDia
       .map((x) => (x.conteudo ? `${x.conteudo} (${x.horas.toFixed(0)}h)` : `(${x.horas.toFixed(0)}h)`))
       .join(" + ");
+    // Locais distintos no dia → "A (manhã) / B (tarde/noite)"
+    const locaisDistintos = Array.from(new Set(aulasDia.map((a) => a.local_nome).filter(Boolean))) as string[];
+    let local_nome: string | null = null;
+    if (locaisDistintos.length === 1) local_nome = locaisDistintos[0];
+    else if (locaisDistintos.length > 1) {
+      local_nome = aulasDia
+        .map((a) => {
+          if (!a.local_nome) return null;
+          const h = Number(a.hi.slice(0, 2));
+          const label = h < 12 ? "manhã" : h < 18 ? "tarde" : "noite";
+          return `${a.local_nome} (${label})`;
+        })
+        .filter(Boolean)
+        .join(" / ");
+    }
     return {
       relacao_id: relacaoId,
       data: d,
@@ -329,12 +389,14 @@ export async function gerarRascunhoDoMes(params: {
       total_horas: totalH,
       valor_dia: totalV,
       conteudo,
+      turma_id: primeira.turma_id,
+      local_nome,
     };
   });
   if (rows.length > 0) {
     // Se colunas novas ainda não foram aplicadas, faz fallback silencioso
     let ins2 = await supabase.from("relacoes_horas_itens" as any).insert(rows);
-    if (ins2.error && /column .*(saida_almoco|retorno|conteudo).* does not exist/i.test(ins2.error.message)) {
+    if (ins2.error && /column .*(turma_id|local_nome|saida_almoco|retorno|conteudo).* does not exist/i.test(ins2.error.message)) {
       const legacy = rows.map((r) => ({
         relacao_id: r.relacao_id,
         data: r.data,
@@ -383,6 +445,7 @@ export async function salvarItem(item: {
   hora_saida: string | null;
   valor_hora: number;
   conteudo?: string | null;
+  local_nome?: string | null;
 }) {
   // Total = manhã (entrada→saida_almoco) + tarde (retorno→saida). Sem almoço, entrada→saida.
   const manha = item.saida_almoco
@@ -403,8 +466,9 @@ export async function salvarItem(item: {
     valor_dia: valor,
   };
   if (item.conteudo !== undefined) payload.conteudo = item.conteudo;
+  if (item.local_nome !== undefined) payload.local_nome = item.local_nome;
   let res = await supabase.from("relacoes_horas_itens" as any).update(payload).eq("id", item.id);
-  if (res.error && /column .*(saida_almoco|retorno|conteudo).* does not exist/i.test(res.error.message)) {
+  if (res.error && /column .*(saida_almoco|retorno|conteudo|local_nome).* does not exist/i.test(res.error.message)) {
     const legacy = {
       hora_entrada: item.hora_entrada,
       hora_saida: item.hora_saida,

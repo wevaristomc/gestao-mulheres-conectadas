@@ -17,6 +17,9 @@ import {
   NOMES_CURSO, TURNOS, MUNICIPIOS, CICLOS,
   faltantesTurma, upsertTurmaMTE, type TurmaMTE,
 } from "@/lib/mte-queries";
+import { useQuery } from "@tanstack/react-query";
+import { locaisOptions, upsertLocal } from "@/lib/locais-queries";
+import { Plus } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -40,6 +43,7 @@ const empty: Partial<TurmaMTE> = {
   data_fim: "",
   municipio: "",
   local_endereco: "",
+  local_id: null,
   contato_local_nome: "",
   contato_local_telefone: "",
   ciclo: 1,
@@ -49,6 +53,11 @@ const empty: Partial<TurmaMTE> = {
 export function TurmaFormDialog({ open, onOpenChange, turma, initialValues }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Partial<TurmaMTE>>(empty);
+  const locaisQ = useQuery(locaisOptions(true));
+  const [novoLocalOpen, setNovoLocalOpen] = useState(false);
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEnd, setNovoEnd] = useState("");
+  const [novoMun, setNovoMun] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -177,6 +186,30 @@ export function TurmaFormDialog({ open, onOpenChange, turma, initialValues }: Pr
             <Textarea rows={2} value={form.local_endereco ?? ""} onChange={(e) => set("local_endereco", e.target.value)} />
           </Field>
 
+          <Field label="Local (cadastrado)">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Select
+                  value={form.local_id ?? "none"}
+                  onValueChange={(v) => set("local_id", v === "none" ? null : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione um local" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {(locaisQ.data?.rows ?? []).map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.nome}{l.municipio ? ` — ${l.municipio}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setNovoLocalOpen(true)}>
+                <Plus className="mr-1 h-4 w-4" /> Novo local
+              </Button>
+            </div>
+          </Field>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Contato do local — nome *">
               <Input value={form.contato_local_nome ?? ""} onChange={(e) => set("contato_local_nome", e.target.value)} />
@@ -200,6 +233,38 @@ export function TurmaFormDialog({ open, onOpenChange, turma, initialValues }: Pr
             Salvar
           </Button>
         </DialogFooter>
+
+        <Dialog open={novoLocalOpen} onOpenChange={setNovoLocalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Novo local</DialogTitle>
+              <DialogDescription>Cadastro rápido de local de trabalho.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3">
+              <div><Label>Nome *</Label><Input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} /></div>
+              <div><Label>Endereço</Label><Input value={novoEnd} onChange={(e) => setNovoEnd(e.target.value)} /></div>
+              <div><Label>Município</Label><Input value={novoMun} onChange={(e) => setNovoMun(e.target.value)} /></div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNovoLocalOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={async () => {
+                  if (!novoNome.trim()) { toast.error("Nome é obrigatório"); return; }
+                  try {
+                    const l = await upsertLocal({ nome: novoNome, endereco: novoEnd || null, municipio: novoMun || null });
+                    toast.success("Local criado");
+                    qc.invalidateQueries({ queryKey: ["locais"] });
+                    set("local_id", l.id);
+                    setNovoLocalOpen(false);
+                    setNovoNome(""); setNovoEnd(""); setNovoMun("");
+                  } catch (e) { toast.error((e as Error).message); }
+                }}
+              >
+                Criar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

@@ -209,6 +209,7 @@ export type UpsertTurmaInput = {
   data_inicio?: string | null;
   data_fim?: string | null;
   descricao?: string | null;
+  local_id?: string | null;
 };
 
 // Grava turma tentando "nome" primeiro; se a coluna não existir, refaz com "titulo".
@@ -220,6 +221,7 @@ export async function upsertTurma(input: UpsertTurmaInput) {
     data_fim: input.data_fim || null,
     descricao: input.descricao ?? null,
   };
+  if (input.local_id !== undefined) base.local_id = input.local_id;
   // Limpa nulls opcionais sem valor para não sobrescrever colunas inexistentes.
   const write = async (nameKey: "nome" | "titulo") => {
     const payload = { ...base, [nameKey]: input.nome };
@@ -229,6 +231,10 @@ export async function upsertTurma(input: UpsertTurmaInput) {
     return supabase.from("turmas").insert(payload);
   };
   let res = await write("nome");
+  if (res.error && /column .*local_id.* does not exist/i.test(res.error.message)) {
+    delete base.local_id;
+    res = await write("nome");
+  }
   if (res.error && /column .*(nome).* does not exist/i.test(res.error.message)) {
     res = await write("titulo");
   }

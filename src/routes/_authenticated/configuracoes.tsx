@@ -16,6 +16,7 @@ function ConfiguracoesLayout() {
     { to: "/configuracoes/usuarios", label: "Usuários" },
     { to: "/configuracoes/permissoes", label: "Permissões" },
     { to: "/configuracoes/instrutor-turmas", label: "Instrutores ↔ Turmas" },
+    { to: "/configuracoes/locais", label: "Locais" },
     { to: "/configuracoes/ia", label: "Inteligência Artificial" },
   ];
   return (
