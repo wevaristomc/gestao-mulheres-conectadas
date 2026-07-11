@@ -37,13 +37,56 @@ function authHeaders(): HeadersInit {
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// Throttle mínimo global — evita rajadas que disparam 429 no gateway do Drive.
+let lastCallAt = 0;
+const MIN_INTERVAL_MS = 120;
+async function throttle(): Promise<void> {
+  const delta = Date.now() - lastCallAt;
+  if (delta < MIN_INTERVAL_MS) await sleep(MIN_INTERVAL_MS - delta);
+  lastCallAt = Date.now();
+}
+
+function backoffDelay(attempt: number, retryAfter?: string | null): number {
+  if (retryAfter) {
+    const asInt = Number.parseInt(retryAfter, 10);
+    if (Number.isFinite(asInt) && asInt > 0) return Math.min(asInt * 1000, 15000);
+    const asDate = Date.parse(retryAfter);
+    if (!Number.isNaN(asDate)) {
+      const diff = asDate - Date.now();
+      if (diff > 0) return Math.min(diff, 15000);
+    }
+  }
+  const base = Math.min(500 * 2 ** attempt, 10_000);
+  return base + Math.floor(Math.random() * 250);
+}
+
 async function gwFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const url = path.startsWith("http") ? path : `${BASE}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...authHeaders(), ...(init.headers ?? {}) },
-  });
-  return res;
+  const maxAttempts = 5;
+  let lastRes: Response | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await throttle();
+    const res = await fetch(url, {
+      ...init,
+      headers: { ...authHeaders(), ...(init.headers ?? {}) },
+    });
+    // 429 e 5xx → retry com backoff (respeita Retry-After).
+    if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+      lastRes = res;
+      if (attempt < maxAttempts - 1) {
+        const wait = backoffDelay(attempt, res.headers.get("retry-after"));
+        await sleep(wait);
+        continue;
+      }
+      return res;
+    }
+    return res;
+  }
+  return lastRes as Response;
 }
 
 async function gwJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -76,7 +119,7 @@ export async function listChildren(params: {
   const usp = new URLSearchParams({
     q,
     fields: FIELDS,
-    pageSize: String(params.pageSize ?? 50),
+    pageSize: String(params.pageSize ?? 500),
     orderBy: params.orderBy ?? "folder,name",
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
@@ -197,7 +240,7 @@ export async function listRecursive(rootId: string, maxItems = 5000): Promise<Ar
     let pageToken: string | null | undefined = null;
     do {
       const page: { files: GDriveFile[]; nextPageToken?: string | null } = await listChildren({
-        folderId, pageToken, pageSize: 200, orderBy: "folder,name",
+        folderId, pageToken, pageSize: 500, orderBy: "folder,name",
       });
       for (const f of page.files ?? []) {
         if (out.length >= maxItems) break;
