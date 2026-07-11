@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { createHash } from "crypto";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 import { executarAiRouter } from "@/lib/ia.functions";
 
 // -----------------------------------------------------------------------------
@@ -157,7 +158,7 @@ async function enriquecerComIA(admin: any, edital: EditalNormalizado): Promise<{
 // ---- Server functions -------------------------------------------------------
 
 export const buscarEditais = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input) => z.object({ projetoId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     void context.userId;
@@ -233,7 +234,7 @@ export const buscarEditais = createServerFn({ method: "POST" })
   });
 
 export const ultimaBusca = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async () => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
@@ -247,7 +248,7 @@ export const ultimaBusca = createServerFn({ method: "POST" })
   });
 
 export const atualizarSituacaoEdital = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input) =>
     z.object({
       id: z.string().uuid(),

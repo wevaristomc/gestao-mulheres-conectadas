@@ -4,6 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 type EnrolRow = {
   ava_user_id: number;
@@ -13,7 +14,7 @@ type EnrolRow = {
 };
 
 export const gerarMatriculasDoAva = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }) => {
     // Somente coordenação geral (mesma regra do import do dump).
     const roleQ = await context.supabase

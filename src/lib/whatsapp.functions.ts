@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 import { parseChat, tail8 } from "@/lib/whatsapp-parser";
 import { executarAiRouter, executarTranscricaoRouter, executarVisaoRouter } from "@/lib/ia.functions";
 import { indexarDocumentoInterno } from "@/lib/base-conhecimento.functions";
@@ -29,7 +30,7 @@ const CriarGrupoInput = z.object({
 });
 
 export const criarGrupo = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => CriarGrupoInput.parse(v))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
@@ -78,7 +79,7 @@ const RegistrarImportacaoInput = z.object({
  * inserts em lote — sem JSZip, sem download do zip, sem gargalo de RAM.
  */
 export const registrarImportacao = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => RegistrarImportacaoInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -158,7 +159,7 @@ type Insercao = {
 };
 
 export const processarZip = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ProcessarZipInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -305,7 +306,7 @@ function guessContentType(nome: string): string {
 const StatusAudiosInput = z.object({ importacao_id: z.string().uuid() });
 
 export const statusAudios = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => StatusAudiosInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -360,7 +361,7 @@ export const statusAudios = createServerFn({ method: "POST" })
 const TranscreverInput = z.object({ importacao_id: z.string().uuid() });
 
 export const transcreverAudios = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => TranscreverInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -470,7 +471,7 @@ const PublicarAudiosInput = z.object({
 });
 
 export const publicarAudiosNaBase = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => PublicarAudiosInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -670,7 +671,7 @@ export const publicarAudiosNaBase = createServerFn({ method: "POST" })
 const AnalisarImgInput = z.object({ importacao_id: z.string().uuid() });
 
 export const analisarImagens = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => AnalisarImgInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -767,7 +768,7 @@ function safeJson(raw: string): { ocr_texto?: string; descricao?: string; tipo_p
 const RemetentesInput = z.object({ importacao_id: z.string().uuid() });
 
 export const listarRemetentes = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => RemetentesInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -825,7 +826,7 @@ const VincularInput = z.object({
 });
 
 export const vincularRemetente = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => VincularInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -867,7 +868,7 @@ const ResumoInput = z.object({
 });
 
 export const gerarResumoGrupo = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ResumoInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;
@@ -947,7 +948,7 @@ Nunca invente números. Se um dado não estiver claro, registre a lacuna.`;
 const PurgarInput = z.object({ importacao_id: z.string().uuid() });
 
 export const purgarImportacao = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => PurgarInput.parse(v))
   .handler(async ({ data, context }) => {
     const sb = context.supabase;

@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 import {
   ALUNAS_SEED,
   NOME_CURSO_CONSOLIDADO,
@@ -32,7 +33,7 @@ export type ResumoConsolidado = {
 };
 
 export const importarConsolidadoQajbc = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((data: { projeto_id?: string | null } | undefined) => {
     const projeto_id = data?.projeto_id ?? null;
     if (projeto_id !== null && typeof projeto_id !== "string") {

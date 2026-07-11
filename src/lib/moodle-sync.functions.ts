@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 async function assertCoordenadorGeral(supabase: any, userId: string) {
   const { data, error } = await supabase
@@ -21,7 +22,7 @@ async function assertCoordenadorGeral(supabase: any, userId: string) {
 
 /** Retropreenche beneficiarias.email a partir de ava_users, apenas quando vazio. */
 export const sincronizarEmailsBeneficiariasFromAva = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }) => {
     await assertCoordenadorGeral(context.supabase, context.userId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -66,7 +67,7 @@ export const sincronizarEmailsBeneficiariasFromAva = createServerFn({ method: "P
 
 /** Retorna a lista de professores capturada no último import AVA (do campo resumo). */
 export const listarProfessoresUltimoAva = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }) => {
     await assertCoordenadorGeral(context.supabase, context.userId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");

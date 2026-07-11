@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 const WRITE_ROLES = new Set([
   "coordenador_geral",
@@ -22,7 +23,7 @@ async function assertWriteRole(context: { userId: string; supabase: any }) {
 }
 
 export const verifyGdriveConnection = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async () => {
     const { verifyConnection, getRootFolderId } = await import("@/lib/gdrive-helpers.server");
     const res = await verifyConnection();
@@ -39,7 +40,7 @@ const ListInput = z.object({
 });
 
 export const listGdrive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ListInput.parse(v))
   .handler(async ({ data }) => {
     const h = await import("@/lib/gdrive-helpers.server");
@@ -62,7 +63,7 @@ export const listGdrive = createServerFn({ method: "POST" })
 const SearchInput = z.object({ q: z.string().min(2), pageToken: z.string().nullish() });
 
 export const searchGdrive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => SearchInput.parse(v))
   .handler(async ({ data }) => {
     const h = await import("@/lib/gdrive-helpers.server");
@@ -74,7 +75,7 @@ export const searchGdrive = createServerFn({ method: "POST" })
 const CrumbInput = z.object({ folderId: z.string() });
 
 export const gdriveBreadcrumb = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => CrumbInput.parse(v))
   .handler(async ({ data }) => {
     const h = await import("@/lib/gdrive-helpers.server");
@@ -105,7 +106,7 @@ const ImportInput = z.object({
 });
 
 export const importGdriveToBucket = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => ImportInput.parse(v))
   .handler(async ({ data, context }) => {
     await assertWriteRole(context);
@@ -193,7 +194,7 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
 const CreateFolderInput = z.object({ name: z.string().min(1).max(200), parentId: z.string().optional() });
 
 export const createGdriveFolder = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => CreateFolderInput.parse(v))
   .handler(async ({ data, context }) => {
     await assertWriteRole(context);
@@ -216,7 +217,7 @@ const UploadInput = z.object({
 });
 
 export const uploadToGdrive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => UploadInput.parse(v))
   .handler(async ({ data, context }) => {
     await assertWriteRole(context);

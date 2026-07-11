@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 const ALLOWED_ROLES = new Set([
   "coordenador_geral",
@@ -24,7 +25,7 @@ async function assertLerListaRole(context: { userId: string; supabase: any }) {
 const Input = z.object({ fileId: z.string().min(4) });
 
 export const baixarPdfDoDrive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((v: unknown) => Input.parse(v))
   .handler(async ({ data, context }) => {
     await assertLerListaRole(context);

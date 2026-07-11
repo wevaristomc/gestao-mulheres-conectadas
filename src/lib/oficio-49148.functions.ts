@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requirePapel, PAPEIS_COORDENACAO } from "@/lib/rbac-guard";
 
 export const FONTE_OFICIO_49148 = "oficio-49148-2026";
 
@@ -164,7 +165,7 @@ export type ResumoSeedOficio = {
 };
 
 export const carregarPendenciasOficio49148 = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .handler(async ({ context }): Promise<ResumoSeedOficio> => {
     // Autorização — coordenador_geral
     const roleQ = await context.supabase
