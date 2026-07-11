@@ -228,6 +228,51 @@ function QualificacaoTab() {
         </div>
       ) : (
         <div className="rounded-md border">
+          <ul className="divide-y md:hidden">
+            {cursistasQ.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="p-3"><Skeleton className="h-4 w-40" /></li>
+              ))
+            ) : linhas.length === 0 ? (
+              <li className="p-6 text-center text-sm text-muted-foreground">
+                {turmaIdAtiva ? "Nenhuma cursista matriculada nesta turma." : "Selecione uma turma."}
+              </li>
+            ) : linhas.map((l) => (
+              <li key={l.matriculaId} className="flex min-w-0 items-start justify-between gap-2 p-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="break-words text-sm font-semibold">{l.nome}</div>
+                  <div className="break-words text-xs text-muted-foreground">{l.email ?? "—"}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="capitalize">{l.status}</Badge>
+                    {l.qualificado ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <Award className="h-3 w-3" />{formatarData(l.qualificado.data_qualificacao)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Não qualificada</span>
+                    )}
+                  </div>
+                  {l.qualificado?.certificado_url ? (
+                    <button type="button" onClick={() => abrirCertificado(l.qualificado!.certificado_url!)} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <Download className="h-3 w-3" /> Baixar certificado
+                    </button>
+                  ) : null}
+                </div>
+                <div className="shrink-0">
+                  {l.qualificado ? (
+                    <Button size="sm" variant="ghost" className="h-10" disabled={revogarMut.isPending && revogarAlvo?.matriculaId === l.matriculaId} onClick={() => setRevogarAlvo(l)}>
+                      {revogarMut.isPending && revogarAlvo?.matriculaId === l.matriculaId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                    </Button>
+                  ) : (
+                    <Button size="sm" className="h-10" onClick={() => { setAlvo(l); setObs(""); }}>
+                      <Award className="mr-1 h-4 w-4" /> Emitir
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -320,6 +365,7 @@ function QualificacaoTab() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 
