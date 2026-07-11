@@ -158,6 +158,7 @@ export function OrbeNeural() {
   const [open, setOpen] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const listar = useServerFn(orbeNotificacoes);
   const verificar = useServerFn(orbeVerificarAlertas);
 
@@ -192,6 +193,18 @@ export function OrbeNeural() {
     return () => { supabase.removeChannel(ch); };
   }, [user, notifQ]);
 
+  // Escuta evento global 'orbe:open' — HelpPoint e página /ajuda usam para
+  // abrir o painel com uma pergunta pré-preenchida.
+  useEffect(() => {
+    function onOpen(ev: Event) {
+      const detail = (ev as CustomEvent<{ pergunta?: string }>).detail;
+      if (detail?.pergunta) setPendingPrompt(detail.pergunta);
+      setOpen(true);
+    }
+    window.addEventListener("orbe:open", onOpen);
+    return () => window.removeEventListener("orbe:open", onOpen);
+  }, []);
+
   if (!user) return null;
 
   const estado: Estado = recording
@@ -223,6 +236,8 @@ export function OrbeNeural() {
         onOpenChange={setOpen}
         onThinkingChange={setThinking}
         onRecordingChange={setRecording}
+        pendingPrompt={pendingPrompt}
+        onPendingPromptConsumed={() => setPendingPrompt(null)}
       />
     </>
   );
