@@ -3,6 +3,11 @@ import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { APP_ROLES } from "@/lib/role-access";
+import {
+  normalizePermissionRows,
+  storageRoleForAppRole,
+  type PermissionRow,
+} from "@/lib/permissions-model";
 
 const ProjetoIdSchema = z.string().uuid();
 const RoleEnum = z.enum(APP_ROLES);
@@ -27,9 +32,9 @@ async function assertCoordenadorGeral(
     .from("user_roles")
     .select("role")
     .eq("user_id", userId)
-    .eq("projeto_id", projetoId)
     .eq("role", "coordenador_geral")
-      .eq("ativo", true)
+    .eq("ativo", true)
+    .or(`projeto_id.eq.${projetoId},projeto_id.is.null`)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Apenas coordenação geral pode executar esta ação.");
@@ -40,13 +45,39 @@ async function assertCoordenadorGeral(
 export const listarPermissoesMatriz = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
       .from("permissoes_papel")
       .select("role, modulo, pode_ver, pode_criar, pode_editar, pode_excluir")
-      .order("role")
       .order("modulo");
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return normalizePermissionRows((data ?? []) as Array<Record<string, unknown>>);
+  });
+
+export const listarPermissoesPapel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ role: RoleEnum }).parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const allRolesRes = await admin
+      .from("permissoes_papel")
+      .select("role");
+    if (allRolesRes.error) throw new Error(allRolesRes.error.message);
+
+    const availableRoles = Array.from(
+      new Set(((allRolesRes.data ?? []) as Array<{ role: string }>).map((r) => r.role)),
+    );
+    const storageRole = storageRoleForAppRole(data.role, availableRoles);
+    const { data: rows, error } = await admin
+      .from("permissoes_papel")
+      .select("role, modulo, pode_ver, pode_criar, pode_editar, pode_excluir")
+      .eq("role", storageRole)
+      .order("modulo");
+    if (error) throw new Error(error.message);
+    return normalizePermissionRows((rows ?? []) as Array<Record<string, unknown>>)
+      .filter((row): row is PermissionRow => row.role === data.role);
   });
 
 export const atualizarPermissao = createServerFn({ method: "POST" })
@@ -66,6 +97,14 @@ export const atualizarPermissao = createServerFn({ method: "POST" })
     await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
+    const rolesRes = await admin
+      .from("permissoes_papel")
+      .select("role");
+    if (rolesRes.error) throw new Error(rolesRes.error.message);
+    const availableRoles = Array.from(
+      new Set(((rolesRes.data ?? []) as Array<{ role: string }>).map((r) => r.role)),
+    );
+    const storageRole = storageRoleForAppRole(data.role, availableRoles);
     const { error } = await admin
       .from("permissoes_papel")
       .update({
@@ -74,7 +113,7 @@ export const atualizarPermissao = createServerFn({ method: "POST" })
         pode_editar: data.pode_editar,
         pode_excluir: data.pode_excluir,
       })
-      .eq("role", data.role)
+      .eq("role", storageRole)
       .eq("modulo", data.modulo);
     if (error) throw new Error(error.message);
     return { ok: true };
