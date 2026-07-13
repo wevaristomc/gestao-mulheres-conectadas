@@ -1,60 +1,71 @@
-# Correção de vazamento de permissões — plano de execução
+# Corrigir vazamento de acesso por papel
 
-O escopo é grande (20+ arquivos `.functions.ts`, sidebar, ~30 rotas, dashboard reduzido, docs). Antes de tocar em todos os arquivos, quero confirmar prioridades e a estratégia de cada camada — pequenas escolhas de arquitetura mudam MUITO o volume de código.
+## Diagnóstico
 
-## Estratégia por camada
+Dois problemas somados explicam o vazamento reportado:
 
-### Camada 1 — Sidebar + guardas de rota (baixo risco)
-- Reescrever `src/lib/role-access.ts` (`MODULE_ACCESS`) com a matriz nova:
-  - **professor / auxiliar_pedagogico**: `pedagogico`, `relacao-horas`, `base-conhecimento`, `ajuda`, `etapas` (leitura), `pendencias`. **Fora**: `visao-geral` geral, `mte`, `financeiro`, `relatorios`, `captacao`, `whatsapp`, `configuracoes`, `administrativo`, `drive`.
-  - **gestor_financeiro**: `financeiro`, `financeiro-relacoes-horas`, `relatorios` (leitura), `ajuda`, `pendencias`, `base-conhecimento`. Fora: pedagógico/MTE/configurações.
-  - **coordenador_pedagogico**: pedagógico, MTE, relatórios, etapas, ajuda, base, drive, pendências, visão-geral. Fora: financeiro, configurações.
-  - **coordenador_geral / administrativo**: tudo (inalterado).
-- Substituir o comentário "fail-open" em `requireModuleAccess`: quando role já está em cache, bloquear com `redirect({ to: "/" })` + toast (via search param) para telas fora do escopo do papel.
-- Sidebar (`app-sidebar.tsx`): já filtra por `canAccess`; só validar que os itens novos aparecem certos após a matriz.
-- Criar rota `index.tsx` que, para professor, redireciona a `/pedagogico` (dashboard geral fica bloqueado). Ou renderizar um "Minhas turmas" reduzido no `visao-geral` para professor (ver pergunta 1 abaixo).
+1. **Matriz `MODULE_ACCESS` frouxa** em `src/lib/role-access.ts`:
+   - `base-conhecimento` ainda inclui `professor` e `auxiliar_pedagogico` (e financeiro).
+   - `etapas` está como `ALL` (todos os papéis).
+   - `visao-geral` e `pendencias` incluem `gestor_financeiro`.
+   - `captacao` inclui `gestor_financeiro`.
+   - `administrativo` não inclui `gestor_financeiro` (o usuário pediu incluir).
+2. **Guarda fail-open em hard refresh** em `src/lib/auth-guard.ts`: `requireModuleAccess` faz `if (role === null) return;`. Como o papel só é hidratado depois do primeiro render pelo `ActiveContextProvider`, um professor que digita `/whatsapp`, `/administrativo`, `/pendencias`, etc. passa a guarda (role ainda null) e a página carrega — o sidebar até esconde o item, mas a URL direta entra.
 
-### Camada 2 — Server functions (crítico)
-Criar `src/lib/rbac-guard.ts` com:
-```ts
-export async function papelDoUsuario(supabase, userId): Promise<AppRole | null>
-export async function exigirPapel(supabase, userId, papeis: AppRole[]): void
-export async function turmasDoUsuario(supabase, userId): Promise<string[]>  // via instrutor_turmas
-export async function exigirTurmaDoUsuario(supabase, userId, turmaId): void
-```
-- Todas leem via `context.supabase` (RLS do usuário) para a checagem de papel — **não** via admin.
+Também: sidebar mostra o skeleton enquanto carrega, então visualmente já filtra; a rota é a que vaza.
 
-Aplicar em cada `.functions.ts`. Padrão por módulo:
+## Alterações
 
-| Arquivo | Regra |
-|---|---|
-| `ava-turmas`, `ava-matriculas`, `ava-beneficiarias`, `mte-relatorios`, `moodle-import`, `moodle-sync`, `consolidado-qajbc`, `oficio-49148`, `ciclo2-previsto`, `relatorio-parcial-objeto`, `certificados`, `leitor-drive` | Exigir coordenação (`coordenador_geral`, `coordenador_pedagogico`, `administrativo`). Professor negado. |
-| `mte-relatorios` (listas frequência/entrega por turma) | Se professor: `exigirTurmaDoUsuario` no `turmaId` da entrada; senão exige coordenação. |
-| `relatorios` (análise IA) | Exigir coordenação + financeiro (leitura). Professor negado. |
-| `drive-sync`, `gdrive`, `base-conhecimento`, `ia` (configurações), `editais-busca` | Exigir coordenação. |
-| `whatsapp` | Exigir coordenação. |
-| `orbe` (ferramentas) | Injetar papel + turmas no contexto de execução; ferramentas `listar_turmas`/`detalhar`/`matriculas`/`frequencia`/`buscar_beneficiaria` filtram por `turmasDoUsuario` quando professor; `financeiro_resumo`, `orcamento`, `pendencias_financeiras` → só financeiro/coordenação; `etapas`/`pendencias` leitura livre. |
-| `users`, `rbac` | Já exige `coordenador_geral` no `rbac.functions.ts`; auditar `users.functions.ts` do mesmo jeito. |
+### 1. Nova matriz em `src/lib/role-access.ts`
 
-**Ponto de risco**: várias dessas fns hoje fazem `getSupabaseAdmin()` sem checar papel — é aí que o vazamento acontece. Vou manter o admin para o WRITE quando faz sentido, mas SEMPRE precedido por `exigirPapel` via `context.supabase`.
+Ajustar `MODULE_ACCESS` para o pedido exato:
 
-### Camada 3 — UI / client queries
-- `pedagogico.index.tsx` (lista de turmas): para professor, filtrar por `turmas.id IN (select turma_id from instrutor_turmas where user_id = auth.uid())`. Já era esperado que RLS fizesse isso, mas garantir na query.
-- `mte.beneficiarias.tsx`, `mte.turmas.tsx`, `mte.matriculas.tsx`, `mte.evidencias.tsx`, `mte.presencas.tsx`, `mte.aulas.tsx`, `mte.importar-lista.tsx`, `mte.cronograma.tsx`, `mte.checklist.tsx`, `mte.ava.tsx`, `mte.index.tsx` — todas ficam bloqueadas para professor pela guarda de rota; sem edições internas.
-- Dashboard (`index.tsx` de `_authenticated`): se professor → renderizar "Minhas turmas" (cards das turmas vinculadas) em vez do painel geral, OU redirect para `/pedagogico`. **Pergunta 1 abaixo.**
+- `visao-geral`, `pendencias`, `etapas`: `coordenador_geral`, `administrativo`, `coordenador_pedagogico` (remover `gestor_financeiro`; remover professor/auxiliar de `etapas`).
+- `base-conhecimento`: `coordenador_geral`, `administrativo`, `coordenador_pedagogico` (remover professor, auxiliar, financeiro).
+- `whatsapp`: manter `coordenador_geral`, `administrativo`, `coordenador_pedagogico`.
+- `captacao`: `coordenador_geral`, `administrativo`, `coordenador_pedagogico` (remover financeiro; conforme "e outros que forem selecionados", deixamos coordenação).
+- `administrativo`: adicionar `gestor_financeiro` ao conjunto existente (`coordenador_geral`, `administrativo`).
+- `mte` e `pedagogico`: continuam liberados para professor/auxiliar; o escopo por turma já é feito nas telas (`soMinhasTurmas` em pedagogico) — replicar o mesmo filtro em MTE (ver item 3).
+- Demais módulos permanecem.
 
-### Camada 4 — Documentação
-- `docs/PERMISSOES.md` com a matriz final papel × módulo × ação e a lista de cada server function auditada e a checagem aplicada. Sem SQL — texto para coordenação.
+### 2. Fechar o fail-open da guarda em `src/lib/auth-guard.ts`
 
-### Verificação
-- `bun run typecheck` limpo.
-- Testar como `coordenador_geral`: nenhum acesso perdido.
+`requireModuleAccess` deixa de fazer bypass quando `role === null`. Passa a:
 
-## Perguntas antes de começar
+- Se não há sessão → `/auth` (comportamento atual via `requireSession`).
+- Se há sessão mas o papel ainda não hidratou → em vez de deixar entrar, deixamos o componente da rota lidar renderizando um estado de carregamento e checando via `useActiveContext` + `canAccess` no cliente (rerender após hidratar redireciona). Concretamente:
+  - Manter a guarda como antes para sessão, mas remover o `return` no ramo `role === null`.
+  - Adicionar um utilitário `useEnforceModuleAccess(module)` chamado no topo das páginas restritas (ou centralizar via um wrapper no `_authenticated/route.tsx` que lê `role` do contexto e chama `navigate` quando `!canAccess`).
+- Alternativa preferida (mais simples): manter `getCachedRole` mas persistir o papel também durante login (já é feito em `setCachedRole` via effect no provider). No primeiro acesso pós-login o cache já existe. Para o caso inicial sem cache, adicionar checagem cliente no `_authenticated/route.tsx` que observa `role` do contexto e, quando `role` estiver definido e o `pathname` não passar por `canAccess(modulo)`, faz `navigate({ to: landingPathForRole(role), replace: true })`.
 
-1. **Dashboard do professor**: prefere (a) redirect para `/pedagogico` (mais simples, sem UI nova) ou (b) um "Minhas turmas" reduzido em `/` (mais trabalho, mas melhor UX)?
-2. **Etapas para professor**: leitura sem edição — confirmar. Basta esconder botões de edição, ou também restringir server fns de escrita a coordenação?
-3. **Toast de "sem permissão"**: hoje não temos infraestrutura para toast em `beforeLoad` (só `redirect`). Está ok redirect silencioso para `/pedagogico` (professor) ou `/` (coordenação), OU quer que eu adicione um `?erro=sem-permissao` que a rota destino lê e mostra toast?
-4. **Financeiro vs Relatórios para gestor_financeiro**: quer que ele veja TODOS os relatórios (frequência, pedagógico, MTE, orçamentário) ou só orçamentário/financeiro?
+Escolha: implementar a **guarda em nível de layout `_authenticated`** (via mapeamento pathname→ModuleKey), rodando após o `role` estar disponível — assim garantimos que `beforeLoad` (que não tem contexto assíncrono do provider) fica só como best-effort e a checagem definitiva acontece no cliente sempre que `role` muda.
 
-Com as 4 respostas fecho o escopo e executo camada a camada. Estimativa: ~25 arquivos editados, 2 criados (`rbac-guard.ts`, `PERMISSOES.md`).
+### 3. Escopo por turma no MTE para professor/auxiliar
+
+Nas abas do MTE (`mte.beneficiarias`, `mte.matriculas`, `mte.presencas`, `mte.aulas`, `mte.evidencias`, `mte.checklist`, `mte.cronograma`, `mte.ava`, `mte.importar-lista`), aplicar o mesmo padrão já usado em pedagogico:
+
+- Buscar `instrutor_turmas` para o `user.id`.
+- Se `role ∈ {professor, auxiliar_pedagogico}` e existir escopo, filtrar as consultas por `turma_id IN (escopo)`; se não houver turmas vinculadas, mostrar estado vazio com mensagem "Nenhuma turma vinculada ao seu usuário".
+- Esconder botões de criação/importação globais para esses papéis (mantendo somente ações escopo-turma).
+
+### 4. Documentação
+
+Atualizar `docs/PERMISSOES.md` com a nova matriz e a nota sobre a guarda de layout.
+
+## Detalhes técnicos
+
+- Arquivos alterados:
+  - `src/lib/role-access.ts` (matriz).
+  - `src/lib/auth-guard.ts` (comportamento no ramo `role === null`).
+  - `src/routes/_authenticated/route.tsx` (guarda em nível de layout observando `role`).
+  - Rotas MTE citadas (filtro por escopo de turma).
+  - `docs/PERMISSOES.md`.
+- RLS no banco continua sendo a verdade — as mudanças aqui são de UX/roteamento.
+- Coordenador_geral mantém 100% do acesso (está em todos os conjuntos).
+
+## Verificação
+
+- Typecheck limpo.
+- Passar por cada URL restrita como "professor" e confirmar redirecionamento para `/pedagogico`: `/`, `/pendencias`, `/etapas`, `/administrativo`, `/financeiro`, `/captacao`, `/whatsapp`, `/base-conhecimento`, `/drive`, `/relatorios`, `/configuracoes`.
+- Como "gestor_financeiro": bloqueio em `/`, `/pendencias`, `/etapas`, `/captacao`, `/base-conhecimento`; liberado em `/administrativo`, `/financeiro`, `/relatorios`.
+- Coordenação geral vê tudo.
