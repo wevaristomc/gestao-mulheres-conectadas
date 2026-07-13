@@ -348,12 +348,16 @@ export type AulaMTE = {
 
 export const TIPOS_CH = ["geral", "especifico"] as const;
 
-export function aulasMteListOptions(turmaId: string | null) {
+export function aulasMteListOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "aulas", turmaId],
+    queryKey: ["mte", "aulas", turmaId, restrictToUserId ?? "all"],
     enabled: !!turmaId,
     queryFn: async (): Promise<{ rows: AulaMTE[]; error?: string }> => {
       if (!turmaId) return { rows: [] };
+      if (restrictToUserId) {
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("aulas")
         .select("*")
@@ -365,13 +369,18 @@ export function aulasMteListOptions(turmaId: string | null) {
   });
 }
 
-export function cronogramaGeralOptions() {
+export function cronogramaGeralOptions(restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "cronograma"],
+    queryKey: ["mte", "cronograma", restrictToUserId ?? "all"],
     queryFn: async (): Promise<{
       rows: (AulaMTE & { turma?: Partial<TurmaMTE> | null })[];
       error?: string;
     }> => {
+      let permitidas: Set<string> | null = null;
+      if (restrictToUserId) {
+        permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (permitidas.size === 0) return { rows: [] };
+      }
       let res = await supabase
         .from("aulas")
         .select("*, turma:turmas(id, codigo_turma, nome_curso, turno, municipio)")
@@ -381,7 +390,9 @@ export function cronogramaGeralOptions() {
         res = await supabase.from("aulas").select("*").order("data", { ascending: true }).limit(1000);
       }
       if (res.error) return { rows: [], error: res.error.message };
-      return { rows: (res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[] };
+      let rows = (res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[];
+      if (permitidas) rows = rows.filter((r) => permitidas!.has(r.turma_id));
+      return { rows };
     },
   });
 }
