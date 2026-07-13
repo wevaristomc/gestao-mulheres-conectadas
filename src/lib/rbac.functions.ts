@@ -94,8 +94,7 @@ export const listarTurmasDoProjeto = createServerFn({ method: "POST" })
     const { data: rows, error } = await context.supabase
       .from("turmas")
       .select("*")
-      .eq("projeto_id", data.projetoId)
-      .order("codigo_turma", { ascending: true, nullsFirst: false });
+      .eq("projeto_id", data.projetoId);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
