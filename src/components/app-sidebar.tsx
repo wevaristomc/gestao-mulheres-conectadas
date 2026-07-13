@@ -29,8 +29,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { canAccess, type ModuleKey } from "@/lib/role-access";
+import type { ModuleKey } from "@/lib/role-access";
 import { useActiveContext } from "@/hooks/use-active-context";
+import { usePermissoes } from "@/hooks/use-permissoes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PMQLogo } from "@/components/pmq-logo";
 
@@ -66,12 +67,13 @@ const APOIO: Item[] = [
 ];
 
 export function AppSidebar() {
-  const { role, isLoadingRoles } = useActiveContext();
+  const { isLoadingRoles } = useActiveContext();
+  const { can, isLoading: isLoadingPermissoes } = usePermissoes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
 
   const renderGroup = (label: string, items: Item[]) => {
-    if (isLoadingRoles) {
+    if (isLoadingRoles || isLoadingPermissoes) {
       return (
         <SidebarGroup>
           <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -85,7 +87,7 @@ export function AppSidebar() {
         </SidebarGroup>
       );
     }
-    const visible = items.filter((i) => canAccess(i.key, role));
+    const visible = items.filter((i) => can(i.key));
     if (visible.length === 0) return null;
     return (
       <SidebarGroup>

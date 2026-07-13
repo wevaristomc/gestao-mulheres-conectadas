@@ -4,30 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useActiveContext } from "@/hooks/use-active-context";
 import { canAccess, type AppRole, type ModuleKey } from "@/lib/role-access";
 
-/** Papéis v2 introduzidos na Fase 1 (SQL). */
-export type AppRoleV2 =
-  | "admin"
-  | "coordenador"
-  | "instrutor"
-  | "financeiro"
-  | "parceiro_mte"
-  | "captacao";
-
 export type Acao = "ver" | "criar" | "editar" | "excluir";
-
-/** Mapeia enum antigo (client) → v2. Mesmo mapeamento do SQL de backfill. */
-export function mapRoleV1toV2(role: AppRole | null): AppRoleV2 | null {
-  if (!role) return null;
-  switch (role) {
-    case "coordenador_geral": return "admin";
-    case "gestor_financeiro": return "financeiro";
-    case "coordenador_pedagogico": return "coordenador";
-    case "administrativo": return "coordenador";
-    case "professor":
-    case "auxiliar_pedagogico": return "instrutor";
-    default: return null;
-  }
-}
 
 type PermRow = {
   modulo: string;
@@ -38,30 +15,26 @@ type PermRow = {
 };
 
 /**
- * Fase 2 — Hook de permissões com fallback.
+ * Hook de permissões com fallback.
  *
- * - Lê `permissoes_papel` filtrando pelo papel v2 do usuário atual.
- * - Se a tabela ainda não existir (Fase 1 não aplicada) ou a query falhar,
- *   cai para `canAccess` (hardcoded em role-access.ts) → comportamento atual.
- * - `can(modulo, 'ver')` é o único caso que hoje tem correspondência 1:1 no
- *   fallback; para 'criar/editar/excluir' o fallback assume o mesmo booleano
- *   de 'ver' (mantém comportamento pré-RBAC).
+ * - Lê `permissoes_papel` filtrando pelo papel real do usuário atual.
+ * - Se a tabela/query falhar, cai para `canAccess` (matriz fixa em role-access.ts).
+ * - Para 'criar/editar/excluir' no fallback, devolve o mesmo booleano de 'ver'.
  */
 export function usePermissoes() {
   const { user, role } = useActiveContext();
-  const roleV2 = mapRoleV1toV2(role);
 
   const q = useQuery({
-    queryKey: ["permissoes_papel", roleV2],
-    enabled: !!user && !!roleV2,
+    queryKey: ["permissoes_papel", role],
+    enabled: !!user && !!role,
     retry: false,
     staleTime: 60_000,
     queryFn: async (): Promise<PermRow[] | null> => {
-      if (!roleV2) return null;
+      if (!role) return null;
       const { data, error } = await supabase
         .from("permissoes_papel" as any)
         .select("modulo, pode_ver, pode_criar, pode_editar, pode_excluir")
-        .eq("role", roleV2);
+        .eq("role", role);
       if (error) {
         // Silencia: tabela pode ainda não existir (Fase 1 não aplicada).
         // eslint-disable-next-line no-console
@@ -96,6 +69,6 @@ export function usePermissoes() {
     isReady: !q.isLoading,
     isLoading: q.isLoading,
     source,
-    roleV2,
+    role,
   };
 }
