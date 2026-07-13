@@ -88,6 +88,9 @@ function FrequenciaTab() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["pedagogico", "frequencia", turmaId] });
+      qc.invalidateQueries({ queryKey: ["mte", "presencas"] });
+      qc.invalidateQueries({ queryKey: ["mte", "matriculas"] });
+      qc.invalidateQueries({ queryKey: ["relatorios"] });
     },
   });
 

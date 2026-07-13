@@ -92,6 +92,9 @@ function PresencasIndex() {
       toast.success("Presenças salvas — frequência recalculada");
       qc.invalidateQueries({ queryKey: ["mte", "presencas"] });
       qc.invalidateQueries({ queryKey: ["mte", "matriculas"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico", "frequencia"] });
+      qc.invalidateQueries({ queryKey: ["pedagogico"] });
+      qc.invalidateQueries({ queryKey: ["relatorios"] });
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao salvar"),
   });

@@ -171,6 +171,7 @@ function ImportarListaPage() {
       qc.invalidateQueries({ queryKey: ["mte"] });
       qc.invalidateQueries({ queryKey: ["pedagogico"] });
       qc.invalidateQueries({ queryKey: ["administrativo"] });
+      qc.invalidateQueries({ queryKey: ["relatorios"] });
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao gravar"),
   });
