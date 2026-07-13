@@ -20,6 +20,7 @@ import { useHasRole } from "@/hooks/use-active-context";
 import {
   turmasMteListOptions, deleteTurmaMTE, faltantesTurma, type TurmaMTE,
 } from "@/lib/mte-queries";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/turmas")({
   component: TurmasMteIndex,

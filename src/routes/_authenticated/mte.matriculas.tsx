@@ -25,6 +25,7 @@ import {
   turmasMteListOptions, matriculasListOptions, deleteMatricula,
   type Matricula, type Beneficiaria,
 } from "@/lib/mte-queries";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/matriculas")({
   component: MatriculasIndex,

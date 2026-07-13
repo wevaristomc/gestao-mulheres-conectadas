@@ -55,6 +55,7 @@ import {
   type MatriculaLite,
   type ResultadoLeitura,
 } from "@/lib/leitor-lista";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/importar-lista")({
   component: ImportarListaPage,

@@ -21,6 +21,7 @@ import {
   aulasMteListOptions, matriculasListOptions, presencasByAulaOptions,
   turmasMteListOptions, upsertPresencaMTE,
 } from "@/lib/mte-queries";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/presencas")({
   component: PresencasIndex,

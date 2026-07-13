@@ -29,6 +29,7 @@ import {
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/evidencias")({
   component: EvidenciasIndex,

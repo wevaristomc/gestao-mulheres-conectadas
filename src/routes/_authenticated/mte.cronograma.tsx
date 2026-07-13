@@ -23,6 +23,7 @@ import {
   criarTurmasCiclo2Previstas,
   type ResumoCiclo2,
 } from "@/lib/ciclo2-previsto.functions";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/cronograma")({
   component: CronogramaIndex,
