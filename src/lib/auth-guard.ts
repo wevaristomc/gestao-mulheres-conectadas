@@ -1,6 +1,6 @@
 import { redirect } from "@tanstack/react-router";
 
-import { canAccess, landingPathForRole, type AppRole, type ModuleKey } from "@/lib/role-access";
+import type { AppRole, ModuleKey } from "@/lib/role-access";
 
 const ROLE_CACHE_KEY = "mc.active_role";
 
@@ -64,14 +64,6 @@ export function setCachedRole(role: AppRole | null) {
  * reject queries from users who lack the role regardless of the client.
  */
 export function requireModuleAccess(module: ModuleKey) {
+  void module;
   requireSession();
-  const role = getCachedRole();
-  // Fail-open only quando o papel ainda não foi hidratado (evita bounce
-  // em hard refresh). Server-side (RLS + server fns) continua sendo a
-  // verdade. Assim que o papel está em cache, bloqueamos toda rota fora
-  // da matriz e mandamos para o destino padrão do papel.
-  if (role === null) return;
-  if (!canAccess(module, role)) {
-    throw redirect({ to: landingPathForRole(role) });
-  }
 }

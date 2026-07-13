@@ -92,11 +92,11 @@ function RoleAccessGate() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   useEffect(() => {
-    if (!user || isLoadingRoles || isLoadingPermissoes || !role) return;
+    if (!user || isLoadingRoles || isLoadingPermissoes) return;
     const mod = moduleForPath(pathname);
     if (!mod) return; // rota não mapeada (ex.: /trocar-senha)
-    if (!can(mod)) {
-      navigate({ to: landingPathForRole(role), replace: true });
+    if (!role || !can(mod)) {
+      navigate({ to: role ? landingPathForRole(role) : "/auth", replace: true });
     }
   }, [role, isLoadingRoles, isLoadingPermissoes, user, pathname, navigate, can]);
   return null;
