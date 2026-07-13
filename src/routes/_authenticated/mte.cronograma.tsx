@@ -30,8 +30,8 @@ export const Route = createFileRoute("/_authenticated/mte/cronograma")({
 });
 
 function CronogramaIndex() {
-  const turmasQ = useQuery(turmasMteListOptions());
-  const q = useQuery(cronogramaGeralOptions());
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
+  const q = useQuery(cronogramaGeralOptions(restrictToUserId));
   const qc = useQueryClient();
   const criarCiclo2 = useServerFn(criarTurmasCiclo2Previstas);
   const ciclo2Mut = useMutation({

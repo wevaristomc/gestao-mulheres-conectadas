@@ -34,23 +34,23 @@ function PresencasIndex() {
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "professor", "auxiliar_pedagogico"]);
 
-  const turmasQ = useQuery(turmasMteListOptions());
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const effectiveTurma = turmaId || turmas[0]?.id || "";
 
-  const aulasQ = useQuery(aulasMteListOptions(effectiveTurma || null));
+  const aulasQ = useQuery(aulasMteListOptions(effectiveTurma || null, restrictToUserId));
   const aulas = aulasQ.data?.rows ?? [];
   const [aulaId, setAulaId] = useState<string>("");
   const effectiveAula = aulaId || aulas[0]?.id || "";
 
-  const matQ = useQuery(matriculasListOptions(effectiveTurma || null));
+  const matQ = useQuery(matriculasListOptions(effectiveTurma || null, restrictToUserId));
   const matriculas = useMemo(() =>
     (matQ.data?.rows ?? []).filter((m) => m.status !== "evadida" && m.status !== "desistente"),
     [matQ.data],
   );
 
-  const presQ = useQuery(presencasByAulaOptions(effectiveAula || null));
+  const presQ = useQuery(presencasByAulaOptions(effectiveAula || null, restrictToUserId));
 
   const [local, setLocal] = useState<Record<string, Local>>({});
   useEffect(() => {

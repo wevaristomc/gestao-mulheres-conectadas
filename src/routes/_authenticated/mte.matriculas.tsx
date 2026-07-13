@@ -51,12 +51,12 @@ function MatriculasIndex() {
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "administrativo"]);
 
-  const turmasQ = useQuery(turmasMteListOptions());
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const effectiveTurma = turmaId || turmas[0]?.id || "";
 
-  const q = useQuery(matriculasListOptions(effectiveTurma || null));
+  const q = useQuery(matriculasListOptions(effectiveTurma || null, restrictToUserId));
   const rows = useMemo(() => (q.data?.rows ?? []) as Row[], [q.data]);
 
   const counters = useMemo(() => {

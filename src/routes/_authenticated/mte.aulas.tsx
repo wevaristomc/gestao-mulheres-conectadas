@@ -41,12 +41,12 @@ function AulasIndex() {
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "administrativo"]);
 
-  const turmasQ = useQuery(turmasMteListOptions());
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const effectiveTurma = turmaId || turmas[0]?.id || "";
 
-  const q = useQuery(aulasMteListOptions(effectiveTurma || null));
+  const q = useQuery(aulasMteListOptions(effectiveTurma || null, restrictToUserId));
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
 
   const totais = useMemo(() => {
