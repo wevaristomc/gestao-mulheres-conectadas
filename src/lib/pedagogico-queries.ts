@@ -103,7 +103,9 @@ async function detectarTabelaFrequencia(): Promise<"frequencias" | "presencas" |
   if (frequenciaTableCache === "frequencias") return "frequencias";
   if (frequenciaTableCache === "presencas") return "presencas";
   if (frequenciaTableCache === "none") return null;
-  for (const t of ["frequencias", "presencas"] as const) {
+  // Prefer `presencas` (real table). `frequencias` may exist as a read-only
+  // compatibility view over `presencas` and cannot receive upserts.
+  for (const t of ["presencas", "frequencias"] as const) {
     const { error } = await supabase.from(t).select("id", { head: true, count: "exact" }).limit(1);
     if (!error) {
       frequenciaTableCache = t;
