@@ -1,5 +1,6 @@
 import { APP_ROLES, type AppRole } from "@/lib/role-access";
 import {
+  DEFAULT_PERMISSION_MATRIX,
   DEFAULT_PERMISSION_ROWS,
   PERMISSION_MODULES,
   normalizePermissionRows,
@@ -52,7 +53,7 @@ export async function ensurePermissionMatrix(admin: any): Promise<PermissionStor
   const availableRoles = Array.from(new Set(rows.map((row) => row.role)));
 
   if (availableRoles.length === 0) {
-    const payload = DEFAULT_PERMISSION_ROWS.map((row) => toStorageRow(row, APP_ROLES as unknown as string[]));
+    const payload = DEFAULT_PERMISSION_MATRIX.map((row) => toStorageRow(row, APP_ROLES as unknown as string[]));
     const { error } = await admin
       .from("permissoes_papel")
       .upsert(payload, { onConflict: "role,modulo" });
@@ -63,7 +64,7 @@ export async function ensurePermissionMatrix(admin: any): Promise<PermissionStor
   const invalidRows = rows.filter((row) => !VALID_MODULES.has(row.modulo));
   if (invalidRows.length === 0) return rows;
 
-  const payload = DEFAULT_PERMISSION_ROWS.map((row) => toStorageRow(row, availableRoles));
+  const payload = DEFAULT_PERMISSION_MATRIX.map((row) => toStorageRow(row, availableRoles));
   const { error: upsertError } = await admin
     .from("permissoes_papel")
     .upsert(payload, { onConflict: "role,modulo" });
@@ -86,10 +87,10 @@ export function normalizeStoredPermissions(rows: PermissionStorageRow[]): Permis
   const availableRoles = Array.from(new Set(rows.map((row) => row.role)));
   if (isCanonicalStorage(availableRoles)) return sortPermissionRows(normalized);
 
-  if (hasInvalidModules(rows)) return sortPermissionRows(DEFAULT_PERMISSION_ROWS);
+  if (hasInvalidModules(rows)) return sortPermissionRows(DEFAULT_PERMISSION_MATRIX);
 
   const byKey = new Map(normalized.map((row) => [`${row.role}::${row.modulo}`, row]));
-  const merged = DEFAULT_PERMISSION_ROWS.map((row) => byKey.get(`${row.role}::${row.modulo}`) ?? row);
+  const merged = DEFAULT_PERMISSION_MATRIX.map((row) => byKey.get(`${row.role}::${row.modulo}`) ?? row);
   return sortPermissionRows(merged);
 }
 

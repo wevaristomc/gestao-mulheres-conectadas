@@ -173,6 +173,20 @@ export const DEFAULT_PERMISSION_ROWS: PermissionRow[] = [
   })),
 ];
 
+export const DEFAULT_PERMISSION_MATRIX: PermissionRow[] = APP_ROLES.flatMap((role) =>
+  PERMISSION_MODULES.map((modulo) => {
+    const configured = DEFAULT_PERMISSION_ROWS.find((row) => row.role === role && row.modulo === modulo);
+    return configured ?? {
+      role,
+      modulo,
+      pode_ver: false,
+      pode_criar: false,
+      pode_editar: false,
+      pode_excluir: false,
+    };
+  }),
+);
+
 export const LEGACY_STORAGE_ROLE_BY_APP_ROLE: Record<AppRole, string> = {
   coordenador_geral: "admin",
   gestor_financeiro: "financeiro",
