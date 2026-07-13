@@ -4,6 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 // Tipagens espelhando a migration MTE (nomes conforme especificação).
 // Uso o cliente Supabase sem geração de tipos; queries retornam o shape aqui.
 
+/**
+ * Busca as turmas vinculadas a um usuário via `instrutor_turmas`.
+ * Usado para restringir listagens ao escopo do professor/auxiliar.
+ */
+async function fetchTurmasPermitidas(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("instrutor_turmas")
+    .select("turma_id")
+    .eq("user_id", userId);
+  if (error) return new Set();
+  return new Set(((data ?? []) as { turma_id: string }[]).map((r) => r.turma_id));
+}
+
 export const NOMES_CURSO = [
   "Técnico em Suporte de TI",
   "Programador(a) Web",
@@ -110,16 +123,23 @@ export function faltantesTurma(t: Partial<TurmaMTE>): string[] {
 
 // ============================== Turmas ==============================
 
-export function turmasMteListOptions() {
+export function turmasMteListOptions(restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "turmas"],
+    queryKey: ["mte", "turmas", restrictToUserId ?? "all"],
     queryFn: async (): Promise<{ rows: TurmaMTE[]; error?: string }> => {
+      let permitidas: Set<string> | null = null;
+      if (restrictToUserId) {
+        permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (permitidas.size === 0) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("turmas")
         .select("*")
         .order("data_inicio", { ascending: false });
       if (error) return { rows: [], error: error.message };
-      return { rows: (data ?? []) as TurmaMTE[] };
+      let rows = (data ?? []) as TurmaMTE[];
+      if (permitidas) rows = rows.filter((r) => permitidas!.has(r.id));
+      return { rows };
     },
   });
 }
@@ -238,15 +258,19 @@ export async function importBeneficiariasBulk(rows: Partial<Beneficiaria>[]) {
 
 // ============================ Matrículas ============================
 
-export function matriculasListOptions(turmaId: string | null) {
+export function matriculasListOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "matriculas", turmaId],
+    queryKey: ["mte", "matriculas", turmaId, restrictToUserId ?? "all"],
     enabled: !!turmaId,
     queryFn: async (): Promise<{
       rows: (Matricula & { beneficiaria?: Beneficiaria | null })[];
       error?: string;
     }> => {
       if (!turmaId) return { rows: [] };
+      if (restrictToUserId) {
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       let res = await supabase
         .from("matriculas")
         .select("*, beneficiaria:beneficiarias(*)")
@@ -324,12 +348,16 @@ export type AulaMTE = {
 
 export const TIPOS_CH = ["geral", "especifico"] as const;
 
-export function aulasMteListOptions(turmaId: string | null) {
+export function aulasMteListOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "aulas", turmaId],
+    queryKey: ["mte", "aulas", turmaId, restrictToUserId ?? "all"],
     enabled: !!turmaId,
     queryFn: async (): Promise<{ rows: AulaMTE[]; error?: string }> => {
       if (!turmaId) return { rows: [] };
+      if (restrictToUserId) {
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("aulas")
         .select("*")
@@ -341,13 +369,18 @@ export function aulasMteListOptions(turmaId: string | null) {
   });
 }
 
-export function cronogramaGeralOptions() {
+export function cronogramaGeralOptions(restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "cronograma"],
+    queryKey: ["mte", "cronograma", restrictToUserId ?? "all"],
     queryFn: async (): Promise<{
       rows: (AulaMTE & { turma?: Partial<TurmaMTE> | null })[];
       error?: string;
     }> => {
+      let permitidas: Set<string> | null = null;
+      if (restrictToUserId) {
+        permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (permitidas.size === 0) return { rows: [] };
+      }
       let res = await supabase
         .from("aulas")
         .select("*, turma:turmas(id, codigo_turma, nome_curso, turno, municipio)")
@@ -357,7 +390,9 @@ export function cronogramaGeralOptions() {
         res = await supabase.from("aulas").select("*").order("data", { ascending: true }).limit(1000);
       }
       if (res.error) return { rows: [], error: res.error.message };
-      return { rows: (res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[] };
+      let rows = (res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[];
+      if (permitidas) rows = rows.filter((r) => permitidas!.has(r.turma_id));
+      return { rows };
     },
   });
 }
@@ -400,12 +435,19 @@ export type PresencaMTE = {
   justificativa: string | null;
 };
 
-export function presencasByAulaOptions(aulaId: string | null) {
+export function presencasByAulaOptions(aulaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "presencas", aulaId],
+    queryKey: ["mte", "presencas", aulaId, restrictToUserId ?? "all"],
     enabled: !!aulaId,
     queryFn: async (): Promise<{ rows: PresencaMTE[]; error?: string }> => {
       if (!aulaId) return { rows: [] };
+      if (restrictToUserId) {
+        const aulaRes = await supabase.from("aulas").select("turma_id").eq("id", aulaId).maybeSingle();
+        const turmaId = (aulaRes.data as { turma_id?: string } | null)?.turma_id;
+        if (!turmaId) return { rows: [] };
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       const { data, error } = await supabase.from("presencas").select("*").eq("aula_id", aulaId);
       if (error) return { rows: [], error: error.message };
       return { rows: (data ?? []) as PresencaMTE[] };
@@ -450,12 +492,16 @@ export type Evidencia = {
   created_at?: string;
 };
 
-export function evidenciasByTurmaOptions(turmaId: string | null) {
+export function evidenciasByTurmaOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "evidencias", turmaId],
+    queryKey: ["mte", "evidencias", turmaId, restrictToUserId ?? "all"],
     enabled: !!turmaId,
     queryFn: async (): Promise<{ rows: Evidencia[]; error?: string }> => {
       if (!turmaId) return { rows: [] };
+      if (restrictToUserId) {
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("evidencias")
         .select("*")

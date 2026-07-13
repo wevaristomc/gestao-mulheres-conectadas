@@ -29,6 +29,7 @@ import {
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/evidencias")({
   component: EvidenciasIndex,
@@ -39,15 +40,16 @@ function EvidenciasIndex() {
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "administrativo", "auxiliar_pedagogico"]);
 
-  const turmasQ = useQuery(turmasMteListOptions());
+  const { restrictToUserId } = useEscopoTurmas();
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const effectiveTurma = turmaId || turmas[0]?.id || "";
 
-  const aulasQ = useQuery(aulasMteListOptions(effectiveTurma || null));
+  const aulasQ = useQuery(aulasMteListOptions(effectiveTurma || null, restrictToUserId));
   const aulas = aulasQ.data?.rows ?? [];
 
-  const q = useQuery(evidenciasByTurmaOptions(effectiveTurma || null));
+  const q = useQuery(evidenciasByTurmaOptions(effectiveTurma || null, restrictToUserId));
   const rowsRaw = useMemo(() => q.data?.rows ?? [], [q.data]);
   const [filtroAula, setFiltroAula] = useState<string>("");
   const rows = useMemo(() => {

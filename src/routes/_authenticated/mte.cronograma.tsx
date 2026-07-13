@@ -23,14 +23,16 @@ import {
   criarTurmasCiclo2Previstas,
   type ResumoCiclo2,
 } from "@/lib/ciclo2-previsto.functions";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/cronograma")({
   component: CronogramaIndex,
 });
 
 function CronogramaIndex() {
-  const turmasQ = useQuery(turmasMteListOptions());
-  const q = useQuery(cronogramaGeralOptions());
+  const { restrictToUserId } = useEscopoTurmas();
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
+  const q = useQuery(cronogramaGeralOptions(restrictToUserId));
   const qc = useQueryClient();
   const criarCiclo2 = useServerFn(criarTurmasCiclo2Previstas);
   const ciclo2Mut = useMutation({

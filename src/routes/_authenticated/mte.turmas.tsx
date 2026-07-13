@@ -20,6 +20,7 @@ import { useHasRole } from "@/hooks/use-active-context";
 import {
   turmasMteListOptions, deleteTurmaMTE, faltantesTurma, type TurmaMTE,
 } from "@/lib/mte-queries";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/turmas")({
   component: TurmasMteIndex,
@@ -29,7 +30,8 @@ function TurmasMteIndex() {
   const qc = useQueryClient();
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "administrativo"]);
-  const q = useQuery(turmasMteListOptions());
+  const { restrictToUserId } = useEscopoTurmas();
+  const q = useQuery(turmasMteListOptions(restrictToUserId));
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<TurmaMTE | null>(null);

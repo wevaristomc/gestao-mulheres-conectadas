@@ -55,6 +55,7 @@ import {
   type MatriculaLite,
   type ResultadoLeitura,
 } from "@/lib/leitor-lista";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/importar-lista")({
   component: ImportarListaPage,
@@ -62,7 +63,8 @@ export const Route = createFileRoute("/_authenticated/mte/importar-lista")({
 
 function ImportarListaPage() {
   const qc = useQueryClient();
-  const turmasQ = useQuery(turmasMteListOptions());
+  const { restrictToUserId } = useEscopoTurmas();
+  const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);

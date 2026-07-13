@@ -1,11 +1,14 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireModuleAccess } from "@/lib/auth-guard";
 import { turmaByIdOptions, pickFirst, formatarData, nomeTurma } from "@/lib/pedagogico-queries";
+import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id")({
   head: () => ({ meta: [{ title: "Turma · Pedagógico" }] }),
@@ -24,6 +27,17 @@ function TurmaLayout() {
   const { id } = Route.useParams();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const q = useQuery(turmaByIdOptions(id));
+  const navigate = useNavigate();
+  const { isRestrito, turmasPermitidas, isLoading: escopoLoading } = useEscopoTurmas();
+
+  useEffect(() => {
+    if (!isRestrito || escopoLoading || !turmasPermitidas) return;
+    if (!turmasPermitidas.includes(id)) {
+      toast.error("Turma fora do seu escopo");
+      navigate({ to: "/pedagogico" });
+    }
+  }, [isRestrito, escopoLoading, turmasPermitidas, id, navigate]);
+
   const row = q.data?.row;
   const nome = nomeTurma(row);
   const turno = pickFirst(row, ["turno", "periodo"]);
