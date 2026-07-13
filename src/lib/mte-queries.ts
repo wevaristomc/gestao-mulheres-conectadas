@@ -4,6 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 // Tipagens espelhando a migration MTE (nomes conforme especificação).
 // Uso o cliente Supabase sem geração de tipos; queries retornam o shape aqui.
 
+/**
+ * Busca as turmas vinculadas a um usuário via `instrutor_turmas`.
+ * Usado para restringir listagens ao escopo do professor/auxiliar.
+ */
+async function fetchTurmasPermitidas(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("instrutor_turmas")
+    .select("turma_id")
+    .eq("user_id", userId);
+  if (error) return new Set();
+  return new Set(((data ?? []) as { turma_id: string }[]).map((r) => r.turma_id));
+}
+
 export const NOMES_CURSO = [
   "Técnico em Suporte de TI",
   "Programador(a) Web",
