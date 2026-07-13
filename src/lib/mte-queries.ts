@@ -492,12 +492,16 @@ export type Evidencia = {
   created_at?: string;
 };
 
-export function evidenciasByTurmaOptions(turmaId: string | null) {
+export function evidenciasByTurmaOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "evidencias", turmaId],
+    queryKey: ["mte", "evidencias", turmaId, restrictToUserId ?? "all"],
     enabled: !!turmaId,
     queryFn: async (): Promise<{ rows: Evidencia[]; error?: string }> => {
       if (!turmaId) return { rows: [] };
+      if (restrictToUserId) {
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("evidencias")
         .select("*")
