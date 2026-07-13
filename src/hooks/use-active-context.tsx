@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { setCachedRole } from "@/lib/auth-guard";
 
 type Projeto = { id: string; nome: string };
-type RoleRow = { role: string; projeto_id: string | null };
+type RoleRow = { role: string; projeto_id: string | null; ativo?: boolean | null };
 
 type ActiveContextValue = {
   user: { id: string; email: string } | null;
@@ -46,9 +46,9 @@ const ROLE_PRIORITY: AppRole[] = [
 function pickRole(rows: RoleRow[], projetoId: string | null): AppRole | null {
   if (!rows.length) return null;
   const candidates = rows.filter(
-    (r) => r.projeto_id === projetoId || r.projeto_id === null,
+    (r) => (r.ativo ?? true) && (r.projeto_id === projetoId || r.projeto_id === null),
   );
-  const pool = (candidates.length ? candidates : rows)
+  const pool = candidates
     .map((r) => r.role)
     .filter(isAppRole);
   if (!pool.length) return null;
@@ -104,7 +104,7 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
     (async () => {
       const [projRes, rolesRes] = await Promise.all([
         supabase.from("projetos").select("id, nome").order("nome"),
-        supabase.from("user_roles").select("role, projeto_id").eq("user_id", user.id),
+        supabase.from("user_roles").select("role, projeto_id, ativo").eq("user_id", user.id),
       ]);
       if (cancelled) return;
       if (rolesRes.error) {

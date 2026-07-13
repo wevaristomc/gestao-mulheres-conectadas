@@ -232,6 +232,39 @@ export type Database = {
           },
         ]
       }
+      permissoes_papel: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          modulo: string
+          pode_criar: boolean
+          pode_editar: boolean
+          pode_excluir: boolean
+          pode_ver: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          modulo: string
+          pode_criar?: boolean
+          pode_editar?: boolean
+          pode_excluir?: boolean
+          pode_ver?: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          modulo?: string
+          pode_criar?: boolean
+          pode_editar?: boolean
+          pode_excluir?: boolean
+          pode_ver?: boolean
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: []
+      }
       projetos: {
         Row: {
           atualizado_em: string
@@ -323,6 +356,7 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          ativo: boolean
           criado_em: string
           id: string
           projeto_id: string | null
@@ -330,6 +364,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ativo?: boolean
           criado_em?: string
           id?: string
           projeto_id?: string | null
@@ -337,6 +372,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ativo?: boolean
           criado_em?: string
           id?: string
           projeto_id?: string | null
@@ -358,6 +394,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_role_any: {
         Args: { _roles: string[]; _user_id: string }
         Returns: boolean

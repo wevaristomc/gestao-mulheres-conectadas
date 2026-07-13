@@ -2,16 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { APP_ROLES } from "@/lib/role-access";
 
 const ProjetoIdSchema = z.string().uuid();
-const RoleV2Enum = z.enum([
-  "admin",
-  "coordenador",
-  "instrutor",
-  "financeiro",
-  "parceiro_mte",
-  "captacao",
-]);
+const RoleEnum = z.enum(APP_ROLES);
 
 type InstrutorTurmaDTO = {
   id: string;
@@ -35,6 +29,7 @@ async function assertCoordenadorGeral(
     .eq("user_id", userId)
     .eq("projeto_id", projetoId)
     .eq("role", "coordenador_geral")
+      .eq("ativo", true)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Apenas coordenação geral pode executar esta ação.");
@@ -59,7 +54,7 @@ export const atualizarPermissao = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({
       projetoId: ProjetoIdSchema,
-      role: RoleV2Enum,
+      role: RoleEnum,
       modulo: z.string().min(1),
       pode_ver: z.boolean(),
       pode_criar: z.boolean(),

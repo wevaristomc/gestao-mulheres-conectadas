@@ -14,28 +14,20 @@ import {
 
 import { useActiveContext } from "@/hooks/use-active-context";
 import { listarPermissoesMatriz, atualizarPermissao } from "@/lib/rbac.functions";
+import { APP_ROLES, ROLE_LABELS, type AppRole } from "@/lib/role-access";
 
 export const Route = createFileRoute("/_authenticated/configuracoes/permissoes")({
   component: PermissoesPage,
 });
 
 type Row = {
-  role: string;
+  role: AppRole;
   modulo: string;
   pode_ver: boolean;
   pode_criar: boolean;
   pode_editar: boolean;
   pode_excluir: boolean;
 };
-
-const ROLES_V2: Array<{ v: string; label: string }> = [
-  { v: "admin", label: "Admin" },
-  { v: "coordenador", label: "Coordenador" },
-  { v: "instrutor", label: "Instrutor" },
-  { v: "financeiro", label: "Financeiro" },
-  { v: "parceiro_mte", label: "Parceiro MTE" },
-  { v: "captacao", label: "Captação" },
-];
 
 const ACOES: Array<{ k: "pode_ver" | "pode_criar" | "pode_editar" | "pode_excluir"; label: string }> = [
   { k: "pode_ver", label: "Ver" },
@@ -122,9 +114,9 @@ function PermissoesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[140px]">Módulo</TableHead>
-                  {ROLES_V2.map((r) => (
-                    <TableHead key={r.v} className="text-center">
-                      <div className="font-semibold">{r.label}</div>
+                  {APP_ROLES.map((r) => (
+                    <TableHead key={r} className="text-center">
+                      <div className="font-semibold">{ROLE_LABELS[r]}</div>
                       <div className="mt-1 flex justify-center gap-1 text-[9px] text-muted-foreground">
                         {ACOES.map((a) => (<span key={a.k} className="w-6">{a.label[0]}</span>))}
                       </div>
@@ -136,11 +128,11 @@ function PermissoesPage() {
                 {modulos.map((modulo) => (
                   <TableRow key={modulo}>
                     <TableCell className="font-mono text-xs">{modulo}</TableCell>
-                    {ROLES_V2.map((r) => {
-                      const row = byKey.get(`${r.v}::${modulo}`);
-                      if (!row) return <TableCell key={r.v} className="text-center text-[10px] text-muted-foreground">—</TableCell>;
+                    {APP_ROLES.map((r) => {
+                      const row = byKey.get(`${r}::${modulo}`);
+                      if (!row) return <TableCell key={r} className="text-center text-[10px] text-muted-foreground">—</TableCell>;
                       return (
-                        <TableCell key={r.v}>
+                        <TableCell key={r}>
                           <div className="flex justify-center gap-1">
                             {ACOES.map((a) => (
                               <Checkbox
@@ -150,7 +142,7 @@ function PermissoesPage() {
                                 onCheckedChange={(v) =>
                                   mut.mutate({ ...row, [a.k]: v === true })
                                 }
-                                aria-label={`${r.label}/${modulo}/${a.label}`}
+                                aria-label={`${ROLE_LABELS[r]}/${modulo}/${a.label}`}
                               />
                             ))}
                           </div>

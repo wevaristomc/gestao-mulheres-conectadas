@@ -7,8 +7,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppTopbar } from "@/components/app-topbar";
 import { OrbeNeural } from "@/components/orbe/orbe-neural";
 import { ActiveContextProvider, useActiveContext } from "@/hooks/use-active-context";
+import { usePermissoes } from "@/hooks/use-permissoes";
 import { requireSession } from "@/lib/auth-guard";
-import { canAccess, landingPathForRole, type ModuleKey } from "@/lib/role-access";
+import { landingPathForRole, type ModuleKey } from "@/lib/role-access";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -87,16 +88,17 @@ function moduleForPath(pathname: string): ModuleKey | null {
  */
 function RoleAccessGate() {
   const { role, isLoadingRoles, user } = useActiveContext();
+  const { can, isLoading: isLoadingPermissoes } = usePermissoes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   useEffect(() => {
-    if (!user || isLoadingRoles || !role) return;
+    if (!user || isLoadingRoles || isLoadingPermissoes || !role) return;
     const mod = moduleForPath(pathname);
     if (!mod) return; // rota não mapeada (ex.: /trocar-senha)
-    if (!canAccess(mod, role)) {
+    if (!can(mod)) {
       navigate({ to: landingPathForRole(role), replace: true });
     }
-  }, [role, isLoadingRoles, user, pathname, navigate]);
+  }, [role, isLoadingRoles, isLoadingPermissoes, user, pathname, navigate, can]);
   return null;
 }
 

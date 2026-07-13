@@ -62,7 +62,8 @@ export async function papelDoUsuario(
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("ativo", true);
   if (error) throw new Error(`Falha ao ler papel: ${error.message}`);
   const roles = ((data ?? []) as { role: string }[]).map((r) => r.role);
   const PRIORIDADE: AppRole[] = [
