@@ -18,7 +18,6 @@ import {
 import { useHasRole } from "@/hooks/use-active-context";
 import { formatCpf } from "@/lib/cpf";
 import {
-import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
   aulasMteListOptions, matriculasListOptions, presencasByAulaOptions,
   turmasMteListOptions, upsertPresencaMTE,
 } from "@/lib/mte-queries";

@@ -30,7 +30,6 @@ import {
   TIPOS_CH, type AulaMTE,
 } from "@/lib/mte-queries";
 import { DialogGerarListas } from "@/components/pedagogico/dialog-gerar-listas";
-import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/aulas")({
   component: AulasIndex,

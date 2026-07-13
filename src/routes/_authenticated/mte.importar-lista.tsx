@@ -37,7 +37,6 @@ import { ImportarConsolidadoCard } from "@/components/mte/importar-consolidado-c
 import { uploadEvidenciasAula } from "@/lib/pedagogico-queries";
 import { ImageDown, Camera } from "lucide-react";
 import {
-import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
   arquivoParaImagensBase64,
   carregarMatriculasDaTurma,
   confirmarImportacao,

@@ -20,7 +20,6 @@ import {
 import { cronogramaGeralOptions, turmasMteListOptions } from "@/lib/mte-queries";
 import { downloadCSV } from "@/lib/csv";
 import {
-import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
   criarTurmasCiclo2Previstas,
   type ResumoCiclo2,
 } from "@/lib/ciclo2-previsto.functions";

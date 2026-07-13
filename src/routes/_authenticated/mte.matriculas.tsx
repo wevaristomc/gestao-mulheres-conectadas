@@ -22,7 +22,6 @@ import { MatriculaFormDialog } from "@/components/mte/matricula-form-dialog";
 import { useHasRole } from "@/hooks/use-active-context";
 import { formatCpf } from "@/lib/cpf";
 import {
-import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
   turmasMteListOptions, matriculasListOptions, deleteMatricula,
   type Matricula, type Beneficiaria,
 } from "@/lib/mte-queries";
