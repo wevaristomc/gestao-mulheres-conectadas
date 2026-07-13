@@ -95,12 +95,34 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
     await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    const { data: vinc, error } = await admin
+    // Tenta primeiro filtrar direto por projeto_id (schema atualizado).
+    const direto = await admin
       .from("instrutor_turmas")
       .select("*")
       .eq("projeto_id", data.projetoId);
-    if (error) throw new Error(error.message);
-    return vinc ?? [];
+    if (!direto.error) return direto.data ?? [];
+    const msg = direto.error.message || "";
+    const semColuna = /column .*projeto_id.* does not exist/i.test(msg);
+    if (!semColuna) throw new Error(msg);
+    // Fallback: schema antigo sem projeto_id em instrutor_turmas.
+    // Deriva via turmas do projeto.
+    const turmasRes = await admin
+      .from("turmas")
+      .select("id")
+      .eq("projeto_id", data.projetoId);
+    if (turmasRes.error) throw new Error(turmasRes.error.message);
+    const ids = (turmasRes.data ?? []).map((t: { id: string }) => t.id);
+    if (ids.length === 0) return [];
+    const vinc = await admin
+      .from("instrutor_turmas")
+      .select("*")
+      .in("turma_id", ids);
+    if (vinc.error) throw new Error(vinc.error.message);
+    // Preenche projeto_id in-memory para o cliente.
+    return (vinc.data ?? []).map((r: Record<string, unknown>) => ({
+      ...r,
+      projeto_id: data.projetoId,
+    }));
   });
 
 export const vincularInstrutorTurma = createServerFn({ method: "POST" })
@@ -116,7 +138,8 @@ export const vincularInstrutorTurma = createServerFn({ method: "POST" })
     await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    const { error } = await admin.from("instrutor_turmas").upsert(
+    // Primeiro tentativa: schema com projeto_id.
+    const comProj = await admin.from("instrutor_turmas").upsert(
       {
         user_id: data.userId,
         turma_id: data.turmaId,
@@ -124,7 +147,17 @@ export const vincularInstrutorTurma = createServerFn({ method: "POST" })
       },
       { onConflict: "user_id,turma_id" },
     );
-    if (error) throw new Error(error.message);
+    if (!comProj.error) return { ok: true };
+    const msg = comProj.error.message || "";
+    if (!/column .*projeto_id.* does not exist/i.test(msg)) {
+      throw new Error(msg);
+    }
+    // Fallback: schema antigo — grava só user_id/turma_id.
+    const semProj = await admin.from("instrutor_turmas").upsert(
+      { user_id: data.userId, turma_id: data.turmaId },
+      { onConflict: "user_id,turma_id" },
+    );
+    if (semProj.error) throw new Error(semProj.error.message);
     return { ok: true };
   });
 
