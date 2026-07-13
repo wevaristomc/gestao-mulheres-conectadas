@@ -86,6 +86,48 @@ export type Database = {
         }
         Relationships: []
       }
+      instrutor_turmas: {
+        Row: {
+          criado_em: string
+          id: string
+          projeto_id: string | null
+          turma_id: string
+          user_id: string
+          valor_hora: number
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          projeto_id?: string | null
+          turma_id: string
+          user_id: string
+          valor_hora?: number
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          projeto_id?: string | null
+          turma_id?: string
+          user_id?: string
+          valor_hora?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instrutor_turmas_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instrutor_turmas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificacoes: {
         Row: {
           chave_dedup: string | null
@@ -190,15 +232,149 @@ export type Database = {
           },
         ]
       }
+      projetos: {
+        Row: {
+          atualizado_em: string
+          cnpj: string | null
+          criado_em: string
+          custo_aluno_hora: number | null
+          endereco: string | null
+          executora_nome: string | null
+          id: string
+          nome: string
+          valor_global: number | null
+          vigencia_fim: string | null
+          vigencia_inicio: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          cnpj?: string | null
+          criado_em?: string
+          custo_aluno_hora?: number | null
+          endereco?: string | null
+          executora_nome?: string | null
+          id?: string
+          nome: string
+          valor_global?: number | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          cnpj?: string | null
+          criado_em?: string
+          custo_aluno_hora?: number | null
+          endereco?: string | null
+          executora_nome?: string | null
+          id?: string
+          nome?: string
+          valor_global?: number | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Relationships: []
+      }
+      turmas: {
+        Row: {
+          atualizado_em: string
+          codigo: string | null
+          codigo_turma: string | null
+          criado_em: string
+          horario_realizacao: string | null
+          id: string
+          municipio: string | null
+          nome: string | null
+          projeto_id: string
+          turno: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          codigo?: string | null
+          codigo_turma?: string | null
+          criado_em?: string
+          horario_realizacao?: string | null
+          id?: string
+          municipio?: string | null
+          nome?: string | null
+          projeto_id: string
+          turno?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          codigo?: string | null
+          codigo_turma?: string | null
+          criado_em?: string
+          horario_realizacao?: string | null
+          id?: string
+          municipio?: string | null
+          nome?: string | null
+          projeto_id?: string
+          turno?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turmas_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          criado_em: string
+          id: string
+          projeto_id: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          projeto_id?: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          projeto_id?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role_any: {
+        Args: { _roles: string[]; _user_id: string }
+        Returns: boolean
+      }
+      is_project_admin: {
+        Args: { _projeto_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "coordenador_geral"
+        | "gestor_financeiro"
+        | "administrativo"
+        | "coordenador_pedagogico"
+        | "professor"
+        | "auxiliar_pedagogico"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -325,6 +501,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "coordenador_geral",
+        "gestor_financeiro",
+        "administrativo",
+        "coordenador_pedagogico",
+        "professor",
+        "auxiliar_pedagogico",
+      ],
+    },
   },
 } as const
