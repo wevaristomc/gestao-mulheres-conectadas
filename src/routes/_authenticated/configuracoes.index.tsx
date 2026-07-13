@@ -143,17 +143,24 @@ function ConfiguracoesGeral() {
       // nunca envia null para nome — coluna costuma ser NOT NULL
       if (!payload.nome) payload.nome = form.nome;
 
+      const removidos: string[] = [];
       let attempts = 0;
-      while (attempts < 6) {
+      while (attempts < 10) {
+        if (Object.keys(payload).length === 0) {
+          throw new Error(
+            "Nenhuma das colunas existe na tabela `projetos`. Aplique a migração pendente (docs/migrations/fix-schema-executora-e-instrutor-turmas.sql).",
+          );
+        }
         const res = await supabase
           .from("projetos")
           .update(payload)
           .eq("id", projetoId);
-        if (!res.error) return;
+        if (!res.error) return { removidos };
         const msg = res.error.message;
         const m = /column "?([a-zA-Z0-9_]+)"? .* does not exist/i.exec(msg);
         if (m && m[1] && m[1] in payload) {
           delete payload[m[1]];
+          removidos.push(m[1]);
           attempts++;
           continue;
         }
@@ -161,8 +168,15 @@ function ConfiguracoesGeral() {
       }
       throw new Error("Não foi possível salvar as configurações do projeto.");
     },
-    onSuccess: () => {
-      toast.success("Configurações do projeto atualizadas.");
+    onSuccess: (result) => {
+      if (result?.removidos && result.removidos.length > 0) {
+        toast.warning(
+          `Salvo parcialmente. Colunas ausentes na tabela projetos: ${result.removidos.join(", ")}. Rode docs/migrations/fix-schema-executora-e-instrutor-turmas.sql.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success("Configurações do projeto atualizadas.");
+      }
       qc.invalidateQueries({ queryKey: ["configuracoes"] });
       // atualiza também o seletor global de projetos
       qc.invalidateQueries({ queryKey: ["projetos"] });
