@@ -36,20 +36,16 @@ export type ModuleKey =
   | "ajuda"
   | "configuracoes";
 
-const ALL: AppRole[] = [...APP_ROLES];
-
 export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
   "visao-geral": [
     "coordenador_geral",
     "administrativo",
     "coordenador_pedagogico",
-    "gestor_financeiro",
   ],
   pendencias: [
     "coordenador_geral",
     "administrativo",
     "coordenador_pedagogico",
-    "gestor_financeiro",
   ],
   pedagogico: [
     "coordenador_geral",
@@ -62,10 +58,12 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "coordenador_geral",
     "administrativo",
     "coordenador_pedagogico",
+    "professor",
+    "auxiliar_pedagogico",
   ],
-  administrativo: ["coordenador_geral", "administrativo"],
+  administrativo: ["coordenador_geral", "administrativo", "gestor_financeiro"],
   financeiro: ["coordenador_geral", "administrativo", "gestor_financeiro"],
-  captacao: ["coordenador_geral", "administrativo", "gestor_financeiro"],
+  captacao: ["coordenador_geral", "administrativo", "coordenador_pedagogico"],
   relatorios: [
     "coordenador_geral",
     "administrativo",
@@ -77,9 +75,6 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "coordenador_geral",
     "administrativo",
     "coordenador_pedagogico",
-    "gestor_financeiro",
-    "professor",
-    "auxiliar_pedagogico",
   ],
   drive: [
     "coordenador_geral",
@@ -97,8 +92,12 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "administrativo",
     "gestor_financeiro",
   ],
-  etapas: ALL,
-  ajuda: ALL,
+  etapas: [
+    "coordenador_geral",
+    "administrativo",
+    "coordenador_pedagogico",
+  ],
+  ajuda: [...APP_ROLES],
   configuracoes: ["coordenador_geral", "administrativo"],
 };
 

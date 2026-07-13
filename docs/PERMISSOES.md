@@ -12,22 +12,30 @@ turmas vinculadas via `instrutor_turmas`.
 
 | Módulo               | coord. geral | administrativo | coord. pedagógico | gestor financeiro | professor / auxiliar |
 |----------------------|:---:|:---:|:---:|:---:|:---:|
-| Visão Geral (`/`)    | ✓ | ✓ | ✓ | ✓ | — (redirect `/pedagogico`) |
-| Etapas do Projeto    | ✓ | ✓ | ✓ | ✓ | ✓ (leitura) |
-| Pendências           | ✓ | ✓ | ✓ | ✓ | — |
+| Visão Geral (`/`)    | ✓ | ✓ | ✓ | — (redirect `/financeiro`) | — (redirect `/pedagogico`) |
+| Etapas do Projeto    | ✓ | ✓ | ✓ | — | — |
+| Pendências           | ✓ | ✓ | ✓ | — | — |
 | Pedagógico           | ✓ | ✓ | ✓ | — | ✓ *(escopo: só suas turmas)* |
-| Fiscalização MTE     | ✓ | ✓ | ✓ | — | — |
-| Administrativo       | ✓ | ✓ | — | — | — |
+| Fiscalização MTE     | ✓ | ✓ | ✓ | — | ✓ *(escopo: só suas turmas via RLS)* |
+| Administrativo       | ✓ | ✓ | — | ✓ | — |
 | Financeiro           | ✓ | ✓ | — | ✓ | — |
-| Captação             | ✓ | ✓ | — | ✓ | — |
+| Captação             | ✓ | ✓ | ✓ | — | — |
 | Relatórios           | ✓ | ✓ | ✓ | ✓ | — |
 | WhatsApp             | ✓ | ✓ | ✓ | — | — |
 | Relação de Horas     | ✓ | ✓ | — | — | ✓ *(própria)* |
 | Financ. Relações-Horas | ✓ | ✓ | — | ✓ | — |
-| Base de Conhecimento | ✓ | ✓ | ✓ | ✓ | ✓ *(leitura + busca)* |
+| Base de Conhecimento | ✓ | ✓ | ✓ | — | — |
 | Drive do Projeto     | ✓ | ✓ | ✓ | — | — |
 | Configurações        | ✓ | ✓ | — | — | — |
 | Ajuda                | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+**Nota de enforcement.** A guarda `requireModuleAccess` (em `beforeLoad`) usa o
+papel em cache no `localStorage`. Em primeiro acesso sem cache, o layout
+`_authenticated/route.tsx` roda uma checagem client-side (`RoleAccessGate`)
+que redireciona para `landingPathForRole(role)` assim que o papel é hidratado
+pelo `ActiveContextProvider`. Isso fecha o fail-open que deixava um professor
+abrir `/pendencias`, `/administrativo`, `/base-conhecimento` etc. via URL
+direta antes do papel ser carregado.
 
 A matriz de UI vive em `src/lib/role-access.ts` (`MODULE_ACCESS`) e é
 aplicada pela guarda `requireModuleAccess` (arquivo `src/lib/auth-guard.ts`).
