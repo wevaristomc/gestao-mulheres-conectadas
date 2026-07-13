@@ -29,6 +29,21 @@ type Usuario = { id: string; email: string; nome: string | null; role: string; a
 type Turma = { id: string; nome: string | null; codigo: string | null };
 type Vinculo = { id: string; user_id: string; turma_id: string; projeto_id: string };
 
+function formatTurmaLabel(t: Turma) {
+  if (t.nome && t.nome.trim()) {
+    return (
+      <span className="inline-flex items-baseline gap-1.5">
+        <span className="truncate">{t.nome}</span>
+        {t.codigo ? (
+          <span className="text-xs text-muted-foreground">· {t.codigo}</span>
+        ) : null}
+      </span>
+    );
+  }
+  if (t.codigo) return <span>{t.codigo}</span>;
+  return <span className="text-muted-foreground">{t.id.slice(0, 8)}</span>;
+}
+
 function InstrutorTurmasPage() {
   const { projetoId, role } = useActiveContext();
   const qc = useQueryClient();
@@ -138,7 +153,7 @@ function InstrutorTurmasPage() {
               <SelectContent>
                 {(turmasQ.data ?? []).map((t) => (
                   <SelectItem key={t.id} value={t.id}>
-                    {t.codigo ? `[${t.codigo}] ` : ""}{t.nome ?? t.id}
+                    {formatTurmaLabel(t)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -189,7 +204,7 @@ function InstrutorTurmasPage() {
                     return (
                       <TableRow key={v.id}>
                         <TableCell>{u?.nome ?? u?.email ?? v.user_id.slice(0, 8)}</TableCell>
-                        <TableCell>{t ? `${t.codigo ? `[${t.codigo}] ` : ""}${t.nome ?? t.id}` : v.turma_id.slice(0, 8)}</TableCell>
+                        <TableCell>{t ? formatTurmaLabel(t) : v.turma_id.slice(0, 8)}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             size="sm" variant="ghost"
