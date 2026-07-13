@@ -258,15 +258,19 @@ export async function importBeneficiariasBulk(rows: Partial<Beneficiaria>[]) {
 
 // ============================ Matrículas ============================
 
-export function matriculasListOptions(turmaId: string | null) {
+export function matriculasListOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "matriculas", turmaId],
+    queryKey: ["mte", "matriculas", turmaId, restrictToUserId ?? "all"],
     enabled: !!turmaId,
     queryFn: async (): Promise<{
       rows: (Matricula & { beneficiaria?: Beneficiaria | null })[];
       error?: string;
     }> => {
       if (!turmaId) return { rows: [] };
+      if (restrictToUserId) {
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       let res = await supabase
         .from("matriculas")
         .select("*, beneficiaria:beneficiarias(*)")
