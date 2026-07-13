@@ -4,10 +4,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { APP_ROLES } from "@/lib/role-access";
 import {
-  normalizePermissionRows,
-  storageRoleForAppRole,
-  type PermissionRow,
-} from "@/lib/permissions-model";
+  ensurePermissionMatrix,
+  loadPermissionRows,
+  normalizeStoredPermissions,
+  permissionsForRole,
+} from "@/lib/permissions-db";
+import { storageRoleForAppRole } from "@/lib/permissions-model";
 
 const ProjetoIdSchema = z.string().uuid();
 const RoleEnum = z.enum(APP_ROLES);
@@ -47,12 +49,8 @@ export const listarPermissoesMatriz = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    const { data, error } = await admin
-      .from("permissoes_papel")
-      .select("role, modulo, pode_ver, pode_criar, pode_editar, pode_excluir")
-      .order("modulo");
-    if (error) throw new Error(error.message);
-    return normalizePermissionRows((data ?? []) as Array<Record<string, unknown>>);
+    const rows = await ensurePermissionMatrix(admin);
+    return normalizeStoredPermissions(rows);
   });
 
 export const listarPermissoesPapel = createServerFn({ method: "POST" })
@@ -61,23 +59,8 @@ export const listarPermissoesPapel = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    const allRolesRes = await admin
-      .from("permissoes_papel")
-      .select("role");
-    if (allRolesRes.error) throw new Error(allRolesRes.error.message);
-
-    const availableRoles = Array.from(
-      new Set(((allRolesRes.data ?? []) as Array<{ role: string }>).map((r) => r.role)),
-    );
-    const storageRole = storageRoleForAppRole(data.role, availableRoles);
-    const { data: rows, error } = await admin
-      .from("permissoes_papel")
-      .select("role, modulo, pode_ver, pode_criar, pode_editar, pode_excluir")
-      .eq("role", storageRole)
-      .order("modulo");
-    if (error) throw new Error(error.message);
-    return normalizePermissionRows((rows ?? []) as Array<Record<string, unknown>>)
-      .filter((row): row is PermissionRow => row.role === data.role);
+    const rows = await ensurePermissionMatrix(admin);
+    return permissionsForRole(rows, data.role);
   });
 
 export const atualizarPermissao = createServerFn({ method: "POST" })
@@ -97,12 +80,9 @@ export const atualizarPermissao = createServerFn({ method: "POST" })
     await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    const rolesRes = await admin
-      .from("permissoes_papel")
-      .select("role");
-    if (rolesRes.error) throw new Error(rolesRes.error.message);
+    const rows = await loadPermissionRows(admin);
     const availableRoles = Array.from(
-      new Set(((rolesRes.data ?? []) as Array<{ role: string }>).map((r) => r.role)),
+      new Set(rows.map((r) => r.role)),
     );
     const storageRole = storageRoleForAppRole(data.role, availableRoles);
     const { error } = await admin
