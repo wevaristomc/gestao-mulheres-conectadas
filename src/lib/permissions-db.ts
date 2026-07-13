@@ -34,6 +34,10 @@ function isCanonicalStorage(availableRoles: string[]) {
   return APP_ROLES.some((role) => availableRoles.includes(role));
 }
 
+function hasInvalidModules(rows: PermissionStorageRow[]) {
+  return rows.some((row) => !VALID_MODULES.has(row.modulo));
+}
+
 export async function loadPermissionRows(admin: any): Promise<PermissionStorageRow[]> {
   const { data, error } = await admin
     .from("permissoes_papel")
@@ -81,6 +85,8 @@ export function normalizeStoredPermissions(rows: PermissionStorageRow[]): Permis
   const normalized = normalizePermissionRows(rows as unknown as Array<Record<string, unknown>>);
   const availableRoles = Array.from(new Set(rows.map((row) => row.role)));
   if (isCanonicalStorage(availableRoles)) return sortPermissionRows(normalized);
+
+  if (hasInvalidModules(rows)) return sortPermissionRows(DEFAULT_PERMISSION_ROWS);
 
   const byKey = new Map(normalized.map((row) => [`${row.role}::${row.modulo}`, row]));
   const merged = DEFAULT_PERMISSION_ROWS.map((row) => byKey.get(`${row.role}::${row.modulo}`) ?? row);

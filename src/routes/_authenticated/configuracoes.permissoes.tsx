@@ -39,9 +39,9 @@ function PermissoesPage() {
   const isCoord = role === "coordenador_geral";
 
   const q = useQuery({
-    queryKey: ["permissoes_matriz"],
-    queryFn: () => listarFn() as Promise<Row[]>,
-    enabled: isCoord,
+    queryKey: ["permissoes_matriz", projetoId],
+    queryFn: () => listarFn({ data: { projetoId: projetoId! } }) as Promise<Row[]>,
+    enabled: isCoord && !!projetoId,
   });
 
   const mut = useMutation({

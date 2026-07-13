@@ -50,7 +50,9 @@ async function assertCoordenadorGeral(
 
 export const listarPermissoesMatriz = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input) => z.object({ projetoId: ProjetoIdSchema }).parse(input))
+  .handler(async ({ data, context }) => {
+    await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
     const rows = await ensurePermissionMatrix(admin);
@@ -63,7 +65,7 @@ export const listarPermissoesPapel = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    const rows = await ensurePermissionMatrix(admin);
+    const rows = await loadPermissionRows(admin);
     return permissionsForRole(rows, data.role);
   });
 
