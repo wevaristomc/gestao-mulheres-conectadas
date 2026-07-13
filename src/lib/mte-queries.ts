@@ -123,16 +123,23 @@ export function faltantesTurma(t: Partial<TurmaMTE>): string[] {
 
 // ============================== Turmas ==============================
 
-export function turmasMteListOptions() {
+export function turmasMteListOptions(restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "turmas"],
+    queryKey: ["mte", "turmas", restrictToUserId ?? "all"],
     queryFn: async (): Promise<{ rows: TurmaMTE[]; error?: string }> => {
+      let permitidas: Set<string> | null = null;
+      if (restrictToUserId) {
+        permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (permitidas.size === 0) return { rows: [] };
+      }
       const { data, error } = await supabase
         .from("turmas")
         .select("*")
         .order("data_inicio", { ascending: false });
       if (error) return { rows: [], error: error.message };
-      return { rows: (data ?? []) as TurmaMTE[] };
+      let rows = (data ?? []) as TurmaMTE[];
+      if (permitidas) rows = rows.filter((r) => permitidas!.has(r.id));
+      return { rows };
     },
   });
 }
