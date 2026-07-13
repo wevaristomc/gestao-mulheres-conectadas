@@ -49,7 +49,131 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   configuracoes: "Configurações",
 };
 
-const LEGACY_STORAGE_ROLE_BY_APP_ROLE: Record<AppRole, string> = {
+export const DEFAULT_PERMISSION_ROWS: PermissionRow[] = [
+  ...PERMISSION_MODULES.map((modulo) => ({
+    role: "coordenador_geral" as const,
+    modulo,
+    pode_ver: true,
+    pode_criar: true,
+    pode_editar: true,
+    pode_excluir: true,
+  })),
+  ...[
+    "visao-geral",
+    "pendencias",
+    "pedagogico",
+    "mte",
+    "administrativo",
+    "financeiro",
+    "captacao",
+    "whatsapp",
+    "base-conhecimento",
+    "drive",
+    "relacao-horas",
+    "financeiro-relacoes-horas",
+    "etapas",
+    "configuracoes",
+  ].map((modulo) => ({
+    role: "administrativo" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: true,
+    pode_editar: true,
+    pode_excluir: false,
+  })),
+  {
+    role: "administrativo",
+    modulo: "relatorios",
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: false,
+    pode_excluir: false,
+  },
+  {
+    role: "administrativo",
+    modulo: "ajuda",
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: false,
+    pode_excluir: false,
+  },
+  ...[
+    "visao-geral",
+    "pendencias",
+    "pedagogico",
+    "mte",
+    "captacao",
+    "whatsapp",
+    "base-conhecimento",
+    "drive",
+    "etapas",
+  ].map((modulo) => ({
+    role: "coordenador_pedagogico" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: true,
+    pode_editar: true,
+    pode_excluir: false,
+  })),
+  ...["relatorios", "ajuda"].map((modulo) => ({
+    role: "coordenador_pedagogico" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: false,
+    pode_excluir: false,
+  })),
+  ...["financeiro", "financeiro-relacoes-horas"].map((modulo) => ({
+    role: "gestor_financeiro" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: true,
+    pode_editar: true,
+    pode_excluir: false,
+  })),
+  ...["administrativo", "relatorios", "ajuda"].map((modulo) => ({
+    role: "gestor_financeiro" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: false,
+    pode_excluir: false,
+  })),
+  ...["pedagogico", "relacao-horas"].map((modulo) => ({
+    role: "professor" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: true,
+    pode_editar: true,
+    pode_excluir: false,
+  })),
+  ...["mte", "ajuda"].map((modulo) => ({
+    role: "professor" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: false,
+    pode_excluir: false,
+  })),
+  ...["pedagogico", "relacao-horas"].map((modulo) => ({
+    role: "auxiliar_pedagogico" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: true,
+    pode_editar: true,
+    pode_excluir: false,
+  })),
+  ...["mte", "ajuda"].map((modulo) => ({
+    role: "auxiliar_pedagogico" as const,
+    modulo: modulo as ModuleKey,
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: false,
+    pode_excluir: false,
+  })),
+];
+
+export const LEGACY_STORAGE_ROLE_BY_APP_ROLE: Record<AppRole, string> = {
   coordenador_geral: "admin",
   gestor_financeiro: "financeiro",
   administrativo: "captacao",
@@ -58,7 +182,7 @@ const LEGACY_STORAGE_ROLE_BY_APP_ROLE: Record<AppRole, string> = {
   auxiliar_pedagogico: "parceiro_mte",
 };
 
-const APP_ROLE_BY_STORAGE_ROLE: Record<string, AppRole> = {
+export const APP_ROLE_BY_STORAGE_ROLE: Record<string, AppRole> = {
   ...Object.fromEntries(APP_ROLES.map((role) => [role, role])),
   admin: "coordenador_geral",
   financeiro: "gestor_financeiro",
@@ -114,6 +238,14 @@ export function normalizePermissionRows(rows: Array<Record<string, unknown>>): P
       if (roleDiff !== 0) return roleDiff;
       return PERMISSION_MODULES.indexOf(a.modulo) - PERMISSION_MODULES.indexOf(b.modulo);
     });
+}
+
+export function sortPermissionRows(rows: PermissionRow[]): PermissionRow[] {
+  return [...rows].sort((a, b) => {
+    const moduleDiff = PERMISSION_MODULES.indexOf(a.modulo) - PERMISSION_MODULES.indexOf(b.modulo);
+    if (moduleDiff !== 0) return moduleDiff;
+    return APP_ROLES.indexOf(a.role) - APP_ROLES.indexOf(b.role);
+  });
 }
 
 export function emptyPermissionRow(role: AppRole, modulo: ModuleKey): PermissionRow {
