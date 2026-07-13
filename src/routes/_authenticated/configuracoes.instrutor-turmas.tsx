@@ -33,7 +33,16 @@ type Turma = {
   nome?: string | null;
   nome_curso?: string | null;
 };
-type Vinculo = { id: string; user_id: string; turma_id: string; projeto_id: string };
+type Vinculo = {
+  id: string;
+  user_id: string;
+  turma_id: string;
+  projeto_id: string;
+  turma_codigo_turma?: string | null;
+  turma_codigo?: string | null;
+  turma_nome?: string | null;
+  turma_nome_curso?: string | null;
+};
 
 function formatTurmaLabel(t: Turma) {
   const nomenclatura = t.codigo_turma?.trim() || t.codigo?.trim();
@@ -51,6 +60,17 @@ function formatTurmaLabel(t: Turma) {
   }
   if (descricao) return <span>{descricao}</span>;
   return <span className="text-muted-foreground">{t.id.slice(0, 8)}</span>;
+}
+
+function formatVinculoTurmaLabel(v: Vinculo, turma?: Turma) {
+  if (turma) return formatTurmaLabel(turma);
+  return formatTurmaLabel({
+    id: v.turma_id,
+    codigo_turma: v.turma_codigo_turma,
+    codigo: v.turma_codigo,
+    nome: v.turma_nome,
+    nome_curso: v.turma_nome_curso,
+  });
 }
 
 function InstrutorTurmasPage() {
@@ -213,7 +233,7 @@ function InstrutorTurmasPage() {
                     return (
                       <TableRow key={v.id}>
                         <TableCell>{u?.nome ?? u?.email ?? v.user_id.slice(0, 8)}</TableCell>
-                        <TableCell>{t ? formatTurmaLabel(t) : v.turma_id.slice(0, 8)}</TableCell>
+                        <TableCell>{formatVinculoTurmaLabel(v, t)}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             size="sm" variant="ghost"

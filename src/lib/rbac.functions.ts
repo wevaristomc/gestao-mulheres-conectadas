@@ -96,12 +96,50 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
     await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
+
+    const enriquecerComTurma = async (rows: Record<string, unknown>[]) => {
+      const turmaIds = Array.from(
+        new Set(rows.map((r) => String(r.turma_id ?? "")).filter(Boolean)),
+      );
+      if (turmaIds.length === 0) return rows;
+
+      let turmasRes = await admin
+        .from("turmas")
+        .select("id, codigo_turma, codigo, nome, nome_curso")
+        .in("id", turmaIds);
+
+      if (turmasRes.error && /column .*nome_curso.* does not exist/i.test(turmasRes.error.message || "")) {
+        turmasRes = await admin
+          .from("turmas")
+          .select("id, codigo_turma, codigo, nome")
+          .in("id", turmaIds);
+      }
+
+      if (turmasRes.error) return rows;
+
+      const turmasById = new Map(
+        ((turmasRes.data ?? []) as Record<string, unknown>[]).map((t) => [String(t.id), t]),
+      );
+
+      return rows.map((r) => {
+        const turma = turmasById.get(String(r.turma_id ?? ""));
+        if (!turma) return r;
+        return {
+          ...r,
+          turma_codigo_turma: turma.codigo_turma ?? null,
+          turma_codigo: turma.codigo ?? null,
+          turma_nome: turma.nome ?? null,
+          turma_nome_curso: turma.nome_curso ?? null,
+        };
+      });
+    };
+
     // Tenta primeiro filtrar direto por projeto_id (schema atualizado).
     const direto = await admin
       .from("instrutor_turmas")
       .select("*")
       .eq("projeto_id", data.projetoId);
-    if (!direto.error) return direto.data ?? [];
+    if (!direto.error) return enriquecerComTurma((direto.data ?? []) as Record<string, unknown>[]);
     const msg = direto.error.message || "";
     const semColuna = /column .*projeto_id.* does not exist/i.test(msg);
     if (!semColuna) throw new Error(msg);
@@ -120,10 +158,11 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
       .in("turma_id", ids);
     if (vinc.error) throw new Error(vinc.error.message);
     // Preenche projeto_id in-memory para o cliente.
-    return (vinc.data ?? []).map((r: Record<string, unknown>) => ({
+    const rows = (vinc.data ?? []).map((r: Record<string, unknown>) => ({
       ...r,
       projeto_id: data.projetoId,
     }));
+    return enriquecerComTurma(rows);
   });
 
 export const vincularInstrutorTurma = createServerFn({ method: "POST" })
