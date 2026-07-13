@@ -232,6 +232,39 @@ export type Database = {
           },
         ]
       }
+      permissoes_papel: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          modulo: string
+          pode_criar: boolean
+          pode_editar: boolean
+          pode_excluir: boolean
+          pode_ver: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          modulo: string
+          pode_criar?: boolean
+          pode_editar?: boolean
+          pode_excluir?: boolean
+          pode_ver?: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          modulo?: string
+          pode_criar?: boolean
+          pode_editar?: boolean
+          pode_excluir?: boolean
+          pode_ver?: boolean
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: []
+      }
       projetos: {
         Row: {
           atualizado_em: string
