@@ -216,7 +216,9 @@ export type FrequenciaResumo = {
 };
 
 async function detectarTabelaFrequencia(): Promise<"frequencias" | "presencas" | null> {
-  for (const t of ["frequencias", "presencas"] as const) {
+  // Preferir `presencas` (fonte de verdade — é onde a Fiscalização MTE grava).
+  // `frequencias` pode existir como tabela/view legada desatualizada.
+  for (const t of ["presencas", "frequencias"] as const) {
     const r = await supabase.from(t).select("id", { head: true, count: "exact" }).limit(1);
     if (!r.error) return t;
   }

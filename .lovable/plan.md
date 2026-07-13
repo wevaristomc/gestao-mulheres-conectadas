@@ -1,24 +1,25 @@
-## Problema
+## Diagnóstico
 
-Ao salvar a chamada em **Fiscalização MTE → Presenças**, os dados são gravados corretamente na tabela `presencas`, mas a aba **Relatórios → Frequência** (e o painel de frequência do Pedagógico) continuam mostrando os números antigos até a página ser recarregada manualmente. As tabelas já se cruzam no banco — o que falta é a invalidação de cache do React Query entre módulos.
+Em `src/lib/relatorios-queries.ts` (linhas 218–224) o detector de tabela de frequência do relatório ainda tenta `frequencias` **antes** de `presencas`:
 
-Confirmado em `src/routes/_authenticated/mte.presencas.tsx` (linhas 91–95): após `upsertPresencaMTE`, só são invalidadas as chaves `["mte","presencas"]` e `["mte","matriculas"]`. As chaves usadas pelos relatórios (`["relatorios","frequencia", projetoId]`) e pelo pedagógico (`["pedagogico","frequencia", turmaId]`) ficam com dado stale por 30s ou mais.
+```ts
+for (const t of ["frequencias", "presencas"] as const) { ... }
+```
 
-O mesmo desalinhamento existe no sentido inverso: ao salvar em **Pedagógico → Frequência** (`pedagogico.turmas.$id.frequencia.tsx`) só invalida `["pedagogico","frequencia", turmaId]` — a aba MTE Presenças e o relatório de frequência não reagem.
+No banco real (yqvocpnvunaprpmhlswn) existe uma `frequencias` legada (tabela ou view desatualizada) que o app **não** grava — a aba **Fiscalização MTE** escreve em `presencas` via `upsertPresencaMTE`. Como o detector vê `frequencias` primeiro e não dá erro, o relatório lê dali e nunca enxerga o que foi lançado em `presencas`.
+
+O `pedagogico-queries.ts` já foi corrigido antes com a ordem `["presencas", "frequencias"]` justamente por esse motivo; o relatório ficou de fora.
 
 ## Correção
 
-1. **`src/routes/_authenticated/mte.presencas.tsx`** — no `onSuccess` de `save`, adicionar invalidação de:
-   - `["relatorios","frequencia"]`
-   - `["pedagogico","frequencia"]`
-   - `["relatorios"]` genérico (indicadores/metas que consomem frequência)
+Ajuste único em `src/lib/relatorios-queries.ts`:
 
-2. **`src/routes/_authenticated/pedagogico.turmas.$id.frequencia.tsx`** — no `onSuccess` da mutation, adicionar as mesmas invalidações + `["mte","presencas"]` e `["mte","matriculas"]`.
+- Trocar a ordem no `detectarTabelaFrequencia` para `["presencas", "frequencias"]`, alinhando com `pedagogico-queries.ts`.
+- Como o loop já pega a primeira que responder sem erro, `presencas` (fonte de verdade) passa a ser sempre a escolhida quando existir.
 
-3. **`src/lib/leitor-lista.ts`** (`confirmarImportacao`) — este caminho grava presenças em lote via importação de lista escaneada. Não estou alterando a assinatura, mas vou adicionar uma nota nos chamadores (`mte.importar-lista.tsx`) para invalidar as mesmas chaves após sucesso.
-
-4. Padronizar num pequeno helper interno em cada rota (`invalidateFrequenciaCrossCutting(qc)`) para não repetir a lista de chaves.
+Isso faz o relatório BET-MC-02 refletir imediatamente qualquer presença lançada na Fiscalização MTE (a invalidação de cache do turno anterior já está no lugar).
 
 ## Fora de escopo
 
-Não vou alterar RLS, esquema, nem a lógica de leitura dos relatórios — o cruzamento já funciona no banco, o que falta é a sincronização de UI.
+- Não vou mexer no esquema do banco nem nas RLS.
+- Não vou remover a `frequencias` legada — apenas parar de lê-la.
