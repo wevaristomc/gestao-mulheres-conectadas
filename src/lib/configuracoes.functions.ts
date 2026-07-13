@@ -19,7 +19,7 @@ const SalvarProjetoSchema = z.object({
   }),
 });
 
-export type ProjetoConfiguracoesValue = string | number | boolean | null | undefined;
+export type ProjetoConfiguracoesValue = string | number | boolean | null;
 
 export type ProjetoConfiguracoesRow = {
   [key: string]: ProjetoConfiguracoesValue;
