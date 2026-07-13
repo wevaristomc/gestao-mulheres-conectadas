@@ -23,14 +23,13 @@ function AuthenticatedLayout() {
   return (
     <ActiveContextProvider>
       <PasswordChangeGate />
-      <RoleAccessGate />
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="bg-background">
           <AppTopbar />
           <BackendNotice />
           <main className="flex-1 px-3 py-4 md:px-6 md:py-6">
-            <Outlet />
+            <AccessControlledOutlet />
           </main>
           <OrbeNeural />
         </SidebarInset>
@@ -86,20 +85,28 @@ function moduleForPath(pathname: string): ModuleKey | null {
  * quando a rota atual está fora da matriz. Rotas neutras (ex.: /trocar-senha)
  * ficam liberadas.
  */
-function RoleAccessGate() {
+function AccessControlledOutlet() {
   const { role, isLoadingRoles, user } = useActiveContext();
   const { can, isLoading: isLoadingPermissoes } = usePermissoes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const mod = moduleForPath(pathname);
+  const isLoading = isLoadingRoles || isLoadingPermissoes;
+  const allowed = !mod || (!!role && can(mod));
+
   useEffect(() => {
     if (!user || isLoadingRoles || isLoadingPermissoes) return;
-    const mod = moduleForPath(pathname);
     if (!mod) return; // rota não mapeada (ex.: /trocar-senha)
     if (!role || !can(mod)) {
       navigate({ to: role ? landingPathForRole(role) : "/auth", replace: true });
     }
-  }, [role, isLoadingRoles, isLoadingPermissoes, user, pathname, navigate, can]);
-  return null;
+  }, [role, isLoadingRoles, isLoadingPermissoes, user, mod, navigate, can]);
+
+  if (user && mod && (isLoading || !allowed)) {
+    return null;
+  }
+
+  return <Outlet />;
 }
 
 function BackendNotice() {
