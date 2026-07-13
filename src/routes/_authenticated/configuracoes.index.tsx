@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryOptions } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { AlertCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,6 +16,7 @@ import {
   carregarProjetoConfiguracoes,
   salvarProjetoConfiguracoes,
   type ProjetoConfiguracoesRow,
+  type ProjetoConfiguracoesPayload,
 } from "@/lib/configuracoes.functions";
 
 export const Route = createFileRoute("/_authenticated/configuracoes/")({
@@ -25,7 +27,7 @@ type ProjetoRow = ProjetoConfiguracoesRow;
 
 function projetoOptions(
   projetoId: string | null,
-  carregarProjeto: ReturnType<typeof useServerFn<typeof carregarProjetoConfiguracoes>>,
+  carregarProjeto: (args: { data: { projetoId: string } }) => Promise<ProjetoRow | null>,
 ) {
   return queryOptions({
     queryKey: ["configuracoes", "projeto", projetoId],
@@ -143,7 +145,7 @@ function ConfiguracoesGeral() {
         endereco: form.endereco.trim() || null,
       };
       if (!payload.nome) payload.nome = form.nome;
-      return salvarProjeto({ data: { projetoId, payload: payload as Parameters<typeof salvarProjeto>[0]["data"]["payload"] } });
+      return salvarProjeto({ data: { projetoId, payload: payload as ProjetoConfiguracoesPayload } });
     },
     onSuccess: (result) => {
       if (result?.removidos && result.removidos.length > 0) {

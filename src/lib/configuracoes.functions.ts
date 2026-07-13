@@ -19,10 +19,15 @@ const SalvarProjetoSchema = z.object({
   }),
 });
 
-export type ProjetoConfiguracoesRow = Record<string, unknown> & {
+export type ProjetoConfiguracoesValue = string | number | boolean | null | undefined;
+
+export type ProjetoConfiguracoesRow = {
+  [key: string]: ProjetoConfiguracoesValue;
   id: string;
   nome: string;
 };
+
+export type ProjetoConfiguracoesPayload = z.infer<typeof SalvarProjetoSchema>["payload"];
 
 export const carregarProjetoConfiguracoes = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -35,7 +40,8 @@ export const carregarProjetoConfiguracoes = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (error) throw new Error(error.message);
-    return (row ?? null) as ProjetoConfiguracoesRow | null;
+    if (!row) return null;
+    return row as ProjetoConfiguracoesRow;
   });
 
 export const salvarProjetoConfiguracoes = createServerFn({ method: "POST" })
