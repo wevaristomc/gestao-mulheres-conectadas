@@ -11,27 +11,29 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveContext } from "@/hooks/use-active-context";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  carregarProjetoConfiguracoes,
+  salvarProjetoConfiguracoes,
+  type ProjetoConfiguracoesRow,
+} from "@/lib/configuracoes.functions";
 
 export const Route = createFileRoute("/_authenticated/configuracoes/")({
   component: ConfiguracoesGeral,
 });
 
-type ProjetoRow = Record<string, unknown> & { id: string; nome: string };
+type ProjetoRow = ProjetoConfiguracoesRow;
 
-function projetoOptions(projetoId: string | null) {
+function projetoOptions(
+  projetoId: string | null,
+  carregarProjeto: ReturnType<typeof useServerFn<typeof carregarProjetoConfiguracoes>>,
+) {
   return queryOptions({
     queryKey: ["configuracoes", "projeto", projetoId],
     enabled: !!projetoId,
-    queryFn: async (): Promise<{ row: ProjetoRow | null; error?: string }> => {
+    queryFn: async (): Promise<{ row: ProjetoRow | null }> => {
       if (!projetoId) return { row: null };
-      const { data, error } = await supabase
-        .from("projetos")
-        .select("*")
-        .eq("id", projetoId)
-        .maybeSingle();
-      if (error) return { row: null, error: error.message };
-      return { row: (data ?? null) as ProjetoRow | null };
+      const row = await carregarProjeto({ data: { projetoId } });
+      return { row };
     },
   });
 }
@@ -99,7 +101,9 @@ function toNumberOrNull(v: string): number | null {
 function ConfiguracoesGeral() {
   const { projetoId, role } = useActiveContext();
   const qc = useQueryClient();
-  const projetoQ = useQuery(projetoOptions(projetoId));
+  const carregarProjeto = useServerFn(carregarProjetoConfiguracoes);
+  const salvarProjeto = useServerFn(salvarProjetoConfiguracoes);
+  const projetoQ = useQuery(projetoOptions(projetoId, carregarProjeto));
   const row = projetoQ.data?.row ?? null;
   const readOnly = role !== "coordenador_geral";
 
@@ -128,8 +132,6 @@ function ConfiguracoesGeral() {
   const salvarMut = useMutation({
     mutationFn: async () => {
       if (!projetoId) throw new Error("Nenhum projeto ativo.");
-      // Monta payload apenas com nomes canônicos; se colunas não existirem,
-      // remove e tenta novamente.
       const payload: Record<string, unknown> = {
         nome: form.nome.trim() || null,
         vigencia_inicio: form.vigencia_inicio || null,
@@ -140,33 +142,8 @@ function ConfiguracoesGeral() {
         cnpj: form.cnpj.trim() || null,
         endereco: form.endereco.trim() || null,
       };
-      // nunca envia null para nome — coluna costuma ser NOT NULL
       if (!payload.nome) payload.nome = form.nome;
-
-      const removidos: string[] = [];
-      let attempts = 0;
-      while (attempts < 10) {
-        if (Object.keys(payload).length === 0) {
-          throw new Error(
-            "Nenhuma das colunas existe na tabela `projetos`. Aplique a migração pendente (docs/migrations/fix-schema-executora-e-instrutor-turmas.sql).",
-          );
-        }
-        const res = await supabase
-          .from("projetos")
-          .update(payload)
-          .eq("id", projetoId);
-        if (!res.error) return { removidos };
-        const msg = res.error.message;
-        const m = /column "?([a-zA-Z0-9_]+)"? .* does not exist/i.exec(msg);
-        if (m && m[1] && m[1] in payload) {
-          delete payload[m[1]];
-          removidos.push(m[1]);
-          attempts++;
-          continue;
-        }
-        throw new Error(msg);
-      }
-      throw new Error("Não foi possível salvar as configurações do projeto.");
+      return salvarProjeto({ data: { projetoId, payload: payload as Parameters<typeof salvarProjeto>[0]["data"]["payload"] } });
     },
     onSuccess: (result) => {
       if (result?.removidos && result.removidos.length > 0) {
@@ -202,7 +179,7 @@ function ConfiguracoesGeral() {
     );
   }
 
-  const erro = projetoQ.data?.error;
+  const erro = projetoQ.error instanceof Error ? projetoQ.error.message : null;
 
   return (
     <form
