@@ -435,12 +435,19 @@ export type PresencaMTE = {
   justificativa: string | null;
 };
 
-export function presencasByAulaOptions(aulaId: string | null) {
+export function presencasByAulaOptions(aulaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
-    queryKey: ["mte", "presencas", aulaId],
+    queryKey: ["mte", "presencas", aulaId, restrictToUserId ?? "all"],
     enabled: !!aulaId,
     queryFn: async (): Promise<{ rows: PresencaMTE[]; error?: string }> => {
       if (!aulaId) return { rows: [] };
+      if (restrictToUserId) {
+        const aulaRes = await supabase.from("aulas").select("turma_id").eq("id", aulaId).maybeSingle();
+        const turmaId = (aulaRes.data as { turma_id?: string } | null)?.turma_id;
+        if (!turmaId) return { rows: [] };
+        const permitidas = await fetchTurmasPermitidas(restrictToUserId);
+        if (!permitidas.has(turmaId)) return { rows: [] };
+      }
       const { data, error } = await supabase.from("presencas").select("*").eq("aula_id", aulaId);
       if (error) return { rows: [], error: error.message };
       return { rows: (data ?? []) as PresencaMTE[] };
