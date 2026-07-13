@@ -13,6 +13,17 @@ const RoleV2Enum = z.enum([
   "captacao",
 ]);
 
+type InstrutorTurmaDTO = {
+  id: string;
+  user_id: string;
+  turma_id: string;
+  projeto_id: string;
+  turma_codigo_turma: string | null;
+  turma_codigo: string | null;
+  turma_nome: string | null;
+  turma_nome_curso: string | null;
+};
+
 async function assertCoordenadorGeral(
   supabase: any,
   userId: string,
@@ -97,25 +108,30 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
 
-    const enriquecerComTurma = async (rows: Record<string, unknown>[]) => {
+    const toStringOrNull = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+
+    const enriquecerComTurma = async (rows: Record<string, unknown>[]): Promise<InstrutorTurmaDTO[]> => {
       const turmaIds = Array.from(
         new Set(rows.map((r) => String(r.turma_id ?? "")).filter(Boolean)),
       );
-      if (turmaIds.length === 0) return rows;
+      const base = (turma?: Record<string, unknown>) => (r: Record<string, unknown>): InstrutorTurmaDTO => ({
+        id: String(r.id ?? `${r.user_id ?? ""}-${r.turma_id ?? ""}`),
+        user_id: String(r.user_id ?? ""),
+        turma_id: String(r.turma_id ?? ""),
+        projeto_id: String(r.projeto_id ?? data.projetoId),
+        turma_codigo_turma: toStringOrNull(turma?.codigo_turma),
+        turma_codigo: toStringOrNull(turma?.codigo),
+        turma_nome: toStringOrNull(turma?.nome),
+        turma_nome_curso: toStringOrNull(turma?.nome_curso),
+      });
 
-      let turmasRes = await admin
+      if (turmaIds.length === 0) return rows.map((r) => base()(r));
+
+      const turmasRes = await admin
         .from("turmas")
-        .select("id, codigo_turma, codigo, nome, nome_curso")
+        .select("*")
         .in("id", turmaIds);
-
-      if (turmasRes.error && /column .*nome_curso.* does not exist/i.test(turmasRes.error.message || "")) {
-        turmasRes = await admin
-          .from("turmas")
-          .select("id, codigo_turma, codigo, nome")
-          .in("id", turmaIds);
-      }
-
-      if (turmasRes.error) return rows;
+      if (turmasRes.error) return rows.map((r) => base()(r));
 
       const turmasById = new Map(
         ((turmasRes.data ?? []) as Record<string, unknown>[]).map((t) => [String(t.id), t]),
@@ -123,14 +139,7 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
 
       return rows.map((r) => {
         const turma = turmasById.get(String(r.turma_id ?? ""));
-        if (!turma) return r;
-        return {
-          ...r,
-          turma_codigo_turma: turma.codigo_turma ?? null,
-          turma_codigo: turma.codigo ?? null,
-          turma_nome: turma.nome ?? null,
-          turma_nome_curso: turma.nome_curso ?? null,
-        };
+        return base(turma)(r);
       });
     };
 
