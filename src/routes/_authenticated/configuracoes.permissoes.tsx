@@ -41,11 +41,14 @@ function PermissoesPage() {
   const q = useQuery({
     queryKey: ["permissoes_matriz"],
     queryFn: () => listarFn() as Promise<Row[]>,
+    enabled: isCoord,
   });
 
   const mut = useMutation({
-    mutationFn: (payload: Row) =>
-      atualizarFn({ data: { projetoId: projetoId!, ...payload } as any }),
+    mutationFn: (payload: Row) => {
+      if (!projetoId) throw new Error("Nenhum projeto ativo.");
+      return atualizarFn({ data: { projetoId, ...payload } });
+    },
     onSuccess: () => { toast.success("Permissão atualizada."); qc.invalidateQueries({ queryKey: ["permissoes_matriz"] }); qc.invalidateQueries({ queryKey: ["permissoes_papel"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
