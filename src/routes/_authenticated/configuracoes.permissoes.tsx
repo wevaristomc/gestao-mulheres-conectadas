@@ -15,19 +15,13 @@ import {
 import { useActiveContext } from "@/hooks/use-active-context";
 import { listarPermissoesMatriz, atualizarPermissao } from "@/lib/rbac.functions";
 import { APP_ROLES, ROLE_LABELS, type AppRole } from "@/lib/role-access";
+import { MODULE_LABELS, PERMISSION_MODULES, type PermissionRow } from "@/lib/permissions-model";
 
 export const Route = createFileRoute("/_authenticated/configuracoes/permissoes")({
   component: PermissoesPage,
 });
 
-type Row = {
-  role: AppRole;
-  modulo: string;
-  pode_ver: boolean;
-  pode_criar: boolean;
-  pode_editar: boolean;
-  pode_excluir: boolean;
-};
+type Row = PermissionRow;
 
 const ACOES: Array<{ k: "pode_ver" | "pode_criar" | "pode_editar" | "pode_excluir"; label: string }> = [
   { k: "pode_ver", label: "Ver" },
@@ -45,21 +39,31 @@ function PermissoesPage() {
   const isCoord = role === "coordenador_geral";
 
   const q = useQuery({
-    queryKey: ["permissoes_matriz"],
-    queryFn: () => listarFn() as Promise<Row[]>,
+    queryKey: ["permissoes_matriz", projetoId],
+    queryFn: () => listarFn({ data: { projetoId: projetoId! } }) as Promise<Row[]>,
+    enabled: isCoord && !!projetoId,
   });
 
   const mut = useMutation({
-    mutationFn: (payload: Row) =>
-      atualizarFn({ data: { projetoId: projetoId!, ...payload } as any }),
+    mutationFn: (payload: Row) => {
+      if (!projetoId) throw new Error("Nenhum projeto ativo.");
+      return atualizarFn({ data: { projetoId, ...payload } });
+    },
     onSuccess: () => { toast.success("Permissão atualizada."); qc.invalidateQueries({ queryKey: ["permissoes_matriz"] }); qc.invalidateQueries({ queryKey: ["permissoes_papel"] }); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const modulos = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(PERMISSION_MODULES);
     (q.data ?? []).forEach((r) => set.add(r.modulo));
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => {
+      const ai = PERMISSION_MODULES.indexOf(a as any);
+      const bi = PERMISSION_MODULES.indexOf(b as any);
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
   }, [q.data]);
 
   const byKey = useMemo(() => {
@@ -127,7 +131,10 @@ function PermissoesPage() {
               <TableBody>
                 {modulos.map((modulo) => (
                   <TableRow key={modulo}>
-                    <TableCell className="font-mono text-xs">{modulo}</TableCell>
+                    <TableCell>
+                      <div className="text-xs font-medium">{MODULE_LABELS[modulo as keyof typeof MODULE_LABELS] ?? modulo}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">{modulo}</div>
+                    </TableCell>
                     {APP_ROLES.map((r) => {
                       const row = byKey.get(`${r}::${modulo}`);
                       if (!row) return <TableCell key={r} className="text-center text-[10px] text-muted-foreground">—</TableCell>;

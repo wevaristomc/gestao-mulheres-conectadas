@@ -14,13 +14,18 @@ async function assertCoordenadorGeral(
 ) {
   const { data, error } = await supabase
     .from("user_roles")
-    .select("role")
+    .select("role, projeto_id")
     .eq("user_id", userId)
-    .eq("projeto_id", projetoId)
-    .eq("role", "coordenador_geral")
-    .maybeSingle();
+    .eq("ativo", true)
+    .or(`projeto_id.eq.${projetoId},projeto_id.is.null`)
+    .limit(20);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Apenas coordenação geral pode executar esta ação.");
+  const rows = (data ?? []) as Array<{ role: string; projeto_id: string | null }>;
+  const projectRows = rows.filter((r) => r.projeto_id === projetoId);
+  const allowed = projectRows.length > 0
+    ? projectRows.some((r) => r.role === "coordenador_geral")
+    : rows.some((r) => r.projeto_id === null && r.role === "coordenador_geral");
+  if (!allowed) throw new Error("Apenas coordenação geral pode executar esta ação.");
 }
 
 /* ============ LISTAR USUÁRIOS DO PROJETO ============ */

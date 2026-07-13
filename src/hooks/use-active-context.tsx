@@ -45,9 +45,10 @@ const ROLE_PRIORITY: AppRole[] = [
 
 function pickRole(rows: RoleRow[], projetoId: string | null): AppRole | null {
   if (!rows.length) return null;
-  const candidates = rows.filter(
-    (r) => (r.ativo ?? true) && (r.projeto_id === projetoId || r.projeto_id === null),
-  );
+  const active = rows.filter((r) => r.ativo ?? true);
+  const projectRows = projetoId ? active.filter((r) => r.projeto_id === projetoId) : [];
+  const globalRows = active.filter((r) => r.projeto_id === null);
+  const candidates = projectRows.length > 0 ? projectRows : (projetoId ? globalRows : active);
   const pool = candidates
     .map((r) => r.role)
     .filter(isAppRole);

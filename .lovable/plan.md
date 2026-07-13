@@ -1,41 +1,40 @@
 ## Diagnóstico
 
-O erro vem de uma inconsistência entre dois modelos de papel:
+O problema atual tem duas causas principais:
 
-- **Usuários** usam papéis atuais/legados: `Coordenação Geral`, `Gestão Financeira`, `Administrativo`, `Coordenação Pedagógica`, `Professor(a)`, `Auxiliar Pedagógico`.
-- **Matriz de Permissões** tenta usar papéis novos: `Admin`, `Coordenador`, `Instrutor`, `Financeiro`, `Parceiro MTE`, `Captação`.
-
-Além disso, no banco atual a tabela `permissoes_papel` **não existe**, então a matriz exibida não está sendo a fonte real de bloqueio. O sistema cai no fallback antigo (`role-access.ts`).
-
-Sobre o professor ver todas as abas: o acesso depende do papel efetivo carregado em `useActiveContext`. Se o usuário tiver mais de um papel, o código escolhe automaticamente o de **maior privilégio**. Ou seja: se a pessoa aparece como `Professor(a)` em uma linha, mas também possui `Coordenação Geral`, `Administrativo` ou outro papel mais alto no mesmo projeto ou global, ela continuará vendo tudo.
+1. A tela de permissões está falhando ao carregar a matriz real e cai no fallback, por isso aparece tudo como “—” e as regras não são aplicadas como esperado. O erro registrado é:
+   `invalid input value for enum app_role_v2: "coordenador_geral"`.
+2. Parte do bloqueio ainda usa a matriz fixa antiga no frontend (`canAccess`) enquanto outra parte tenta usar a tabela de permissões. Isso deixa o comportamento inconsistente: Coordenador perde acesso para configurar e outros perfis continuam enxergando abas indevidas.
 
 ## Plano de correção
 
-1. **Unificar os nomes dos papéis**
-   - Alterar a tela da Matriz de Permissões para usar os mesmos papéis mostrados em Configurações → Usuários:
-     - Coordenação Geral
-     - Gestão Financeira
-     - Administrativo
-     - Coordenação Pedagógica
-     - Professor(a)
-     - Auxiliar Pedagógico
-   - Remover/evitar os nomes novos (`Admin`, `Coordenador`, `Instrutor`, etc.) nessa tela para não confundir a gestão.
+1. **Corrigir a fonte única de permissões**
+   - Ajustar a consulta da matriz para não depender do enum problemático no filtro direto.
+   - Garantir que a tela “Configurações → Permissões” carregue os registros reais da tabela de permissões.
+   - Manter os nomes dos papéis exatamente como aparecem em “Configurações → Usuários”: Coordenação Geral, Gestão Financeira, Administrativo, Coordenação Pedagógica, Professor(a), Auxiliar Pedagógico.
 
-2. **Criar/ajustar a tabela real da matriz de permissões**
-   - Criar a tabela `permissoes_papel` no backend, se ainda não existir.
-   - Preencher permissões iniciais a partir da matriz atual de acesso do app.
-   - Garantir acesso protegido: usuários autenticados podem consultar, e somente Coordenação Geral pode alterar.
+2. **Restaurar permissão do Coordenador Geral**
+   - Corrigir a verificação usada para editar a matriz.
+   - Permitir que `coordenador_geral` altere permissões mesmo quando o papel estiver vinculado ao projeto ativo ou como papel global.
+   - Considerar somente papéis ativos.
 
-3. **Fazer menu e rotas usarem a matriz do banco**
-   - Atualizar o hook de permissões para consultar `permissoes_papel` com os papéis atuais.
-   - Atualizar a sidebar para esconder abas com base na matriz carregada, não apenas no fallback fixo.
-   - Manter estado de carregamento para não mostrar todas as abas antes de carregar o papel/permissões.
+3. **Bloquear abas por perfil de forma consistente**
+   - Remover o fallback amplo que libera abas pela matriz fixa quando a tabela existe mas a consulta falha.
+   - Fazer sidebar e guarda de rotas esperarem o carregamento de papéis/permissões antes de decidir o acesso.
+   - Se a permissão não carregar, falhar fechado para módulos restritos em vez de mostrar todas as abas.
 
-4. **Corrigir papel efetivo do usuário**
-   - Ajustar a leitura de papéis para considerar `ativo` quando a coluna existir.
-   - Deixar claro no comportamento: se houver papel global ou duplicado de maior privilégio, ele prevalece; caso contrário, `Professor(a)` deve ver somente módulos permitidos.
+4. **Alinhar módulos duplicados/antigos na matriz**
+   - Limpar ou normalizar módulos que aparecem com nomes antigos ou duplicados, como `dashboard`, `base_conhecimento`, `configuracoes-geral`, `configuracoes-ia`, `usuarios`, `ia_config`.
+   - Manter apenas os módulos que realmente existem no menu e nas rotas atuais.
 
-5. **Revalidar as telas de Configurações**
-   - Confirmar que `Professor(a)` não acessa Configurações, Financeiro, Administrativo etc.
-   - Confirmar que Coordenação Geral continua podendo editar usuários, instrutores/turmas e matriz de permissões.
-   - Confirmar que a Matriz de Permissões mostra nomes coerentes com a tela de usuários.
+5. **Validar o comportamento final**
+   - Coordenação Geral: vê Configurações e consegue editar a matriz.
+   - Professor(a): vê apenas Pedagógico, Fiscalização MTE, Relação de Horas e Ajuda, conforme a matriz.
+   - Gestão Financeira: vê apenas áreas financeiras/relatórios permitidos.
+   - Usuários sem papel ativo: não recebem acesso geral.
+
+## Detalhes técnicos
+
+- Ajustar `usePermissoes`, `rbac.functions`, `use-active-context`, `auth-guard` e o layout autenticado para usar a matriz real como fonte principal.
+- Aplicar uma migração idempotente para corrigir dados antigos da tabela de permissões e permissões de escrita/leitura necessárias.
+- Não alterar autenticação nem criar novos papéis; apenas corrigir a aplicação dos papéis existentes.
