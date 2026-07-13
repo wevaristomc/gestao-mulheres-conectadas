@@ -26,22 +26,51 @@ export const Route = createFileRoute("/_authenticated/configuracoes/instrutor-tu
 });
 
 type Usuario = { id: string; email: string; nome: string | null; role: string; ativo: boolean };
-type Turma = { id: string; nome: string | null; codigo: string | null };
-type Vinculo = { id: string; user_id: string; turma_id: string; projeto_id: string };
+type Turma = {
+  id: string;
+  codigo_turma?: string | null;
+  codigo?: string | null;
+  nome?: string | null;
+  nome_curso?: string | null;
+};
+type Vinculo = {
+  id: string;
+  user_id: string;
+  turma_id: string;
+  projeto_id: string;
+  turma_codigo_turma?: string | null;
+  turma_codigo?: string | null;
+  turma_nome?: string | null;
+  turma_nome_curso?: string | null;
+};
 
 function formatTurmaLabel(t: Turma) {
-  if (t.nome && t.nome.trim()) {
+  const nomenclatura = t.codigo_turma?.trim() || t.codigo?.trim();
+  const descricao = t.nome?.trim() || t.nome_curso?.trim();
+
+  if (nomenclatura) {
     return (
       <span className="inline-flex items-baseline gap-1.5">
-        <span className="truncate">{t.nome}</span>
-        {t.codigo ? (
-          <span className="text-xs text-muted-foreground">· {t.codigo}</span>
+        <span className="font-medium">{nomenclatura}</span>
+        {descricao ? (
+          <span className="truncate text-xs text-muted-foreground">· {descricao}</span>
         ) : null}
       </span>
     );
   }
-  if (t.codigo) return <span>{t.codigo}</span>;
+  if (descricao) return <span>{descricao}</span>;
   return <span className="text-muted-foreground">{t.id.slice(0, 8)}</span>;
+}
+
+function formatVinculoTurmaLabel(v: Vinculo, turma?: Turma) {
+  if (turma) return formatTurmaLabel(turma);
+  return formatTurmaLabel({
+    id: v.turma_id,
+    codigo_turma: v.turma_codigo_turma,
+    codigo: v.turma_codigo,
+    nome: v.turma_nome,
+    nome_curso: v.turma_nome_curso,
+  });
 }
 
 function InstrutorTurmasPage() {
@@ -204,7 +233,7 @@ function InstrutorTurmasPage() {
                     return (
                       <TableRow key={v.id}>
                         <TableCell>{u?.nome ?? u?.email ?? v.user_id.slice(0, 8)}</TableCell>
-                        <TableCell>{t ? formatTurmaLabel(t) : v.turma_id.slice(0, 8)}</TableCell>
+                        <TableCell>{formatVinculoTurmaLabel(v, t)}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             size="sm" variant="ghost"

@@ -13,6 +13,17 @@ const RoleV2Enum = z.enum([
   "captacao",
 ]);
 
+type InstrutorTurmaDTO = {
+  id: string;
+  user_id: string;
+  turma_id: string;
+  projeto_id: string;
+  turma_codigo_turma: string | null;
+  turma_codigo: string | null;
+  turma_nome: string | null;
+  turma_nome_curso: string | null;
+};
+
 async function assertCoordenadorGeral(
   supabase: any,
   userId: string,
@@ -95,12 +106,48 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
     await assertCoordenadorGeral(context.supabase, context.userId, data.projetoId);
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
+
+    const toStringOrNull = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
+
+    const enriquecerComTurma = async (rows: Record<string, unknown>[]): Promise<InstrutorTurmaDTO[]> => {
+      const turmaIds = Array.from(
+        new Set(rows.map((r) => String(r.turma_id ?? "")).filter(Boolean)),
+      );
+      const base = (turma?: Record<string, unknown>) => (r: Record<string, unknown>): InstrutorTurmaDTO => ({
+        id: String(r.id ?? `${r.user_id ?? ""}-${r.turma_id ?? ""}`),
+        user_id: String(r.user_id ?? ""),
+        turma_id: String(r.turma_id ?? ""),
+        projeto_id: String(r.projeto_id ?? data.projetoId),
+        turma_codigo_turma: toStringOrNull(turma?.codigo_turma),
+        turma_codigo: toStringOrNull(turma?.codigo),
+        turma_nome: toStringOrNull(turma?.nome),
+        turma_nome_curso: toStringOrNull(turma?.nome_curso),
+      });
+
+      if (turmaIds.length === 0) return rows.map((r) => base()(r));
+
+      const turmasRes = await admin
+        .from("turmas")
+        .select("*")
+        .in("id", turmaIds);
+      if (turmasRes.error) return rows.map((r) => base()(r));
+
+      const turmasById = new Map(
+        ((turmasRes.data ?? []) as Record<string, unknown>[]).map((t) => [String(t.id), t]),
+      );
+
+      return rows.map((r) => {
+        const turma = turmasById.get(String(r.turma_id ?? ""));
+        return base(turma)(r);
+      });
+    };
+
     // Tenta primeiro filtrar direto por projeto_id (schema atualizado).
     const direto = await admin
       .from("instrutor_turmas")
       .select("*")
       .eq("projeto_id", data.projetoId);
-    if (!direto.error) return direto.data ?? [];
+    if (!direto.error) return enriquecerComTurma((direto.data ?? []) as Record<string, unknown>[]);
     const msg = direto.error.message || "";
     const semColuna = /column .*projeto_id.* does not exist/i.test(msg);
     if (!semColuna) throw new Error(msg);
@@ -119,10 +166,11 @@ export const listarInstrutorTurmas = createServerFn({ method: "POST" })
       .in("turma_id", ids);
     if (vinc.error) throw new Error(vinc.error.message);
     // Preenche projeto_id in-memory para o cliente.
-    return (vinc.data ?? []).map((r: Record<string, unknown>) => ({
+    const rows = (vinc.data ?? []).map((r: Record<string, unknown>) => ({
       ...r,
       projeto_id: data.projetoId,
     }));
+    return enriquecerComTurma(rows);
   });
 
 export const vincularInstrutorTurma = createServerFn({ method: "POST" })
