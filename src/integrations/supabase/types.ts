@@ -14,6 +14,239 @@ export type Database = {
   }
   public: {
     Tables: {
+      aulas: {
+        Row: {
+          assunto: string | null
+          ch: number | null
+          ch_ministrada: number | null
+          ch_prevista: number | null
+          conteudo: string | null
+          conteudo_programatico: string | null
+          created_at: string
+          data: string | null
+          duracao: number | null
+          hora_fim: string | null
+          hora_inicio: string | null
+          id: string
+          instrutor: string | null
+          observacoes: string | null
+          ordem: number | null
+          tema: string | null
+          tipo_ch: string | null
+          titulo: string | null
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          assunto?: string | null
+          ch?: number | null
+          ch_ministrada?: number | null
+          ch_prevista?: number | null
+          conteudo?: string | null
+          conteudo_programatico?: string | null
+          created_at?: string
+          data?: string | null
+          duracao?: number | null
+          hora_fim?: string | null
+          hora_inicio?: string | null
+          id?: string
+          instrutor?: string | null
+          observacoes?: string | null
+          ordem?: number | null
+          tema?: string | null
+          tipo_ch?: string | null
+          titulo?: string | null
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          assunto?: string | null
+          ch?: number | null
+          ch_ministrada?: number | null
+          ch_prevista?: number | null
+          conteudo?: string | null
+          conteudo_programatico?: string | null
+          created_at?: string
+          data?: string | null
+          duracao?: number | null
+          hora_fim?: string | null
+          hora_inicio?: string | null
+          id?: string
+          instrutor?: string | null
+          observacoes?: string | null
+          ordem?: number | null
+          tema?: string | null
+          tipo_ch?: string | null
+          titulo?: string | null
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aulas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      beneficiarias: {
+        Row: {
+          agencia: string | null
+          banco: string | null
+          beneficiaria_programa_social: boolean | null
+          conta: string | null
+          cpf: string | null
+          created_at: string
+          data_nascimento: string | null
+          email: string | null
+          endereco: string | null
+          genero: string | null
+          id: string
+          municipio: string | null
+          nis: string | null
+          nome: string
+          pcd: boolean | null
+          qual_programa_social: string | null
+          raca: string | null
+          telefone: string | null
+          tipo_deficiencia: string | null
+          updated_at: string
+        }
+        Insert: {
+          agencia?: string | null
+          banco?: string | null
+          beneficiaria_programa_social?: boolean | null
+          conta?: string | null
+          cpf?: string | null
+          created_at?: string
+          data_nascimento?: string | null
+          email?: string | null
+          endereco?: string | null
+          genero?: string | null
+          id?: string
+          municipio?: string | null
+          nis?: string | null
+          nome: string
+          pcd?: boolean | null
+          qual_programa_social?: string | null
+          raca?: string | null
+          telefone?: string | null
+          tipo_deficiencia?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agencia?: string | null
+          banco?: string | null
+          beneficiaria_programa_social?: boolean | null
+          conta?: string | null
+          cpf?: string | null
+          created_at?: string
+          data_nascimento?: string | null
+          email?: string | null
+          endereco?: string | null
+          genero?: string | null
+          id?: string
+          municipio?: string | null
+          nis?: string | null
+          nome?: string
+          pcd?: boolean | null
+          qual_programa_social?: string | null
+          raca?: string | null
+          telefone?: string | null
+          tipo_deficiencia?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cursistas: {
+        Row: {
+          cpf: string | null
+          created_at: string
+          email: string | null
+          id: string
+          municipio: string | null
+          nome: string
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          municipio?: string | null
+          nome: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          municipio?: string | null
+          nome?: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      evidencias: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string
+          aula_id: string | null
+          created_at: string
+          descricao: string | null
+          enviado_por: string | null
+          id: string
+          tipo: string
+          turma_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url: string
+          aula_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          enviado_por?: string | null
+          id?: string
+          tipo: string
+          turma_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string
+          aula_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          enviado_por?: string | null
+          id?: string
+          tipo?: string
+          turma_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evidencias_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidencias_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       importacoes_presenca: {
         Row: {
           arquivo_nome: string | null
@@ -121,6 +354,85 @@ export type Database = {
           },
           {
             foreignKeyName: "instrutor_turmas_turma_id_fkey"
+            columns: ["turma_id"]
+            isOneToOne: false
+            referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matriculas: {
+        Row: {
+          assinou_lista: boolean | null
+          beneficiaria_id: string | null
+          certificado_emitido_em: string | null
+          certificado_url: string | null
+          created_at: string
+          cursista_id: string | null
+          data_conclusao: string | null
+          data_inscricao: string | null
+          ficha_inscricao_url: string | null
+          frequencia_percentual: number | null
+          id: string
+          motivo_evasao: string | null
+          observacao_importacao: string | null
+          status: string | null
+          turma_id: string
+          updated_at: string
+        }
+        Insert: {
+          assinou_lista?: boolean | null
+          beneficiaria_id?: string | null
+          certificado_emitido_em?: string | null
+          certificado_url?: string | null
+          created_at?: string
+          cursista_id?: string | null
+          data_conclusao?: string | null
+          data_inscricao?: string | null
+          ficha_inscricao_url?: string | null
+          frequencia_percentual?: number | null
+          id?: string
+          motivo_evasao?: string | null
+          observacao_importacao?: string | null
+          status?: string | null
+          turma_id: string
+          updated_at?: string
+        }
+        Update: {
+          assinou_lista?: boolean | null
+          beneficiaria_id?: string | null
+          certificado_emitido_em?: string | null
+          certificado_url?: string | null
+          created_at?: string
+          cursista_id?: string | null
+          data_conclusao?: string | null
+          data_inscricao?: string | null
+          ficha_inscricao_url?: string | null
+          frequencia_percentual?: number | null
+          id?: string
+          motivo_evasao?: string | null
+          observacao_importacao?: string | null
+          status?: string | null
+          turma_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matriculas_beneficiaria_id_fkey"
+            columns: ["beneficiaria_id"]
+            isOneToOne: false
+            referencedRelation: "beneficiarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matriculas_cursista_id_fkey"
+            columns: ["cursista_id"]
+            isOneToOne: false
+            referencedRelation: "cursistas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matriculas_turma_id_fkey"
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas"
@@ -265,6 +577,51 @@ export type Database = {
         }
         Relationships: []
       }
+      presencas: {
+        Row: {
+          aula_id: string
+          created_at: string
+          id: string
+          justificativa: string | null
+          matricula_id: string
+          presente: boolean
+          updated_at: string
+        }
+        Insert: {
+          aula_id: string
+          created_at?: string
+          id?: string
+          justificativa?: string | null
+          matricula_id: string
+          presente?: boolean
+          updated_at?: string
+        }
+        Update: {
+          aula_id?: string
+          created_at?: string
+          id?: string
+          justificativa?: string | null
+          matricula_id?: string
+          presente?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presencas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projetos: {
         Row: {
           atualizado_em: string
@@ -310,39 +667,102 @@ export type Database = {
       turmas: {
         Row: {
           atualizado_em: string
+          ch_conhecimentos_especificos: number | null
+          ch_conhecimentos_gerais: number | null
+          ch_total: number | null
+          ciclo: number | null
           codigo: string | null
           codigo_turma: string | null
+          contato_local_nome: string | null
+          contato_local_telefone: string | null
+          created_at: string
           criado_em: string
+          data_fim: string | null
+          data_inicio: string | null
+          descricao: string | null
+          dias_semana: string | null
+          executora: string | null
           horario_realizacao: string | null
           id: string
+          instrumento_id: string | null
+          local_endereco: string | null
+          local_id: string | null
           municipio: string | null
           nome: string | null
+          nome_curso: string | null
+          observacoes: string | null
           projeto_id: string
+          qtd_dias_curso: number | null
+          titulo: string | null
           turno: string | null
+          updated_at: string
+          vagas: number | null
         }
         Insert: {
           atualizado_em?: string
+          ch_conhecimentos_especificos?: number | null
+          ch_conhecimentos_gerais?: number | null
+          ch_total?: number | null
+          ciclo?: number | null
           codigo?: string | null
           codigo_turma?: string | null
+          contato_local_nome?: string | null
+          contato_local_telefone?: string | null
+          created_at?: string
           criado_em?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          descricao?: string | null
+          dias_semana?: string | null
+          executora?: string | null
           horario_realizacao?: string | null
           id?: string
+          instrumento_id?: string | null
+          local_endereco?: string | null
+          local_id?: string | null
           municipio?: string | null
           nome?: string | null
+          nome_curso?: string | null
+          observacoes?: string | null
           projeto_id: string
+          qtd_dias_curso?: number | null
+          titulo?: string | null
           turno?: string | null
+          updated_at?: string
+          vagas?: number | null
         }
         Update: {
           atualizado_em?: string
+          ch_conhecimentos_especificos?: number | null
+          ch_conhecimentos_gerais?: number | null
+          ch_total?: number | null
+          ciclo?: number | null
           codigo?: string | null
           codigo_turma?: string | null
+          contato_local_nome?: string | null
+          contato_local_telefone?: string | null
+          created_at?: string
           criado_em?: string
+          data_fim?: string | null
+          data_inicio?: string | null
+          descricao?: string | null
+          dias_semana?: string | null
+          executora?: string | null
           horario_realizacao?: string | null
           id?: string
+          instrumento_id?: string | null
+          local_endereco?: string | null
+          local_id?: string | null
           municipio?: string | null
           nome?: string | null
+          nome_curso?: string | null
+          observacoes?: string | null
           projeto_id?: string
+          qtd_dias_curso?: number | null
+          titulo?: string | null
           turno?: string | null
+          updated_at?: string
+          vagas?: number | null
         }
         Relationships: [
           {
@@ -391,7 +811,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      frequencias: {
+        Row: {
+          aula_id: string | null
+          id: string | null
+          matricula_id: string | null
+          presente: boolean | null
+        }
+        Insert: {
+          aula_id?: string | null
+          id?: string | null
+          matricula_id?: string | null
+          presente?: boolean | null
+        }
+        Update: {
+          aula_id?: string | null
+          id?: string | null
+          matricula_id?: string | null
+          presente?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presencas_aula_id_fkey"
+            columns: ["aula_id"]
+            isOneToOne: false
+            referencedRelation: "aulas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presencas_matricula_id_fkey"
+            columns: ["matricula_id"]
+            isOneToOne: false
+            referencedRelation: "matriculas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
