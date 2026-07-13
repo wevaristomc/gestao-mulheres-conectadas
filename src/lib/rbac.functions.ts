@@ -84,8 +84,7 @@ export const listarTurmasDoProjeto = createServerFn({ method: "POST" })
       .from("turmas")
       .select("*")
       .eq("projeto_id", data.projetoId)
-      .order("codigo_turma", { ascending: true, nullsFirst: false })
-      .order("codigo", { ascending: true, nullsFirst: false });
+      .order("codigo_turma", { ascending: true, nullsFirst: false });
     if (error) throw new Error(error.message);
     return rows ?? [];
   });

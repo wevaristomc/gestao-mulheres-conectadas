@@ -52,8 +52,8 @@ export const salvarProjetoConfiguracoes = createServerFn({ method: "POST" })
       .from("user_roles")
       .select("role")
       .eq("user_id", context.userId)
-      .eq("projeto_id", data.projetoId)
       .eq("role", "coordenador_geral")
+      .or(`projeto_id.eq.${data.projetoId},projeto_id.is.null`)
       .maybeSingle();
 
     if (roleError) throw new Error(roleError.message);
