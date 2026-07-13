@@ -30,6 +30,7 @@ export const Route = createFileRoute("/_authenticated/mte/cronograma")({
 });
 
 function CronogramaIndex() {
+  const { restrictToUserId } = useEscopoTurmas();
   const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const q = useQuery(cronogramaGeralOptions(restrictToUserId));
   const qc = useQueryClient();

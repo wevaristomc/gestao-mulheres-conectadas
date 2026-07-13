@@ -63,6 +63,7 @@ export const Route = createFileRoute("/_authenticated/mte/importar-lista")({
 
 function ImportarListaPage() {
   const qc = useQueryClient();
+  const { restrictToUserId } = useEscopoTurmas();
   const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");

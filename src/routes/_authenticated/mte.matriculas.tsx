@@ -51,6 +51,7 @@ function MatriculasIndex() {
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "administrativo"]);
 
+  const { restrictToUserId } = useEscopoTurmas();
   const turmasQ = useQuery(turmasMteListOptions(restrictToUserId));
   const turmas = turmasQ.data?.rows ?? [];
   const [turmaId, setTurmaId] = useState<string>("");

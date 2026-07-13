@@ -30,6 +30,7 @@ function TurmasMteIndex() {
   const qc = useQueryClient();
   const { hasAnyRole } = useHasRole();
   const canWrite = hasAnyRole(["coordenador_geral", "coordenador_pedagogico", "administrativo"]);
+  const { restrictToUserId } = useEscopoTurmas();
   const q = useQuery(turmasMteListOptions(restrictToUserId));
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const [dialogOpen, setDialogOpen] = useState(false);
