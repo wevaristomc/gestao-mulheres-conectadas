@@ -25,6 +25,7 @@ import {
   aulasMteListOptions, matriculasListOptions, presencasByAulaOptions,
   turmasMteListOptions, upsertPresencaMTE,
 } from "@/lib/mte-queries";
+import { formatarData } from "@/lib/pedagogico-queries";
 import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/presencas")({
@@ -161,7 +162,10 @@ function PresencasIndex() {
             <SelectContent>
               {aulas.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.data ?? "s/ data"} — {a.conteudo_programatico?.slice(0, 40) ?? "(sem conteúdo)"}
+                  {formatarData(a.data) ?? "s/ data"}
+                  {a.hora_inicio ? ` · ${String(a.hora_inicio).slice(0, 5)}${a.hora_fim ? `–${String(a.hora_fim).slice(0, 5)}` : ""}` : ""}
+                  {a.tipo_ch ? ` · ${a.tipo_ch}` : ""}
+                  {" — "}{a.conteudo_programatico?.slice(0, 40) ?? "(sem conteúdo)"}
                 </SelectItem>
               ))}
             </SelectContent>
