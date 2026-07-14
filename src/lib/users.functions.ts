@@ -21,7 +21,6 @@ async function assertCoordenadorGeral(
     .limit(20);
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as Array<{ role: string; projeto_id: string | null }>;
-  const projectRows = rows.filter((r) => r.projeto_id === projetoId);
   const allowed = rows.some(
     (r) => r.role === "coordenador_geral" && (r.projeto_id === projetoId || r.projeto_id === null),
   );
