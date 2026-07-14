@@ -1,25 +1,43 @@
-## Diagnóstico
+## Ordenação de colunas na frequência
 
-Em `src/lib/relatorios-queries.ts` (linhas 218–224) o detector de tabela de frequência do relatório ainda tenta `frequencias` **antes** de `presencas`:
+Adicionar ordenação interativa (clique no cabeçalho) nas três telas de frequência, mantendo tudo em UI/estado local — sem tocar em queries ou backend.
 
-```ts
-for (const t of ["frequencias", "presencas"] as const) { ... }
-```
+### Telas e critérios
 
-No banco real (yqvocpnvunaprpmhlswn) existe uma `frequencias` legada (tabela ou view desatualizada) que o app **não** grava — a aba **Fiscalização MTE** escreve em `presencas` via `upsertPresencaMTE`. Como o detector vê `frequencias` primeiro e não dá erro, o relatório lê dali e nunca enxerga o que foi lançado em `presencas`.
+**1. Fiscalização MTE › Presenças** (`src/routes/_authenticated/mte.presencas.tsx`)
+Cabeçalhos clicáveis com indicador de direção (↑/↓):
+- Beneficiária → alfabética A→Z / Z→A
+- Freq. atual → % maior→menor / menor→maior (nulos ao final)
+- Presença → P primeiro / F primeiro (usando estado `local`)
+- Justificativa → preenchidas primeiro / vazias primeiro
 
-O `pedagogico-queries.ts` já foi corrigido antes com a ordem `["presencas", "frequencias"]` justamente por esse motivo; o relatório ficou de fora.
+**2. Pedagógico › Turma › Frequência** (`src/routes/_authenticated/pedagogico.turmas.$id.frequencia.tsx`)
+Ordena a lista de cursistas (linhas da matriz e lista mobile):
+- Cursista → alfabética A→Z / Z→A
+- % frequência total (calculada a partir do `freqIndex` sobre todas as aulas) → maior→menor / menor→maior
 
-## Correção
+Adicionar um pequeno seletor acima da tabela (desktop e mobile) já que a matriz tem N colunas de aulas e não faz sentido tornar cada data ordenável. Opções: "Nome (A→Z)", "Nome (Z→A)", "Frequência (maior)", "Frequência (menor)".
 
-Ajuste único em `src/lib/relatorios-queries.ts`:
+**3. Relatórios › Frequência** (`src/routes/_authenticated/relatorios.frequencia.tsx`)
+Cabeçalhos clicáveis conforme colunas existentes na tabela. Critérios:
+- Nome/beneficiária → alfabética
+- % frequência → numérica
+- Presença/status agregado → presentes primeiro / faltosos primeiro
+- Justificativa (se existir coluna) → com motivo / sem motivo
 
-- Trocar a ordem no `detectarTabelaFrequencia` para `["presencas", "frequencias"]`, alinhando com `pedagogico-queries.ts`.
-- Como o loop já pega a primeira que responder sem erro, `presencas` (fonte de verdade) passa a ser sempre a escolhida quando existir.
+Ler o arquivo antes de editar para mapear as colunas reais e aplicar somente aos campos existentes.
 
-Isso faz o relatório BET-MC-02 refletir imediatamente qualquer presença lançada na Fiscalização MTE (a invalidação de cache do turno anterior já está no lugar).
+### Detalhes técnicos
 
-## Fora de escopo
+- Estado local por página: `const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>()`.
+- Clique no `TableHead` alterna direção; segundo critério diferente reseta para `asc`.
+- Ordenação via `useMemo` sobre a lista já filtrada — não altera queries nem invalidações.
+- Componente auxiliar local `SortableHeader` (ícone `ArrowUp`/`ArrowDown`/`ArrowUpDown` de lucide-react) para não repetir markup.
+- Comparação de strings com `localeCompare(pt-BR, { sensitivity: "base" })`; números com fallback para nulos ao final independente da direção.
+- Nada muda em `mte-queries.ts`, `pedagogico-queries.ts`, `relatorios-queries.ts` nem no banco.
 
-- Não vou mexer no esquema do banco nem nas RLS.
-- Não vou remover a `frequencias` legada — apenas parar de lê-la.
+### Fora do escopo
+
+- Persistência da ordenação entre sessões.
+- Ordenação server-side / paginação.
+- Reordenar colunas de aulas na matriz pedagógica.
