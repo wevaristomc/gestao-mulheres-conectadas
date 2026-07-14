@@ -81,9 +81,8 @@ export function acompanhamentoOptions(projetoId: string | null) {
           aulasPrevistas = aulas.length;
           const hoje = new Date();
           aulasRealizadas = aulas.filter((a) => {
-            if (!a.data) return false;
-            const d = new Date(a.data);
-            return !Number.isNaN(d.getTime()) && d <= hoje;
+            const d = parseISODateLocal(a.data);
+            return d !== null && d <= hoje;
           }).length;
         }
       } else {
@@ -562,8 +561,8 @@ export function metasResumoOptions(projetoId: string | null) {
           let horas = 0;
           for (const a of aulas) {
             if (a.data) {
-              const d = new Date(a.data);
-              if (Number.isNaN(d.getTime()) || d > hoje) continue;
+              const d = parseISODateLocal(a.data);
+              if (!d || d > hoje) continue;
             }
             const dur = pickNum(a.duracao);
             horas += dur > 0 ? dur : 2;
