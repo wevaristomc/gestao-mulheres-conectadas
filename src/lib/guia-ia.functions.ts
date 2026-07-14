@@ -95,10 +95,10 @@ export const orbeGuiaAtividade = createServerFn({ method: "POST" })
 
     // Extrai JSON — modelo pode devolver com cerca de código
     const texto = (r as any).texto ?? (r as any).conteudo ?? "";
-    let guia: unknown = null;
+    let guia: Record<string, unknown> = {};
     try {
       const m = String(texto).match(/\{[\s\S]*\}$/);
-      guia = JSON.parse(m ? m[0] : String(texto));
+      guia = JSON.parse(m ? m[0] : String(texto)) as Record<string, unknown>;
     } catch {
       guia = { resumo: String(texto).slice(0, 800), passos: [], referencias: [] };
     }
@@ -109,5 +109,5 @@ export const orbeGuiaAtividade = createServerFn({ method: "POST" })
       .update({ guia_ia: guia })
       .eq("id", data.atividadeId);
 
-    return { guia, cached: false as const };
+    return { guia: guia as Record<string, unknown>, cached: false as const };
   });
