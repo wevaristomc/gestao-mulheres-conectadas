@@ -65,14 +65,31 @@ CREATE INDEX IF NOT EXISTS atividade_comentarios_atividade_idx
   ON public.atividade_comentarios(atividade_id);
 
 -- 3) Permissão do módulo "minhas-demandas" (visível a todos os papéis) -------
+-- OBS.: aplicado no banco real com o vocabulário V2 usado por
+-- `permissoes_papel` / `has_permission` (admin / coordenador / instrutor /
+-- financeiro). Se o banco de destino ainda usar o vocabulário legado
+-- (coordenador_geral / administrativo / …), rode o bloco alternativo comentado
+-- ao final deste arquivo.
 INSERT INTO public.permissoes_papel (role, modulo, pode_ver, pode_criar, pode_editar, pode_excluir)
 SELECT r, 'minhas-demandas', true, false, true, false
 FROM (VALUES
-  ('coordenador_geral'),
-  ('administrativo'),
-  ('coordenador_pedagogico'),
-  ('gestor_financeiro'),
-  ('professor'),
-  ('auxiliar_pedagogico')
+  ('admin'),
+  ('coordenador'),
+  ('instrutor'),
+  ('financeiro')
 ) AS v(r)
 ON CONFLICT (role, modulo) DO NOTHING;
+
+-- Alternativa (vocabulário legado app_role) — só use se o banco alvo ainda
+-- não migrou para V2:
+-- INSERT INTO public.permissoes_papel (role, modulo, pode_ver, pode_criar, pode_editar, pode_excluir)
+-- SELECT r, 'minhas-demandas', true, false, true, false
+-- FROM (VALUES
+--   ('coordenador_geral'),
+--   ('administrativo'),
+--   ('coordenador_pedagogico'),
+--   ('gestor_financeiro'),
+--   ('professor'),
+--   ('auxiliar_pedagogico')
+-- ) AS v(r)
+-- ON CONFLICT (role, modulo) DO NOTHING;
