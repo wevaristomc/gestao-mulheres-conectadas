@@ -3,6 +3,8 @@
 // Ciclo 1 (2026), meta = 300 educandas, início 2026-05-09.
 //
 // Este arquivo é a fonte da verdade para a importação consolidada QAJBC.
+
+import { onlyDigits } from "@/lib/cpf";
 // O CSV está embutido como template literal para manter tudo em um único
 // deploy, sem depender de leitura de arquivos externos.
 
