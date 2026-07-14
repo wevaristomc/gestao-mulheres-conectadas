@@ -176,12 +176,14 @@ export async function atualizarKanban(
   userId: string | null,
 ) {
   const payload: Record<string, unknown> = { ...patch };
-  if (patch.status === "concluida") {
-    payload.concluida_em = new Date().toISOString();
-    payload.concluida_por = userId;
-  } else if (patch.status && patch.status !== "concluida") {
-    payload.concluida_em = null;
-    payload.concluida_por = null;
+  if (patch.status) {
+    if (patch.status === "concluida") {
+      payload.concluida_em = new Date().toISOString();
+      payload.concluida_por = userId;
+    } else {
+      payload.concluida_em = null;
+      payload.concluida_por = null;
+    }
   }
   const { error } = await (supabase.from(ATIV_TABLE) as any).update(payload).eq("id", id);
   if (error) throw new Error(error.message);
