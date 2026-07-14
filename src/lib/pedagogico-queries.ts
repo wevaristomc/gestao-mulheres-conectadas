@@ -279,6 +279,20 @@ export async function deleteTurma(id: string) {
 }
 
 export async function deleteAula(id: string) {
+  // Blindagem: se a aula tem presenças registradas, recusa a exclusão em vez de
+  // deixar o cascade do banco apagar as marcações em silêncio. Corrige o caso
+  // em que uma aula com chamada preenchida some junto com todas as presenças
+  // quando alguém clica em "Excluir aula" por engano.
+  const pres = await supabase
+    .from("presencas")
+    .select("id", { head: true, count: "exact" })
+    .eq("aula_id", id);
+  if (!pres.error && (pres.count ?? 0) > 0) {
+    throw new Error(
+      `Esta aula tem ${pres.count} presença(s) registrada(s). ` +
+        `Remova as marcações na aba Frequência antes de excluir a aula.`,
+    );
+  }
   const { error } = await supabase.from("aulas").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
