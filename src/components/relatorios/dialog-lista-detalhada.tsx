@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { turmasMteListOptions } from "@/lib/mte-queries";
+import { formatarDataBR } from "@/lib/date-utils";
 
 // Lista Detalhada por turma — XLSX com 3 abas (FREQUENCIA / Lanche / BeneficiosCertificadoTransporte).
 // Fidelidade ao modelo oficial: matriz educanda × dia de aula.
