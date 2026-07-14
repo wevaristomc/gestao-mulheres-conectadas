@@ -2,6 +2,8 @@
 // Ficam fora de .functions.ts porque o splitter do TanStack apaga
 // helpers module-scope referenciados por handlers de createServerFn.
 
+import { onlyDigits } from "@/lib/cpf";
+
 export const TABELAS_ALVO = new Set<string>([
   "pmc_user",
   "pmc_course",
@@ -149,7 +151,7 @@ export function toBool(v: string | null): boolean | null {
 export function pickCpf(idnumber: string | null, username: string | null): string | null {
   for (const cand of [idnumber, username]) {
     if (!cand) continue;
-    const digits = cand.replace(/\D+/g, "");
+    const digits = onlyDigits(cand);
     if (digits.length === 11) return digits;
   }
   return null;

@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatarDataBR } from "@/lib/date-utils";
 
 // Todas as queries retornam { data, error } no mesmo padrão de dashboard-queries.ts.
 // O schema é descoberto em runtime — colunas ausentes viram "—" na UI.
@@ -387,19 +388,9 @@ export function nomeTurma(row: Row | null | undefined): string {
 
 export function formatarData(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const s = String(iso).slice(0, 10);
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) {
-    const [, y, mo, d] = m;
-    return `${d}/${mo}/${y}`;
-  }
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
-  } catch {
-    return String(iso);
-  }
+  // Delegado para @/lib/date-utils (fonte única, tz-safe).
+  const br = formatarDataBR(iso);
+  return br || String(iso);
 }
 
 // ============================================================================

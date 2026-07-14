@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { cronogramaGeralOptions, turmasMteListOptions } from "@/lib/mte-queries";
 import { downloadCSV } from "@/lib/csv";
+import { formatarDataBR, parseISODateLocal } from "@/lib/date-utils";
 import {
   criarTurmasCiclo2Previstas,
   type ResumoCiclo2,
@@ -122,8 +123,8 @@ function CronogramaIndex() {
       String(t.qtd_dias_curso ?? ""),
       t.dias_semana ?? "",
       String(t.vagas ?? ""),
-      t.data_inicio ? new Date(t.data_inicio + "T00:00:00").toLocaleDateString("pt-BR") : "",
-      t.data_fim ? new Date(t.data_fim + "T00:00:00").toLocaleDateString("pt-BR") : "",
+      formatarDataBR(t.data_inicio),
+      formatarDataBR(t.data_fim),
       t.municipio ?? "",
       t.local_endereco ?? "",
       t.contato_local_nome ?? "",
@@ -233,7 +234,9 @@ function CronogramaIndex() {
           {grupos.map(([data, itens]) => (
             <section key={data}>
               <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
-                {data === "sem-data" ? "Sem data definida" : new Date(data + "T00:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+                {data === "sem-data"
+                  ? "Sem data definida"
+                  : (parseISODateLocal(data)?.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) ?? data)}
               </h3>
               <div className="rounded-md border">
                 <Table>

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { parseISODateLocal } from "@/lib/date-utils";
+import { isMatriculaAtiva, FILTRO_STATUS_INATIVOS } from "@/lib/contagens";
 
 // Agrega dados para o módulo Relatórios. Todas as queries são defensivas:
 // se uma tabela/coluna não existir, o dado cai para null/0 e a UI mostra "—".
@@ -193,10 +194,8 @@ function pickNum(v: unknown): number {
   if (typeof v === "string" && v.trim() && !Number.isNaN(Number(v))) return Number(v);
   return 0;
 }
-function matriculaAtiva(m: Record<string, unknown>): boolean {
-  const s = String(m.status ?? "").toLowerCase();
-  return s !== "evadida" && s !== "desistente";
-}
+// Fonte única — ver @/lib/contagens.
+const matriculaAtiva = isMatriculaAtiva;
 
 // -------- Aba 1: Frequência por turma --------
 
@@ -543,7 +542,8 @@ export function metasResumoOptions(projetoId: string | null) {
         const matRes = await supabase
           .from("matriculas")
           .select("id", { count: "exact", head: true })
-          .in("turma_id", turmaIds);
+          .in("turma_id", turmaIds)
+          .not("status", "in", FILTRO_STATUS_INATIVOS);
         if (matRes.error) errors.push(`matriculas: ${matRes.error.message}`);
         base.cursistas.real = matRes.count ?? 0;
       }

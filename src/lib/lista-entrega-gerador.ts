@@ -5,6 +5,8 @@ import {
   type LinhaCabecalho,
   type LogoInstitucional,
 } from "./cabecalho-institucional";
+import { formatarCPF } from "@/lib/cpf";
+import { parseISODateLocal } from "@/lib/date-utils";
 
 // Modelos oficiais DEQ/PMQ — fidelidade exata ao docx original.
 //   1) Lista Comprobatória de Entregas aos Cursistas (kits/EPI/camisetas).
@@ -50,17 +52,13 @@ const LINHAS_ULTIMA = 33;
 
 type FolhaEntrega = { linhas: CursistaEntrega[]; tipo: "primeira" | "continuacao" | "ultima" };
 
+// Fontes únicas — @/lib/cpf e @/lib/date-utils (auditoria P1/P5).
 function fCPF(cpf: string | null): string {
-  if (!cpf) return "";
-  const d = cpf.replace(/\D/g, "");
-  if (d.length !== 11) return cpf;
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  return formatarCPF(cpf ?? "");
 }
-
 function fDataBR(iso: string | null | undefined): { d: string; m: string; y: string } {
-  if (!iso) return { d: "___", m: "___", y: "______" };
-  const dt = new Date(String(iso).slice(0, 10) + "T00:00:00");
-  if (Number.isNaN(dt.getTime())) return { d: "___", m: "___", y: "______" };
+  const dt = parseISODateLocal(iso ?? null);
+  if (!dt) return { d: "___", m: "___", y: "______" };
   return {
     d: String(dt.getDate()).padStart(2, "0"),
     m: String(dt.getMonth() + 1).padStart(2, "0"),

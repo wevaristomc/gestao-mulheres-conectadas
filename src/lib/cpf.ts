@@ -34,6 +34,14 @@ export function isValidCpf(input: string): boolean {
   return d1 === parseInt(cpf[9], 10) && d2 === parseInt(cpf[10], 10);
 }
 
+// Aliases pt-BR (fonte única — usar estes em importadores/geradores/consultas).
+// - normalizarCPF: remove tudo que não é dígito, retorna string bruta (pode ter <11).
+// - formatarCPF:   aplica máscara 000.000.000-00 (parcial ao digitar).
+// - validarCPF:    valida dígitos verificadores oficiais da Receita Federal.
+export const normalizarCPF = onlyDigits;
+export const formatarCPF = formatCpf;
+export const validarCPF = isValidCpf;
+
 export function formatPhone(input: string): string {
   const d = onlyDigits(input).slice(0, 11);
   if (d.length <= 10) {

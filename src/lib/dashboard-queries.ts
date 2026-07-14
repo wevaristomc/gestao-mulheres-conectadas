@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { FILTRO_STATUS_INATIVOS } from "@/lib/contagens";
 
 // Todas as queries retornam { value: number | null, error?: string } para
 // que os cards possam distinguir "carregando", "sem acesso" e "zero".
@@ -14,11 +15,13 @@ export function kpiCursistasAtivasOptions(projetoId: string | null) {
     enabled: !!projetoId,
     queryFn: async (): Promise<KpiResult> => {
       if (!projetoId) return { value: null };
-      // matriculas → turmas!inner(projeto_id = X)
+      // matriculas ativas (status NOT IN evadida/desistente/cancelada) → turmas!inner(projeto_id = X)
+      // Fonte única em @/lib/contagens — mantém dashboard/relatórios/orbe consistentes.
       const { count, error } = await supabase
         .from("matriculas")
         .select("id, turmas!inner(projeto_id)", { count: "exact", head: true })
-        .eq("turmas.projeto_id", projetoId);
+        .eq("turmas.projeto_id", projetoId)
+        .not("status", "in", FILTRO_STATUS_INATIVOS);
       if (error) return { value: null, error: error.message };
       return { value: count ?? 0 };
     },

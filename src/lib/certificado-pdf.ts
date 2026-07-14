@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { txt } from "@/lib/date-utils";
 
 export type CertificadoData = {
   nome: string;
@@ -70,7 +71,7 @@ export function gerarCertificadoPDF(data: CertificadoData): Blob {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(...CINZA_TXT);
-  doc.text(data.nome, contentX, 226);
+  doc.text(txt(data.nome), contentX, 226);
   doc.setDrawColor(...AZUL);
   doc.setLineWidth(0.6);
   doc.line(contentX, 232, contentX + contentW, 232);
@@ -79,7 +80,7 @@ export function gerarCertificadoPDF(data: CertificadoData): Blob {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    doc.text(`CPF: ${data.cpf}`, contentX, 246);
+    doc.text(`CPF: ${txt(data.cpf)}`, contentX, 246);
   }
 
   // Texto corrido (modelo oficial DEQ/PMQ)
@@ -87,18 +88,18 @@ export function gerarCertificadoPDF(data: CertificadoData): Blob {
   const diaConcl = String(dataConcl.getDate()).padStart(2, "0");
   const mesConcl = mesExtenso(dataConcl.getMonth());
   const anoConcl = String(dataConcl.getFullYear()).slice(-2);
-  const curso = data.curso ?? data.turma ?? "Mulheres Conectadas – Formação em Tecnologia e Inovação Digital";
+  const curso = txt(data.curso ?? data.turma, "Mulheres Conectadas – Formação em Tecnologia e Inovação Digital");
   const ch = data.cargaHoraria ?? 150;
   const periodoTxt = data.periodo
     ?? (data.dataInicio && data.dataFim
       ? `${formatarBR(data.dataInicio)} a ${formatarBR(data.dataFim)}`
       : "__/__/____ a __/__/____");
-  const entidade = (data.entidade ?? "QUINTA ARTE").toUpperCase();
+  const entidade = txt(data.entidade, "QUINTA ARTE").toUpperCase();
 
   const texto =
     `em ${diaConcl}, de ${mesConcl} de 20${anoConcl}, a Sr.ª acima nominada concluiu, realizando ` +
     `satisfatoriamente as tarefas propostas, o curso de "${curso}", com carga horária total de ${ch} horas, ` +
-    `realizado no período de ${periodoTxt}${data.municipio ? `, no município de ${data.municipio}` : ""}, ` +
+    `realizado no período de ${txt(periodoTxt)}${data.municipio ? `, no município de ${txt(data.municipio)}` : ""}, ` +
     `na entidade ${entidade}.`;
 
   doc.setFont("helvetica", "normal");
@@ -110,7 +111,7 @@ export function gerarCertificadoPDF(data: CertificadoData): Blob {
   if (data.observacoes) {
     doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    const obs = doc.splitTextToSize(data.observacoes, contentW);
+    const obs = doc.splitTextToSize(txt(data.observacoes), contentW);
     doc.text(obs, contentX, 274 + linhas.length * 18 + 12, { lineHeightFactor: 1.4 });
   }
 
@@ -141,7 +142,7 @@ export function gerarCertificadoPDF(data: CertificadoData): Blob {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
-    doc.text(`Certificado nº ${data.numero}`, W - 24, H - 8, { align: "right" });
+    doc.text(`Certificado nº ${txt(data.numero)}`, W - 24, H - 8, { align: "right" });
   }
 
   return doc.output("blob");

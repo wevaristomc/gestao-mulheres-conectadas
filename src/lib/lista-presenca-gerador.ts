@@ -10,6 +10,8 @@ import {
   type LinhaCabecalho,
   type LogoInstitucional,
 } from "./cabecalho-institucional";
+import { formatarCPF } from "@/lib/cpf";
+import { parseISODateLocal, formatarDataBR as fmtDataBR, formatarDataExtenso } from "@/lib/date-utils";
 
 export type Cursista = { nome: string; cpf: string | null };
 export type AulaInfo = {
@@ -37,27 +39,17 @@ export type ListaData = {
 
 // Modelo oficial DEQ exige CPF digitalizado do/a cursista na lista de
 // frequência (o documento é impresso e assinado; não há PII adicional
-// que não seja de posse da entidade). Formatamos como 000.000.000-00.
-function formatarCPF(cpf: string | null): string {
-  if (!cpf) return "";
-  const d = cpf.replace(/\D/g, "");
-  if (d.length !== 11) return cpf;
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-}
-
+// Datas e CPF vêm de @/lib/date-utils e @/lib/cpf (fonte única — auditoria P1/P5).
 function formatarDataBR(iso: string | null): string {
   if (!iso) return "___/___/______";
-  const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("pt-BR");
+  return fmtDataBR(iso) || String(iso);
 }
-
 function dataPorExtenso(iso: string | null): string {
   if (!iso) return "_____________________________";
-  const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+  return formatarDataExtenso(iso) || String(iso);
 }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _keepParse = parseISODateLocal;
 
 function ordenarCursistas(rows: Cursista[]): Cursista[] {
   return [...rows].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
@@ -352,7 +344,7 @@ function renderPrimeiraPaginaPDF(
       doc.text(nome, xs2[1] + 4, rowY + rowH / 2 + 3);
     }
     if (c.cpf) {
-      doc.text(formatarCPF(c.cpf), xs2[2] + wCPF2 / 2, rowY + rowH / 2 + 3, { align: "center" });
+      doc.text(formatarCPF(c.cpf ?? ""), xs2[2] + wCPF2 / 2, rowY + rowH / 2 + 3, { align: "center" });
     }
   });
   y += rowH * linhas.length;
@@ -418,7 +410,7 @@ function renderContinuacaoPDF(
       doc.text(nome, xs[1] + 4, rowY + rowH / 2 + 3);
     }
     if (c.cpf) {
-      doc.text(formatarCPF(c.cpf), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
+      doc.text(formatarCPF(c.cpf ?? ""), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
     }
   });
   let y = yTop + rowH * linhas.length;
@@ -491,7 +483,7 @@ export async function gerarListaXLSX(listas: ListaData[]): Promise<Blob> {
     for (let i = 0; i < total; i += 1) {
       const r = headerRow + 1 + i;
       const nome = i < cursistas.length ? cursistas[i].nome : "";
-      const cpf = i < cursistas.length ? formatarCPF(cursistas[i].cpf) : "";
+      const cpf = i < cursistas.length ? formatarCPF(cursistas[i].cpf ?? "") : "";
       ws.getCell(r, 1).value = i + 1;
       ws.getCell(r, 2).value = nome;
       ws.getCell(r, 3).value = cpf;
@@ -541,7 +533,7 @@ export async function gerarListaDOCX(listas: ListaData[]): Promise<Blob> {
     const linhas: TableRow[] = [];
     for (let i = 0; i < total; i += 1) {
       const nome = i < cursistas.length ? cursistas[i].nome : "";
-      const cpf = i < cursistas.length ? formatarCPF(cursistas[i].cpf) : "";
+      const cpf = i < cursistas.length ? formatarCPF(cursistas[i].cpf ?? "") : "";
       linhas.push(new TableRow({
         children: [
           cellBody(String(i + 1), 700, "center"),

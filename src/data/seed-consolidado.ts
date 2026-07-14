@@ -3,6 +3,8 @@
 // Ciclo 1 (2026), meta = 300 educandas, início 2026-05-09.
 //
 // Este arquivo é a fonte da verdade para a importação consolidada QAJBC.
+
+import { onlyDigits } from "@/lib/cpf";
 // O CSV está embutido como template literal para manter tudo em um único
 // deploy, sem depender de leitura de arquivos externos.
 
@@ -334,7 +336,7 @@ function parseCsv(): SeedAluna[] {
     const cols = lines[i].split(";");
     while (cols.length < 9) cols.push("");
     const [turma, nome, cpfRaw, banco, agencia, conta, assinou, obs, moodleId] = cols;
-    const cpfDigits = (cpfRaw ?? "").replace(/\D/g, "");
+    const cpfDigits = onlyDigits(cpfRaw ?? "");
     out.push({
       turma: turma.trim(),
       nome: nome.trim(),

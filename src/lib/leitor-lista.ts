@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { onlyDigits } from "@/lib/cpf";
 
 // -----------------------------------------------------------------------------
 // Helpers de cliente para o leitor de listas de presença digitalizadas.
@@ -143,7 +144,7 @@ export async function carregarMatriculasDaTurma(turmaId: string): Promise<Matric
       matricula_id: r.id,
       beneficiaria_id: r.beneficiaria.id,
       nome: r.beneficiaria.nome ?? "",
-      cpf: String(r.beneficiaria.cpf ?? "").replace(/\D+/g, ""),
+      cpf: onlyDigits(String(r.beneficiaria.cpf ?? "")),
       status: r.status ?? null,
     }));
 }

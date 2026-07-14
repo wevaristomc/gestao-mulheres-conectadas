@@ -40,3 +40,14 @@ export function pctSeguro(numerador: number | null | undefined, denominador: num
   if (!Number.isFinite(n) || !Number.isFinite(d) || d === 0) return 0;
   return (n / d) * 100;
 }
+
+// Coerção segura para texto em PDFs / células / templates.
+// jsPDF renderiza literalmente "undefined"/"null" se o valor não for string;
+// txt() garante fallback vazio (ou o placeholder passado) sem quebrar layout.
+export function txt(v: unknown, fallback = ""): string {
+  if (v === null || v === undefined) return fallback;
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : fallback;
+  const s = String(v);
+  if (s === "undefined" || s === "null" || s === "NaN") return fallback;
+  return s;
+}

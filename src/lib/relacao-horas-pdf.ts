@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { RelacaoHoras, RelacaoItem, TurmaVinculo } from "./relacao-horas-queries";
 import { classificarTurno } from "./relacao-horas-queries";
+import { parseISODateLocal } from "@/lib/date-utils";
 
 const CINZA_H: [number, number, number] = [220, 220, 220];
 const CINZA_B: [number, number, number] = [160, 160, 160];
@@ -24,8 +25,9 @@ function fmtHoras(n: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 function fmtDataBR(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+  const dt = parseISODateLocal(iso);
+  if (!dt) return iso;
+  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`;
 }
 function fmtDataHoraBR(iso: string): string {
   const dt = new Date(iso);
@@ -227,7 +229,7 @@ export function gerarPdfRelacaoHoras(input: {
   // itensTrabalhados já calculado acima
 
   const drawRow = (item: RelacaoItem) => {
-    const dt = new Date(item.data + "T12:00:00");
+    const dt = parseISODateLocal(item.data) ?? new Date(item.data + "T12:00:00");
     const dow = dt.getDay();
 
     if (y + rowH > pageH - 90) {
