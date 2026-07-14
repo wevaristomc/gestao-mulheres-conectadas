@@ -542,7 +542,8 @@ export function metasResumoOptions(projetoId: string | null) {
         const matRes = await supabase
           .from("matriculas")
           .select("id", { count: "exact", head: true })
-          .in("turma_id", turmaIds);
+          .in("turma_id", turmaIds)
+          .not("status", "in", FILTRO_STATUS_INATIVOS);
         if (matRes.error) errors.push(`matriculas: ${matRes.error.message}`);
         base.cursistas.real = matRes.count ?? 0;
       }
