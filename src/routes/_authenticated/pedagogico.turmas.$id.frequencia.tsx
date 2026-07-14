@@ -306,6 +306,47 @@ function FrequenciaTab() {
 
   return (
     <div className="min-w-0 space-y-3">
+      {debug === "1" ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          <div className="mb-1 font-semibold">Diagnóstico (aulas × presenças) — turma {codigoTurma ?? turmaId}</div>
+          {datasDuplicadas.size > 0 ? (
+            <div className="mb-1">
+              <strong>Datas com mais de uma aula:</strong>{" "}
+              {[...datasDuplicadas].map((d) => formatarData(d)).join(", ")}. Confira se a marcação foi feita na aula correta em cada uma.
+            </div>
+          ) : null}
+          <div className="max-h-56 overflow-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left [&>th]:pr-2 [&>th]:font-medium">
+                  <th>Data</th><th>Horário</th><th>Tipo CH</th><th>Conteúdo</th><th>P</th><th>F</th><th>Sem marca</th><th>ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {aulas.map((a) => {
+                  const s = statsPorAula.get(a.id) ?? { p: 0, f: 0, sem: 0 };
+                  const d = String(pickFirst(a, ["data"]) ?? "").slice(0, 10);
+                  return (
+                    <tr key={a.id} className={datasDuplicadas.has(d) ? "font-medium" : undefined}>
+                      <td className="pr-2">{formatarData(d)}</td>
+                      <td className="pr-2">{aulaSubtitulo(a) || "—"}</td>
+                      <td className="pr-2">{pickFirst(a, ["tipo_ch"]) ?? "—"}</td>
+                      <td className="pr-2 max-w-[240px] truncate">{pickFirst(a, ["conteudo_programatico", "titulo", "tema", "assunto"]) ?? "—"}</td>
+                      <td className="pr-2">{s.p}</td>
+                      <td className="pr-2">{s.f}</td>
+                      <td className="pr-2">{s.sem}</td>
+                      <td className="pr-2 font-mono opacity-60">{String(a.id).slice(0, 8)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-1 opacity-70">
+            Total de matrículas ativas: {cursistasRaw.length} — de {cursistasAll.length} (evadidas/desistentes ocultas).
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Ordenar:</span>
         <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
