@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { onlyDigits } from "@/lib/cpf";
 
 // -----------------------------------------------------------------------------
 // Helpers de cliente para o leitor de listas de presença digitalizadas.
