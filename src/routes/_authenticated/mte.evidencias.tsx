@@ -30,6 +30,17 @@ import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker
 import { importGdriveToBucket } from "@/lib/gdrive.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
+import { abrirEvidencia } from "@/lib/pedagogico-queries";
+
+// Auditoria P2 — assina a URL só no clique (bucket privado; URL embutida expira).
+async function abrirEvidenciaNoClique(arquivo_url: string): Promise<void> {
+  try {
+    const url = await abrirEvidencia({ arquivo_url });
+    window.open(url, "_blank", "noopener,noreferrer");
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : "Não foi possível abrir o arquivo.");
+  }
+}
 
 export const Route = createFileRoute("/_authenticated/mte/evidencias")({
   component: EvidenciasIndex,
@@ -239,9 +250,13 @@ function EvidenciasIndex() {
                   <span className="text-xs text-muted-foreground">{r.created_at ? new Date(r.created_at).toLocaleDateString("pt-BR") : "—"}</span>
                 </div>
                 <div className="break-words text-sm">{r.descricao ?? "—"}</div>
-                <a href={r.arquivo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 break-all text-xs text-primary hover:underline">
+                <button
+                  type="button"
+                  onClick={() => abrirEvidenciaNoClique(r.arquivo_url)}
+                  className="inline-flex items-center gap-1 break-all text-xs text-primary hover:underline"
+                >
                   {r.arquivo_nome ?? "abrir"} <ExternalLink className="h-3 w-3" />
-                </a>
+                </button>
               </div>
               {canWrite ? (
                 <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => setDeleting(r)} title="Excluir">
@@ -276,9 +291,13 @@ function EvidenciasIndex() {
                 <TableCell><Badge variant="secondary" className="capitalize">{r.tipo.replace(/_/g, " ")}</Badge></TableCell>
                 <TableCell className="max-w-md truncate" title={r.descricao ?? ""}>{r.descricao ?? "—"}</TableCell>
                 <TableCell>
-                  <a href={r.arquivo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => abrirEvidenciaNoClique(r.arquivo_url)}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
                     {r.arquivo_nome ?? "abrir"} <ExternalLink className="h-3 w-3" />
-                  </a>
+                  </button>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {r.created_at ? new Date(r.created_at).toLocaleDateString("pt-BR") : "—"}

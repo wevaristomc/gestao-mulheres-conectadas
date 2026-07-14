@@ -12,6 +12,7 @@ import {
 } from "./cabecalho-institucional";
 import { formatarCPF } from "@/lib/cpf";
 import { parseISODateLocal, formatarDataBR as fmtDataBR, formatarDataExtenso } from "@/lib/date-utils";
+import { yieldToUI } from "@/lib/async-yield";
 
 export type Cursista = { nome: string; cpf: string | null };
 export type AulaInfo = {
@@ -145,9 +146,12 @@ export async function gerarListaPDF(listas: ListaData[]): Promise<Blob> {
   const paginasPorLista = listas.map((l) => paginarCursistas(ordenarCursistas(l.cursistas), l.extras));
   const totalPag = paginasPorLista.reduce((a, p) => a + p.length, 0);
   let pageNo = 0;
-  listas.forEach((lista, i) => {
+  // P3 — em jobs grandes cede o event loop a cada folha renderizada.
+  for (let i = 0; i < listas.length; i += 1) {
+    const lista = listas[i];
     const paginas = paginasPorLista[i];
-    paginas.forEach((folha, pi) => {
+    for (let pi = 0; pi < paginas.length; pi += 1) {
+      const folha = paginas[pi];
       pageNo += 1;
       if (pageNo > 1) doc.addPage();
       // A primeira folha (única ou não) é também a última quando há só uma.
@@ -157,8 +161,9 @@ export async function gerarListaPDF(listas: ListaData[]): Promise<Blob> {
       } else {
         renderContinuacaoPDF(doc, lista, folha.linhas, W, H, pageNo, totalPag, pi + 1, paginas.length, folha.tipo === "ultima");
       }
-    });
-  });
+      if (totalPag > 4 && pageNo % 4 === 0) await yieldToUI();
+    }
+  }
 
   return doc.output("blob");
 }
