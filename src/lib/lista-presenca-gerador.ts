@@ -344,7 +344,7 @@ function renderPrimeiraPaginaPDF(
       doc.text(nome, xs2[1] + 4, rowY + rowH / 2 + 3);
     }
     if (c.cpf) {
-      doc.text(formatarCPF(c.cpf), xs2[2] + wCPF2 / 2, rowY + rowH / 2 + 3, { align: "center" });
+      doc.text(formatarCPF(c.cpf ?? ""), xs2[2] + wCPF2 / 2, rowY + rowH / 2 + 3, { align: "center" });
     }
   });
   y += rowH * linhas.length;
@@ -410,7 +410,7 @@ function renderContinuacaoPDF(
       doc.text(nome, xs[1] + 4, rowY + rowH / 2 + 3);
     }
     if (c.cpf) {
-      doc.text(formatarCPF(c.cpf), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
+      doc.text(formatarCPF(c.cpf ?? ""), xs[2] + wCPF / 2, rowY + rowH / 2 + 3, { align: "center" });
     }
   });
   let y = yTop + rowH * linhas.length;
