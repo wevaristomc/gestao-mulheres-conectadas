@@ -334,7 +334,7 @@ function parseCsv(): SeedAluna[] {
     const cols = lines[i].split(";");
     while (cols.length < 9) cols.push("");
     const [turma, nome, cpfRaw, banco, agencia, conta, assinou, obs, moodleId] = cols;
-    const cpfDigits = (cpfRaw ?? "").replace(/\D/g, "");
+    const cpfDigits = onlyDigits(cpfRaw ?? "");
     out.push({
       turma: turma.trim(),
       nome: nome.trim(),
