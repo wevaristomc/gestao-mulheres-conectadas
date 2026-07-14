@@ -60,6 +60,7 @@ export type ModuleKey =
   | "relacao-horas"
   | "financeiro-relacoes-horas"
   | "etapas"
+  | "minhas-demandas"
   | "ajuda"
   | "configuracoes";
 
@@ -124,6 +125,7 @@ export const MODULE_ACCESS: Record<ModuleKey, AppRole[]> = {
     "administrativo",
     "coordenador_pedagogico",
   ],
+  "minhas-demandas": [...APP_ROLES],
   ajuda: [...APP_ROLES],
   configuracoes: ["coordenador_geral", "administrativo"],
 };
