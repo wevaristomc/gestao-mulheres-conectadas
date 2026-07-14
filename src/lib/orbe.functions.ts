@@ -359,19 +359,47 @@ const TOOL_DESCRICOES = `
 - etapas_status: etapas do projeto com progresso e atividades atrasadas.
 - ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".`.trim();
 
-async function snapshotContexto(admin: any) {
-  const nTurmas = await safe(async () => (await admin.from("turmas").select("id", { count: "exact", head: true })).count ?? 0, 0);
+// Auditoria P8 — snapshot ciente de escopo. Professor/auxiliar recebe agregados
+// só de suas turmas (turmasEscopo). Coordenação/adm recebe agregados globais.
+async function snapshotContexto(admin: any, turmasEscopo?: string[] | null) {
+  const escopado = Array.isArray(turmasEscopo);
+  if (escopado && turmasEscopo!.length === 0) {
+    // Sem turmas atribuídas: agregados = 0, evita vazamento.
+    return {
+      projeto: "Mulheres Conectadas / QUINTA ARTE — Termo de Fomento 01025/2025",
+      turmas: 0, vagas_totais: 0, beneficiarias: 0, matriculas: 0,
+      aulas_realizadas: 0, ch_realizada: 0,
+      pendencias_abertas: { total: 0, criticas: 0, vencidas: 0 },
+      meta_ciclo1: { previsto: 300, atual: 0 },
+      ultimas_acoes: [],
+      etapa_atual: null,
+      escopo: "turmas-do-usuario",
+    } as any;
+  }
+  const scopeTurmas = <T extends { in: (...a: any[]) => any }>(q: T) =>
+    (escopado ? q.in("id", turmasEscopo!) : q) as any;
+  const scopeByTurmaId = <T extends { in: (...a: any[]) => any }>(q: T) =>
+    (escopado ? q.in("turma_id", turmasEscopo!) : q) as any;
+
+  const nTurmas = await safe(async () => (await scopeTurmas(admin.from("turmas").select("id", { count: "exact", head: true }))).count ?? 0, 0);
   const vagas = await safe(async () => {
-    const { data } = await admin.from("turmas").select("vagas").limit(1000);
+    const { data } = await scopeTurmas(admin.from("turmas").select("id, vagas").limit(1000));
     return ((data ?? []) as any[]).reduce((s, r) => s + Number(r.vagas ?? 0), 0);
   }, 0);
-  const nBenef = await safe(async () => (await admin.from("beneficiarias").select("id", { count: "exact", head: true })).count ?? 0, 0);
-  const nMatriculas = await safe(async () => (await admin.from("matriculas").select("id", { count: "exact", head: true })).count ?? 0, 0);
+  const nBenef = await safe(async () => {
+    if (escopado) {
+      const { data } = await admin.from("matriculas").select("beneficiaria_id").in("turma_id", turmasEscopo!).limit(5000);
+      const uniq = new Set(((data ?? []) as any[]).map((r) => r.beneficiaria_id).filter(Boolean));
+      return uniq.size;
+    }
+    return (await admin.from("beneficiarias").select("id", { count: "exact", head: true })).count ?? 0;
+  }, 0);
+  const nMatriculas = await safe(async () => (await scopeByTurmaId(admin.from("matriculas").select("id", { count: "exact", head: true }))).count ?? 0, 0);
   const chRealizada = await safe(async () => {
-    const { data } = await admin.from("aulas").select("ch").limit(5000);
+    const { data } = await scopeByTurmaId(admin.from("aulas").select("ch, turma_id").limit(5000));
     return ((data ?? []) as any[]).reduce((s, r) => s + Number(r.ch ?? 0), 0);
   }, 0);
-  const nAulas = await safe(async () => (await admin.from("aulas").select("id", { count: "exact", head: true })).count ?? 0, 0);
+  const nAulas = await safe(async () => (await scopeByTurmaId(admin.from("aulas").select("id", { count: "exact", head: true }))).count ?? 0, 0);
   const pendenciasAbertas = await safe(async () => {
     const { data } = await admin.from("pendencias").select("prioridade, vencimento, status").eq("status", "aberta").limit(500);
     const rows = (data ?? []) as any[];
@@ -430,6 +458,7 @@ async function snapshotContexto(admin: any) {
     meta_ciclo1: { previsto: 300, atual: nBenef },
     etapa_atual: etapaAtualResumo,
     ultimas_acoes: ultimasAcoes,
+    escopo: escopado ? "turmas-do-usuario" : "global",
   };
 }
 
@@ -439,10 +468,21 @@ async function snapshotContexto(admin: any) {
 
 export const orbeContexto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = getSupabaseAdmin();
-    return snapshotContexto(admin);
+    // Aplica escopo de professor/auxiliar (auditoria P8).
+    const { data: rolesRows } = await admin.from("user_roles").select("role").eq("user_id", context.userId);
+    const papeis = ((rolesRows ?? []) as any[]).map((r) => r.role);
+    const isInstrutor =
+      !papeis.some((p: string) => ["coordenador_geral","coordenador_pedagogico","administrativo"].includes(p))
+      && papeis.some((p: string) => ["professor","auxiliar_pedagogico"].includes(p));
+    let escopo: string[] | null = null;
+    if (isInstrutor) {
+      const { data: it } = await admin.from("instrutor_turmas").select("turma_id").eq("user_id", context.userId);
+      escopo = ((it ?? []) as any[]).map((r) => r.turma_id);
+    }
+    return snapshotContexto(admin, escopo);
   });
 
 export const orbeChat = createServerFn({ method: "POST" })
@@ -499,7 +539,8 @@ export const orbeChat = createServerFn({ method: "POST" })
     });
 
     // Snapshot para o prompt
-    const ctx = await snapshotContexto(admin);
+    // P8 — instrutor recebe agregado escopado às suas turmas.
+    const ctx = await snapshotContexto(admin, isInstrutor ? turmasEscopo : null);
     const dataHoje = new Date().toISOString().slice(0, 10);
     const FERRAMENTAS_INSTRUTOR = new Set([
       "listar_turmas",

@@ -86,6 +86,12 @@ function CronogramaIndex() {
     const turmas = turmasQ.data?.rows ?? [];
     const turmasFiltradas =
       turmaFiltro === "__all__" ? turmas : turmas.filter((t) => t.id === turmaFiltro);
+    // P10 — bloqueia CSV vazio.
+    if (turmasFiltradas.length === 0) {
+      toast.error("Nenhuma turma para o filtro selecionado. Ajuste o filtro antes de exportar.");
+      return;
+    }
+    try {
     const exercicio = String(new Date().getFullYear());
     const linhasMeta: string[][] = [
       ["Tipo de instrumento/parceria:", "Termo de Fomento — MROSC"],
@@ -141,6 +147,9 @@ function CronogramaIndex() {
       ...dados.map((l) => l.map(escapa).join(";")),
     ].join("\n");
     downloadCSV(`cronograma-mte-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao exportar o cronograma.");
+    }
   };
 
   return (

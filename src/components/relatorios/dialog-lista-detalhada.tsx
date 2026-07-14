@@ -81,6 +81,11 @@ export function DialogListaDetalhada({
         .order("hora_inicio", { ascending: true, nullsFirst: false });
       if (aulasR.error) throw new Error(aulasR.error.message);
       const aulas = ordenarAulas((aulasR.data ?? []) as Aula[]);
+      // P10 — bloqueia geração vazia.
+      if (aulas.length === 0) {
+        toast.error("Esta turma não tem aulas cadastradas. Cadastre aulas antes de exportar a lista detalhada.");
+        return;
+      }
 
       // 2. Matrículas
       const matR = await supabase
@@ -95,6 +100,10 @@ export function DialogListaDetalhada({
         .sort((a, b) =>
           (a.beneficiarias?.nome ?? "").localeCompare(b.beneficiarias?.nome ?? "", "pt-BR"),
         );
+      if (matriculas.length === 0) {
+        toast.error("Nenhuma cursista ativa nesta turma. Ative ao menos uma matrícula antes de exportar.");
+        return;
+      }
 
       // 3. Presenças
       const presR = await supabase

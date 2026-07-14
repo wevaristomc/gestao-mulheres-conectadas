@@ -140,14 +140,26 @@ function RelacaoHorasPage() {
   }
 
   function baixarPdf() {
-    if (!relacao) return;
-    const doc = gerarPdfRelacaoHoras({
-      relacao,
-      itens,
-      professorNome: relacao.assinatura_nome || user?.email || "—",
-      turmas: turmasQ.data?.rows ?? [],
-    });
-    doc.save(`relacao-horas-${relacao.mes_referencia.slice(0, 7)}.pdf`);
+    if (!relacao) {
+      toast.error("Selecione uma relação de horas.");
+      return;
+    }
+    // P10 — não gerar PDF vazio.
+    if (!itens || itens.length === 0) {
+      toast.error("Nenhum registro para o filtro selecionado. Adicione ao menos um item antes de exportar.");
+      return;
+    }
+    try {
+      const doc = gerarPdfRelacaoHoras({
+        relacao,
+        itens,
+        professorNome: relacao.assinatura_nome || user?.email || "—",
+        turmas: turmasQ.data?.rows ?? [],
+      });
+      doc.save(`relacao-horas-${relacao.mes_referencia.slice(0, 7)}.pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gerar o PDF da relação de horas.");
+    }
   }
 
   const turnoNome: Record<string, string> = { manha: "manhã", tarde: "tarde", noite: "noite" };

@@ -64,6 +64,11 @@ export function DialogGerarListasEntrega({
     setGerando(true);
     try {
       const cursistas = await buscarCursistas(turmaId);
+      // P10 — não gerar lista vazia.
+      if (!cursistas || cursistas.length === 0) {
+        toast.error("Nenhuma cursista ativa nesta turma. Nada para exportar.");
+        return;
+      }
       const cab = cabecalhoDeTurma(turma, {
         responsavelNome: respNome.trim() || null,
         responsavelCPF: respCPF.trim() || null,

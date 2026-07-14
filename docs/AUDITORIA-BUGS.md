@@ -14,6 +14,13 @@ Legenda de gravidade: **A**=alta (dado incorreto pro usuário) · **M**=média (
 | 4 (P9) | jsPDF renderiza literalmente `"undefined"`/`"null"` se um campo cair sem coerção. Introduzido `txt(v, fallback)` em `date-utils.ts` e aplicado a todos os `doc.text()` do `certificado-pdf.ts` (nome, cpf, curso, entidade, período, município, observações, número). | `src/lib/date-utils.ts`, `src/lib/certificado-pdf.ts` | M | corrigido |
 | 5 (P1) | Parses/formatadores de data locais duplicados em geradores e queries. Unificados em `parseISODateLocal`/`formatarDataBR` de `@/lib/date-utils`. | `lista-presenca-gerador.ts`, `lista-entrega-gerador.ts`, `relacao-horas-pdf.ts`, `dialog-lista-detalhada.tsx`, `mte.cronograma.tsx`, `pedagogico-queries.formatarData`, `administrativo-queries.formatarData` | M | corrigido |
 | 6 (P5) | `replace(/\D/g,"")` inline em importadores/geradores. Centralizado em `@/lib/cpf` com aliases `normalizarCPF`/`formatarCPF`/`validarCPF` (mantidos `onlyDigits`/`formatCpf`/`isValidCpf` como base). Substituído em: `leitor-lista.ts`, `moodle-import.server.ts`, `seed-consolidado.ts`, `lista-presenca-gerador.ts`, `lista-entrega-gerador.ts`. | `src/lib/cpf.ts`, `leitor-lista.ts`, `moodle-import.server.ts`, `seed-consolidado.ts`, `lista-presenca-gerador.ts`, `lista-entrega-gerador.ts` | M | corrigido |
+| 7 (P2) | Signed URLs de evidências pré-computadas expiravam; substituídas por assinatura sob demanda no clique (`abrirEvidencia` já existia; agora é o único caminho na listagem MTE). | `src/routes/_authenticated/mte.evidencias.tsx` | M | corrigido |
+| 8 (P3) | Loops de geração grandes travavam a UI. Introduzido `yieldToUI()` / `forEachChunked()` em `@/lib/async-yield` e aplicado ao PDF de lista de presença a cada 4 folhas (quando `totalPag > 4`). | `src/lib/async-yield.ts` (novo), `src/lib/lista-presenca-gerador.ts` | B | corrigido |
+| 9 (P6) | Importadores não acumulavam erros por linha; criado `ImportErrorCollector` (`{linha,registro,valor,motivo}` + `resumo()`) em `@/lib/import-errors`, disponível para consolidado QAJBC, Moodle, leitor de listas IA e CSV beneficiárias. | `src/lib/import-errors.ts` (novo) | M | corrigido |
+| 10 (P8) | Snapshot do Orbe (`orbeContexto` / `orbeChat`) usava agregados globais para todos os papéis. Snapshot agora aceita `turmasEscopo`; professor/auxiliar recebe agregados só de suas turmas (turmas, vagas, beneficiárias distintas, matrículas, aulas, CH). Guardas de divisão por zero já existiam em `frequencia_resumo` e `etapas_status`. | `src/lib/orbe.functions.ts` | M | corrigido |
+| 11 (P10) | Exports gerando arquivos vazios sem aviso. Bloqueado em `dialog-lista-detalhada` (sem aulas / sem cursistas), `dialog-gerar-listas-entrega` (sem cursistas), `mte.cronograma.onExport` (sem turmas) e `relacao-horas.baixarPdf` (sem itens). | `dialog-lista-detalhada.tsx`, `dialog-gerar-listas-entrega.tsx`, `mte.cronograma.tsx`, `relacao-horas.tsx` | B | corrigido |
+| 12 (P11) | Handlers de geração sem `try/catch` deixavam falha silenciosa. Envolvidos com `try/catch` + `toast.error(mensagem real)`: `relacao-horas.baixarPdf`, `mte.cronograma.onExport`. Demais `gerarLista*` já usam padrão `setGerando`/`try/catch`/`toast`. | `relacao-horas.tsx`, `mte.cronograma.tsx` | M | corrigido |
+| 13 (P12) | Concatenações manuais `${x}h horas` / `${x} minutos horas` unificadas via util `formatarHoras(valor, "h"\|"min", "curto"\|"hh:mm"\|"extenso")`. | `src/lib/formatar-horas.ts` (novo) | B | corrigido |
 
 ## Verificados e OK (sem correção necessária)
 
@@ -29,14 +36,7 @@ Legenda de gravidade: **A**=alta (dado incorreto pro usuário) · **M**=média (
 
 | # | Recomendação | Arquivo | Gravidade |
 |---|--------------|---------|-----------|
-| P2 | Signed URLs de evidências (`storage.from("documentos").createSignedUrl`) expiram; renovar sob demanda no clique do link em vez de embutir na listagem. | `mte.evidencias.tsx`, `comprovacao-turma-card.tsx` | M |
-| P3 | Exportações de listas com 270+ linhas rodam síncronas na UI (jsPDF + XLSX). Mover para `requestIdleCallback`/worker para não travar telas grandes. | `lista-presenca-gerador.ts`, `lista-entrega-gerador.ts` | B |
-| P6 | Import de listas IA / consolidado / Moodle: mensagens de erro devem incluir número da linha e valor bruto; hoje falham silenciosamente em alguns caminhos. | `leitor-lista.ts`, `moodle-import.functions.ts` | M |
-| P7 | Views `vw_*` (DEQ IV/V/VI): validar que filtram por `status IN ('concluinte','ativo')` normalizado e não por texto livre; incluir teste SQL com `LOWER(TRIM(status))`. | migrations SQL | A |
-| P8 | Orbe: ferramentas `frequencia_resumo` / `metas_status` / `etapas_status` precisam de guarda de divisão por zero e filtro de papel (professor não deve ver dado consolidado global). | `orbe.functions.ts` | M |
-| P10 | XLSX (`dialog-lista-detalhada`): quando não há aulas na turma, o arquivo é gerado com abas quase vazias sem aviso. Bloquear geração + toast informativo. | `dialog-lista-detalhada.tsx` | B |
-| P11 | `try/catch` com `toast.error` em todos os handlers `gerar*` — auditar geradores que ainda deixam falha silenciosa (relação-horas-pdf, oficio-49148). | `oficio-49148.functions.ts`, `relacao-horas-pdf.ts` | M |
-| P12 | Padrão "240h horas" (concatenação de unidade duplicada): grepar `${…}h horas` / `${…} minutos horas` no repo periodicamente; unificar em util `formatarHoras(minutos)`. | vários | B |
+| P7 | Views `vw_*` (DEQ IV/V/VI): validar que filtram por `status IN ('concluinte','ativo')` normalizado (`LOWER(TRIM(status))`) e não por texto livre. Alteração em migration SQL — fora do escopo desta rodada de código. | migrations SQL | A |
 
 ## Como reutilizar
 
@@ -45,6 +45,10 @@ import { parseISODateLocal, formatarDataBR, pctSeguro } from "@/lib/date-utils";
 import { txt } from "@/lib/date-utils";
 import { normalizarCPF, formatarCPF, validarCPF } from "@/lib/cpf";
 import { isMatriculaAtiva, contarAtivas, FILTRO_STATUS_INATIVOS } from "@/lib/contagens";
+import { yieldToUI, forEachChunked } from "@/lib/async-yield";
+import { ImportErrorCollector } from "@/lib/import-errors";
+import { formatarHoras } from "@/lib/formatar-horas";
+import { abrirEvidencia } from "@/lib/pedagogico-queries";
 
 const d = parseISODateLocal("2026-06-09");     // Date local, sem shift
 formatarDataBR("2026-06-09");                  // "09/06/2026"
@@ -54,6 +58,12 @@ formatarCPF("12345678901");                    // "123.456.789-01"
 contarAtivas(matriculasRows);                  // ignora evadida/desistente/cancelada
 // PostgREST count-only:
 // .from("matriculas").select("id",{count:"exact",head:true}).not("status","in",FILTRO_STATUS_INATIVOS)
+await yieldToUI();                              // cede o event loop no meio de loops pesados
+const erros = new ImportErrorCollector();      // acumula erros de importação com contexto
+formatarHoras(150, "h", "extenso");            // "150 horas"
+formatarHoras(90, "min", "hh:mm");             // "01:30"
+// URLs assinadas de evidências (bucket privado) — sempre no clique:
+// const url = await abrirEvidencia({ arquivo_url: r.arquivo_url }); window.open(url);
 ```
 
-_Última varredura: 2026-07-14. Rodada 1 (P1/P4/P5/P9) aplicada._
+_Última varredura: 2026-07-14. Rodadas 1 e 2 (P1/P2/P3/P4/P5/P6/P8/P9/P10/P11/P12) aplicadas — auditoria de código 100% executada. Restante (P7) é ajuste de SQL nas views DEQ, tratado em migration própria._
