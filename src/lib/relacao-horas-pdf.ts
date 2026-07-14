@@ -229,7 +229,7 @@ export function gerarPdfRelacaoHoras(input: {
   // itensTrabalhados já calculado acima
 
   const drawRow = (item: RelacaoItem) => {
-    const dt = new Date(item.data + "T12:00:00");
+    const dt = parseISODateLocal(item.data) ?? new Date(item.data + "T12:00:00");
     const dow = dt.getDay();
 
     if (y + rowH > pageH - 90) {
