@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCheck, FileCheck2, Info, Paperclip } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +29,9 @@ import { AulaComprovacaoDialog } from "@/components/pedagogico/aula-comprovacao-
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/frequencia")({
   component: FrequenciaTab,
+  validateSearch: (s: Record<string, unknown>) => ({
+    debug: s.debug === "1" || s.debug === 1 || s.debug === true ? "1" : undefined,
+  }),
 });
 
 function nomeCursista(matricula: Row): string {
@@ -41,10 +44,21 @@ function nomeCursista(matricula: Row): string {
   );
 }
 
+function aulaSubtitulo(a: Row): string {
+  const hi = pickFirst(a, ["hora_inicio"]);
+  const hf = pickFirst(a, ["hora_fim"]);
+  const tipo = pickFirst(a, ["tipo_ch"]);
+  const parts: string[] = [];
+  if (hi) parts.push(hf ? `${String(hi).slice(0, 5)}–${String(hf).slice(0, 5)}` : String(hi).slice(0, 5));
+  if (tipo) parts.push(String(tipo));
+  return parts.join(" · ");
+}
+
 type FreqCache = { tableName: string | null; rows: FrequenciaRow[]; error?: string };
 
 function FrequenciaTab() {
   const { id: turmaId } = Route.useParams();
+  const { debug } = useSearch({ from: Route.id }) as { debug?: string };
   const qc = useQueryClient();
 
   const aulasQ = useQuery(aulasByTurmaOptions(turmaId));
@@ -66,7 +80,17 @@ function FrequenciaTab() {
       ),
     [aulasQ.data?.rows],
   );
-  const cursistasRaw = cursistasQ.data?.rows ?? [];
+  const cursistasAll = cursistasQ.data?.rows ?? [];
+  // Alinha com MTE › Presenças: oculta matrículas evadidas/desistentes na
+  // marcação e no cálculo de % (evita divergência entre as telas).
+  const cursistasRaw = useMemo(
+    () =>
+      cursistasAll.filter((m) => {
+        const s = (m.status as string | undefined) ?? "";
+        return s !== "evadida" && s !== "desistente";
+      }),
+    [cursistasAll],
+  );
   const tableName = freqQ.data?.tableName ?? null;
   const freqIndex = useMemo(() => {
     const map = new Map<string, boolean>();
@@ -187,6 +211,40 @@ function FrequenciaTab() {
     return m;
   }, [aulas, cursistasRaw, freqIndex]);
 
+  // Diagnóstico: contadores por aula (P, F, sem marca) e detecção de aulas
+  // que compartilham a mesma data (fonte comum de divergência entre a
+  // Pedagógico e a Fiscalização MTE).
+  const statsPorAula = useMemo(() => {
+    const m = new Map<string, { p: number; f: number; sem: number }>();
+    for (const a of aulas) {
+      let p = 0, f = 0, sem = 0;
+      for (const c of cursistasRaw) {
+        const v = freqIndex.get(`${a.id}:${c.id}`);
+        if (v === true) p += 1;
+        else if (v === false) f += 1;
+        else sem += 1;
+      }
+      m.set(a.id, { p, f, sem });
+    }
+    return m;
+  }, [aulas, cursistasRaw, freqIndex]);
+
+  const aulasPorData = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const a of aulas) {
+      const d = String(pickFirst(a, ["data"]) ?? "").slice(0, 10);
+      if (!d) continue;
+      const arr = m.get(d) ?? [];
+      arr.push(a.id);
+      m.set(d, arr);
+    }
+    return m;
+  }, [aulas]);
+  const datasDuplicadas = useMemo(
+    () => new Set([...aulasPorData.entries()].filter(([, ids]) => ids.length > 1).map(([d]) => d)),
+    [aulasPorData],
+  );
+
   const loading = aulasQ.isLoading || cursistasQ.isLoading || freqQ.isLoading;
   const erro =
     aulasQ.data?.error ||
@@ -274,7 +332,8 @@ function FrequenciaTab() {
           >
             {aulas.map((a) => (
               <option key={a.id} value={a.id}>
-                {formatarData(pickFirst(a, ["data"]))} — {String(pickFirst(a, ["titulo", "tema", "assunto"]) ?? "Aula")}
+                {formatarData(pickFirst(a, ["data"]))}
+                {aulaSubtitulo(a) ? ` · ${aulaSubtitulo(a)}` : ""} — {String(pickFirst(a, ["titulo", "tema", "assunto", "conteudo_programatico"]) ?? "Aula")}
               </option>
             ))}
           </select>
@@ -373,6 +432,11 @@ function FrequenciaTab() {
             {aulas.map((a) => (
               <th key={a.id} className="sticky top-0 z-20 h-10 whitespace-nowrap bg-background px-2 text-center align-middle font-medium text-muted-foreground">
                 <div className="text-xs font-medium">{formatarData(pickFirst(a, ["data"]))}</div>
+                {aulaSubtitulo(a) ? (
+                  <div className={`text-[10px] font-normal ${datasDuplicadas.has(String(pickFirst(a, ["data"]) ?? "").slice(0, 10)) ? "text-amber-700" : "text-muted-foreground"}`}>
+                    {aulaSubtitulo(a)}
+                  </div>
+                ) : null}
                 <div className="text-[10px] font-normal text-muted-foreground truncate max-w-[120px]">
                   {pickFirst(a, ["titulo", "tema", "assunto"]) ?? ""}
                 </div>
