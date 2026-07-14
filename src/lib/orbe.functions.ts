@@ -385,8 +385,8 @@ const TOOL_DESCRICOES = `
 - relatorio_deq_resumo: contagem de chunks DEQ indexados.
 - buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
 - etapas_status: etapas do projeto com progresso e atividades atrasadas.
-- ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".`.trim();
- // minhas_demandas: adicionada abaixo dinamicamente na descrição.
+- ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".
+- minhas_demandas: demandas Kanban atribuídas ao usuário atual (responsável ou colaborador) — total, abertas, atrasadas e próximas.`.trim();
 
 // Auditoria P8 — snapshot ciente de escopo. Professor/auxiliar recebe agregados
 // só de suas turmas (turmasEscopo). Coordenação/adm recebe agregados globais.
@@ -583,6 +583,7 @@ export const orbeChat = createServerFn({ method: "POST" })
       "etapas_status",
       "pendencias",
       "ajuda_sistema",
+      "minhas_demandas",
     ]);
     const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => {
       if (k === "financeiro_resumo" && !podeFinanceiro) return false;
@@ -683,9 +684,10 @@ REGRAS DE TOOL-CALLING:
           mensagensLoop.push({ role: "user", content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(negado)}` });
           continue;
         }
+        const baseArgs = { ...(toolCall.args ?? {}), __user_id: context.userId };
         const argsFinais = isInstrutor
-          ? { ...(toolCall.args ?? {}), __turmas_escopo: turmasEscopo }
-          : (toolCall.args ?? {});
+          ? { ...baseArgs, __turmas_escopo: turmasEscopo }
+          : baseArgs;
         const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, argsFinais), { erro: "falha na ferramenta" });
         const resultadoStr = JSON.stringify(resultado).slice(0, MAX_TOOL_RESULT);
         await admin.from("orbe_mensagens").insert({
