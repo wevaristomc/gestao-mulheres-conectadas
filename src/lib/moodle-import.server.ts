@@ -149,7 +149,7 @@ export function toBool(v: string | null): boolean | null {
 export function pickCpf(idnumber: string | null, username: string | null): string | null {
   for (const cand of [idnumber, username]) {
     if (!cand) continue;
-    const digits = cand.replace(/\D+/g, "");
+    const digits = onlyDigits(cand);
     if (digits.length === 11) return digits;
   }
   return null;
