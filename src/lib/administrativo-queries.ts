@@ -362,17 +362,9 @@ export function pickFirst(row: Row | null | undefined, keys: string[]): string |
 
 export function formatarData(iso: string | null | undefined): string {
   if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(d);
-  } catch {
-    return String(iso);
-  }
+  // Delegado para @/lib/date-utils (fonte única, tz-safe).
+  const br = formatarDataBR(iso);
+  return br || String(iso);
 }
 
 export function formatBRL(n: number): string {
