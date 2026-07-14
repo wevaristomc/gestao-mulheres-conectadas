@@ -5,6 +5,8 @@ import {
   type LinhaCabecalho,
   type LogoInstitucional,
 } from "./cabecalho-institucional";
+import { formatarCPF } from "@/lib/cpf";
+import { parseISODateLocal } from "@/lib/date-utils";
 
 // Modelos oficiais DEQ/PMQ — fidelidade exata ao docx original.
 //   1) Lista Comprobatória de Entregas aos Cursistas (kits/EPI/camisetas).
