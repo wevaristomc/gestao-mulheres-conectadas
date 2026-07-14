@@ -39,6 +39,7 @@ export type MatriculaLite = {
   beneficiaria_id: string;
   nome: string;
   cpf: string;
+  status: string | null;
 };
 
 export type StatusCruzamento = "identificada" | "divergencia" | "nao_identificada";
@@ -129,17 +130,21 @@ function similarNome(a: string, b: string): number {
 export async function carregarMatriculasDaTurma(turmaId: string): Promise<MatriculaLite[]> {
   const { data, error } = await supabase
     .from("matriculas")
-    .select("id, beneficiaria:beneficiarias(id, nome, cpf)")
+    .select("id, status, beneficiaria:beneficiarias(id, nome, cpf)")
     .eq("turma_id", turmaId);
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as any[];
   return rows
-    .filter((r) => r.beneficiaria)
+    .filter((r) => {
+      const status = String(r.status ?? "").toLowerCase();
+      return r.beneficiaria && status !== "evadida" && status !== "desistente";
+    })
     .map((r) => ({
       matricula_id: r.id,
       beneficiaria_id: r.beneficiaria.id,
       nome: r.beneficiaria.nome ?? "",
       cpf: String(r.beneficiaria.cpf ?? "").replace(/\D+/g, ""),
+      status: r.status ?? null,
     }));
 }
 

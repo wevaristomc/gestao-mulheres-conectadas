@@ -133,12 +133,13 @@ function AulasTab() {
                     <TableCell><Skeleton className="h-4 w-full" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-12" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                 ))
               ) : aulasOrdenadas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
                     Nenhuma aula cadastrada. Use "Nova aula" para lançar a primeira.
                   </TableCell>
                 </TableRow>

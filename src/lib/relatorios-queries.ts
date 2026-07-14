@@ -96,10 +96,10 @@ export function acompanhamentoOptions(projetoId: string | null) {
       if (turmaIds.length) {
         const matRes = await supabase
           .from("matriculas")
-          .select("id", { count: "exact", head: true })
+          .select("id, status")
           .in("turma_id", turmaIds);
         if (matRes.error) errors.push(`matriculas: ${matRes.error.message}`);
-        else cursistasAtivas = matRes.count ?? 0;
+        else cursistasAtivas = ((matRes.data ?? []) as Array<Record<string, unknown>>).filter(matriculaAtiva).length;
       } else {
         cursistasAtivas = 0;
       }
