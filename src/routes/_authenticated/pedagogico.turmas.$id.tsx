@@ -56,7 +56,7 @@ function TurmaLayout() {
     .join(" · ");
 
   return (
-    <div>
+    <div className="min-w-0">
       <Link
         to="/pedagogico"
         className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -72,7 +72,7 @@ function TurmaLayout() {
       {q.isLoading ? (
         <Skeleton className="mb-4 h-10 w-80" />
       ) : (
-        <div className="mb-4 flex gap-1 border-b">
+        <div className="mb-4 flex min-w-0 gap-1 overflow-x-auto border-b">
           {TABS.map((t) => {
             const active = pathname.startsWith(t.to.replace("$id", id));
             return (
