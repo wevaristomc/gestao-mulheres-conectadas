@@ -8,6 +8,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -55,7 +58,7 @@ function FrequenciaTab() {
       ),
     [aulasQ.data?.rows],
   );
-  const cursistas = cursistasQ.data?.rows ?? [];
+  const cursistasRaw = cursistasQ.data?.rows ?? [];
   const tableName = freqQ.data?.tableName ?? null;
   const freqIndex = useMemo(() => {
     const map = new Map<string, boolean>();
@@ -64,6 +67,32 @@ function FrequenciaTab() {
     }
     return map;
   }, [freqQ.data?.rows]);
+
+  type SortMode = "nome-asc" | "nome-desc" | "freq-desc" | "freq-asc";
+  const [sortMode, setSortMode] = useState<SortMode>("nome-asc");
+
+  const pctByMatricula = useMemo(() => {
+    const m = new Map<string, number>();
+    if (aulas.length === 0) return m;
+    for (const c of cursistasRaw) {
+      let p = 0;
+      for (const a of aulas) if (freqIndex.get(`${a.id}:${c.id}`)) p += 1;
+      m.set(c.id, (p / aulas.length) * 100);
+    }
+    return m;
+  }, [cursistasRaw, aulas, freqIndex]);
+
+  const cursistas = useMemo(() => {
+    const rows = [...cursistasRaw];
+    rows.sort((a, b) => {
+      if (sortMode === "nome-asc") return nomeCursista(a).localeCompare(nomeCursista(b), "pt-BR", { sensitivity: "base" });
+      if (sortMode === "nome-desc") return nomeCursista(b).localeCompare(nomeCursista(a), "pt-BR", { sensitivity: "base" });
+      const pa = pctByMatricula.get(a.id) ?? 0;
+      const pb = pctByMatricula.get(b.id) ?? 0;
+      return sortMode === "freq-desc" ? pb - pa : pa - pb;
+    });
+    return rows;
+  }, [cursistasRaw, sortMode, pctByMatricula]);
 
   const marcar = useMutation({
     mutationFn: (v: FrequenciaRow) => upsertFrequencia(v),
@@ -154,6 +183,21 @@ function FrequenciaTab() {
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">Ordenar:</span>
+        <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+          <SelectTrigger className="h-8 w-[220px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="nome-asc">Nome (A → Z)</SelectItem>
+            <SelectItem value="nome-desc">Nome (Z → A)</SelectItem>
+            <SelectItem value="freq-desc">Frequência (maior → menor)</SelectItem>
+            <SelectItem value="freq-asc">Frequência (menor → maior)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Mobile: chooser + vertical list with big P/F toggles */}
       <div className="rounded-md border md:hidden">
         <div className="border-b p-2">
