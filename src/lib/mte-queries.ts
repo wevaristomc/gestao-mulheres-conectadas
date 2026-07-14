@@ -348,6 +348,16 @@ export type AulaMTE = {
 
 export const TIPOS_CH = ["geral", "especifico"] as const;
 
+function ordenarAulasPorDataHora<T extends { id?: string; data?: string | null; hora_inicio?: string | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const byDate = String(a.data ?? "").localeCompare(String(b.data ?? ""));
+    if (byDate !== 0) return byDate;
+    const byTime = String(a.hora_inicio ?? "99:99").slice(0, 5).localeCompare(String(b.hora_inicio ?? "99:99").slice(0, 5));
+    if (byTime !== 0) return byTime;
+    return String(a.id ?? "").localeCompare(String(b.id ?? ""));
+  });
+}
+
 export function aulasMteListOptions(turmaId: string | null, restrictToUserId?: string | null) {
   return queryOptions({
     queryKey: ["mte", "aulas", turmaId, restrictToUserId ?? "all"],
@@ -362,9 +372,10 @@ export function aulasMteListOptions(turmaId: string | null, restrictToUserId?: s
         .from("aulas")
         .select("*")
         .eq("turma_id", turmaId)
-        .order("data", { ascending: true });
+        .order("data", { ascending: true })
+        .order("hora_inicio", { ascending: true, nullsFirst: false });
       if (error) return { rows: [], error: error.message };
-      return { rows: (data ?? []) as AulaMTE[] };
+      return { rows: ordenarAulasPorDataHora((data ?? []) as AulaMTE[]) };
     },
   });
 }
@@ -385,12 +396,13 @@ export function cronogramaGeralOptions(restrictToUserId?: string | null) {
         .from("aulas")
         .select("*, turma:turmas(id, codigo_turma, nome_curso, turno, municipio)")
         .order("data", { ascending: true })
+        .order("hora_inicio", { ascending: true, nullsFirst: false })
         .limit(1000);
       if (res.error) {
         res = await supabase.from("aulas").select("*").order("data", { ascending: true }).limit(1000);
       }
       if (res.error) return { rows: [], error: res.error.message };
-      let rows = (res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[];
+      let rows = ordenarAulasPorDataHora((res.data ?? []) as (AulaMTE & { turma?: Partial<TurmaMTE> | null })[]);
       if (permitidas) rows = rows.filter((r) => permitidas!.has(r.turma_id));
       return { rows };
     },

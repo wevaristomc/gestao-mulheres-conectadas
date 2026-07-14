@@ -52,7 +52,10 @@ function PresencasIndex() {
 
   const matQ = useQuery(matriculasListOptions(effectiveTurma || null, restrictToUserId));
   const matriculas = useMemo(() =>
-    (matQ.data?.rows ?? []).filter((m) => m.status !== "evadida" && m.status !== "desistente"),
+    (matQ.data?.rows ?? []).filter((m) => {
+      const status = String(m.status ?? "").toLowerCase();
+      return status !== "evadida" && status !== "desistente";
+    }),
     [matQ.data],
   );
 

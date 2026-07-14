@@ -96,10 +96,10 @@ export function acompanhamentoOptions(projetoId: string | null) {
       if (turmaIds.length) {
         const matRes = await supabase
           .from("matriculas")
-          .select("id", { count: "exact", head: true })
+          .select("id, status")
           .in("turma_id", turmaIds);
         if (matRes.error) errors.push(`matriculas: ${matRes.error.message}`);
-        else cursistasAtivas = matRes.count ?? 0;
+        else cursistasAtivas = ((matRes.data ?? []) as Array<Record<string, unknown>>).filter(matriculaAtiva).length;
       } else {
         cursistasAtivas = 0;
       }
@@ -193,6 +193,10 @@ function pickNum(v: unknown): number {
   if (typeof v === "string" && v.trim() && !Number.isNaN(Number(v))) return Number(v);
   return 0;
 }
+function matriculaAtiva(m: Record<string, unknown>): boolean {
+  const s = String(m.status ?? "").toLowerCase();
+  return s !== "evadida" && s !== "desistente";
+}
 
 // -------- Aba 1: Frequência por turma --------
 
@@ -262,7 +266,7 @@ export function frequenciaResumoOptions(projetoId: string | null) {
           errors.push(`matriculas(${t.id}): ${matRes.error.message}`);
           continue;
         }
-        const matriculas = (matRes.data ?? []) as Array<Record<string, unknown> & { id: string }>;
+        const matriculas = ((matRes.data ?? []) as Array<Record<string, unknown> & { id: string }>).filter(matriculaAtiva);
 
         // Frequência
         const presencasPorMatricula = new Map<string, number>();

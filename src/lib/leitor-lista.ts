@@ -39,6 +39,7 @@ export type MatriculaLite = {
   beneficiaria_id: string;
   nome: string;
   cpf: string;
+  status: string | null;
 };
 
 export type StatusCruzamento = "identificada" | "divergencia" | "nao_identificada";
@@ -129,17 +130,21 @@ function similarNome(a: string, b: string): number {
 export async function carregarMatriculasDaTurma(turmaId: string): Promise<MatriculaLite[]> {
   const { data, error } = await supabase
     .from("matriculas")
-    .select("id, beneficiaria:beneficiarias(id, nome, cpf)")
+    .select("id, status, beneficiaria:beneficiarias(id, nome, cpf)")
     .eq("turma_id", turmaId);
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as any[];
   return rows
-    .filter((r) => r.beneficiaria)
+    .filter((r) => {
+      const status = String(r.status ?? "").toLowerCase();
+      return r.beneficiaria && status !== "evadida" && status !== "desistente";
+    })
     .map((r) => ({
       matricula_id: r.id,
       beneficiaria_id: r.beneficiaria.id,
       nome: r.beneficiaria.nome ?? "",
       cpf: String(r.beneficiaria.cpf ?? "").replace(/\D+/g, ""),
+      status: r.status ?? null,
     }));
 }
 
@@ -227,16 +232,71 @@ export type ConfirmarResultado = {
   nao_identificadas: LinhaConferencia[];
 };
 
+function normalizarHora(raw: string | null | undefined): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/(\d{1,2})(?:[:hH](\d{2}))?/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2] ?? 0);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+function extrairHorario(raw: string | null | undefined): { inicio: string | null; fim: string | null } {
+  const s = String(raw ?? "").trim();
+  if (!s) return { inicio: null, fim: null };
+  const m = s.match(/(\d{1,2})(?:[:hH](\d{2}))?\s*(?:às|as|-|–|—|a|até)\s*(\d{1,2})(?:[:hH](\d{2}))?/i);
+  if (m) {
+    return {
+      inicio: normalizarHora(`${m[1]}:${m[2] ?? "00"}`),
+      fim: normalizarHora(`${m[3]}:${m[4] ?? "00"}`),
+    };
+  }
+  return { inicio: normalizarHora(s), fim: null };
+}
+
+function horaDaAula(row: Record<string, unknown>, key: "hora_inicio" | "hora_fim"): string | null {
+  return normalizarHora(typeof row[key] === "string" ? row[key] : null);
+}
+
 async function upsertAula(turmaId: string, cab: CabecalhoExtraido): Promise<string> {
   if (!cab.data) throw new Error("A IA não identificou a data da aula — corrija no cabeçalho antes de gravar.");
   const dataIso = cab.data;
-  // procura aula existente pela chave (turma_id, data)
-  const existente = await supabase
+  const horario = extrairHorario(cab.horario);
+  // Em dias com mais de uma aula, a data sozinha aponta para a aula errada.
+  // Usa horário quando disponível e só aceita fallback por data quando há uma única aula no dia.
+  const existentes = await supabase
     .from("aulas")
-    .select("id")
+    .select("id, hora_inicio, hora_fim")
     .eq("turma_id", turmaId)
     .eq("data", dataIso)
-    .maybeSingle();
+    .order("hora_inicio", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
+  if (existentes.error) throw new Error("Falha ao localizar aula existente: " + existentes.error.message);
+  const aulasDoDia = (existentes.data ?? []) as Array<Record<string, unknown> & { id: string }>;
+
+  let aulaExistente = horario.inicio
+    ? aulasDoDia.find((a) => {
+        const hi = horaDaAula(a, "hora_inicio");
+        const hf = horaDaAula(a, "hora_fim");
+        return hi === horario.inicio && (!horario.fim || !hf || hf === horario.fim);
+      }) ?? null
+    : null;
+
+  if (!aulaExistente && aulasDoDia.length === 1) {
+    aulaExistente = aulasDoDia[0];
+  }
+
+  if (!aulaExistente && aulasDoDia.length > 1) {
+    const detalhes = aulasDoDia
+      .map((a) => [horaDaAula(a, "hora_inicio") ?? "sem início", horaDaAula(a, "hora_fim") ?? "sem fim"].join("–"))
+      .join(", ");
+    throw new Error(
+      `Há mais de uma aula em ${dataIso}. Informe/corrija o horário da lista para gravar na aula correta (${detalhes}).`,
+    );
+  }
+
   const payload: Record<string, unknown> = {
     turma_id: turmaId,
     data: dataIso,
@@ -244,15 +304,12 @@ async function upsertAula(turmaId: string, cab: CabecalhoExtraido): Promise<stri
     instrutor: cab.instrutor ?? null,
     ch_ministrada: cab.ch_dia ?? null,
   };
-  if (cab.horario && cab.horario.includes("às")) {
-    const [h1, h2] = cab.horario.split("às").map((s) => s.trim());
-    payload.hora_inicio = h1 || null;
-    payload.hora_fim = h2 || null;
-  }
-  if (existente.data?.id) {
-    const up = await supabase.from("aulas").update(payload).eq("id", existente.data.id);
+  if (horario.inicio) payload.hora_inicio = horario.inicio;
+  if (horario.fim) payload.hora_fim = horario.fim;
+  if (aulaExistente?.id) {
+    const up = await supabase.from("aulas").update(payload).eq("id", aulaExistente.id);
     if (up.error) throw new Error("Falha ao atualizar aula: " + up.error.message);
-    return existente.data.id as string;
+    return aulaExistente.id;
   }
   const ins = await supabase.from("aulas").insert(payload).select("id").single();
   if (ins.error) throw new Error("Falha ao criar aula: " + ins.error.message);
