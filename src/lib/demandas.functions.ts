@@ -108,16 +108,18 @@ export const atribuirResponsavel = createServerFn({ method: "POST" })
         .from("notificacoes")
         .select("id")
         .eq("user_id", data.responsavelId)
-        .eq("dedup_key", dedupKey)
+        .eq("chave_dedup", dedupKey)
         .maybeSingle();
       if (!ja) {
         await admin.from("notificacoes").insert({
           user_id: data.responsavelId,
           tipo: "demanda",
+          severidade: "info",
+          origem: "kanban",
           titulo: "Nova demanda atribuída a você",
-          mensagem: titulo,
+          corpo: titulo,
           link_rota: "/minhas-demandas",
-          dedup_key: dedupKey,
+          chave_dedup: dedupKey,
         });
       }
     }
