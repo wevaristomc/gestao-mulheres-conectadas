@@ -2,6 +2,8 @@
 // Ficam fora de .functions.ts porque o splitter do TanStack apaga
 // helpers module-scope referenciados por handlers de createServerFn.
 
+import { onlyDigits } from "@/lib/cpf";
+
 export const TABELAS_ALVO = new Set<string>([
   "pmc_user",
   "pmc_course",
