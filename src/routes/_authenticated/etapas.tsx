@@ -32,6 +32,9 @@ import {
   ETAPA_STATUS_LABEL, ATIV_STATUS_LABEL,
   type Etapa, type Atividade, type AtividadeStatus,
 } from "@/lib/etapas-queries";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { KanbanBoard } from "@/components/etapas/kanban-board";
+import { AtividadeSheet } from "@/components/etapas/atividade-sheet";
 
 export const Route = createFileRoute("/_authenticated/etapas")({
   head: () => ({ meta: [{ title: "Etapas do Projeto · Painel Mulheres Conectadas" }] }),
@@ -147,6 +150,7 @@ function EtapaDetalhe({
   etapa, canEdit, userId,
 }: { etapa: Etapa; canEdit: boolean; userId: string | null }) {
   const qc = useQueryClient();
+  const { projetoId } = useActiveContext();
   const q = useQuery(atividadesByEtapaOptions(etapa.id));
   const rows = q.data?.rows ?? [];
 
@@ -154,6 +158,7 @@ function EtapaDetalhe({
   const [filtroGrupo, setFiltroGrupo] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Atividade | null>(null);
+  const [selecionada, setSelecionada] = useState<Atividade | null>(null);
 
   const grupos = useMemo(() => {
     const seen = new Map<string, Atividade[]>();
@@ -192,6 +197,7 @@ function EtapaDetalhe({
   const pTotal = progresso(rows);
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -241,7 +247,13 @@ function EtapaDetalhe({
       </CardHeader>
 
       <CardContent>
-        {q.isLoading ? (
+        <Tabs defaultValue="lista">
+          <TabsList className="mb-3">
+            <TabsTrigger value="lista">Lista</TabsTrigger>
+            <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          </TabsList>
+          <TabsContent value="lista">
+          {q.isLoading ? (
           <div className="text-sm text-muted-foreground">Carregando atividades…</div>
         ) : grupos.length === 0 ? (
           <div className="text-sm text-muted-foreground">Nenhuma atividade encontrada.</div>
@@ -269,6 +281,7 @@ function EtapaDetalhe({
                           canEdit={canEdit}
                           onToggle={(c) => toggle.mutate({ id: a.id, concluida: c })}
                           onEdit={() => { setEditing(a); setDialogOpen(true); }}
+                          onOpen={() => setSelecionada(a)}
                           onDelete={() => {
                             if (confirm(`Remover "${a.titulo}"?`)) remover.mutate(a.id);
                           }}
@@ -281,6 +294,21 @@ function EtapaDetalhe({
             })}
           </Accordion>
         )}
+          </TabsContent>
+          <TabsContent value="kanban">
+            {q.isLoading ? (
+              <div className="text-sm text-muted-foreground">Carregando…</div>
+            ) : (
+              <KanbanBoard
+                atividades={rows}
+                onOpenCard={setSelecionada}
+                currentUserId={userId}
+                canEditAll={canEdit}
+                projetoId={projetoId}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
 
       <AtividadeDialog
@@ -292,23 +320,36 @@ function EtapaDetalhe({
         onSaved={() => qc.invalidateQueries({ queryKey: ["etapas"] })}
       />
     </Card>
+    <AtividadeSheet
+      atividade={selecionada}
+      open={!!selecionada}
+      onOpenChange={(v) => !v && setSelecionada(null)}
+      canEdit={canEdit}
+      currentUserId={userId}
+      projetoId={projetoId}
+    />
+    </>
   );
 }
 
 function AtividadeRow({
-  atividade, canEdit, onToggle, onEdit, onDelete,
+  atividade, canEdit, onToggle, onEdit, onDelete, onOpen,
 }: {
   atividade: Atividade;
   canEdit: boolean;
   onToggle: (c: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onOpen?: () => void;
 }) {
   const atrasada = isAtrasada(atividade);
   const link = moduleLink(atividade.vinculo_modulo);
   const concluida = atividade.status === "concluida";
   return (
-    <li className="flex items-start gap-3 py-2">
+    <li className="flex items-start gap-3 py-2 hover:bg-muted/30 rounded px-1 cursor-pointer" onClick={(e) => {
+      if ((e.target as HTMLElement).closest("button, [role=checkbox]")) return;
+      onOpen?.();
+    }}>
       <Checkbox
         checked={concluida}
         onCheckedChange={(c) => onToggle(!!c)}

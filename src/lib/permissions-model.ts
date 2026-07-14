@@ -26,6 +26,7 @@ export const PERMISSION_MODULES: ModuleKey[] = [
   "relacao-horas",
   "financeiro-relacoes-horas",
   "etapas",
+  "minhas-demandas",
   "ajuda",
   "configuracoes",
 ];
@@ -45,6 +46,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   "relacao-horas": "Relação de Horas",
   "financeiro-relacoes-horas": "Financeiro · Relações de Horas",
   etapas: "Etapas do Projeto",
+  "minhas-demandas": "Minhas Demandas",
   ajuda: "Ajuda",
   configuracoes: "Configurações",
 };
@@ -57,6 +59,14 @@ export const DEFAULT_PERMISSION_ROWS: PermissionRow[] = [
     pode_criar: true,
     pode_editar: true,
     pode_excluir: true,
+  })),
+  ...APP_ROLES.filter((r) => r !== "coordenador_geral").map((r) => ({
+    role: r,
+    modulo: "minhas-demandas" as ModuleKey,
+    pode_ver: true,
+    pode_criar: false,
+    pode_editar: true,
+    pode_excluir: false,
   })),
   ...[
     "visao-geral",

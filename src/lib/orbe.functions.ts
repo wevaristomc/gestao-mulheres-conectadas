@@ -308,6 +308,33 @@ async function toolAjudaSistema(args: { topico?: string }) {
   return { guias, campos, faq };
 }
 
+async function toolMinhasDemandas(admin: any, args: any) {
+  const userId = args?.__user_id;
+  if (!userId) return { erro: "sem usuário" };
+  const { data } = await admin
+    .from("etapa_atividades")
+    .select("id, titulo, grupo, status, prazo, prioridade")
+    .or(`responsavel_id.eq.${userId},colaboradores.cs.{${userId}}`)
+    .limit(200);
+  const rows = ((data ?? []) as any[]);
+  const hoje = Date.now();
+  const abertas = rows.filter((r) => r.status !== "concluida");
+  const atrasadas = abertas.filter(
+    (r) => r.prazo && new Date(r.prazo + "T23:59:59").getTime() < hoje,
+  );
+  return {
+    total: rows.length,
+    abertas: abertas.length,
+    atrasadas: atrasadas.length,
+    prioridade_alta: abertas.filter((r) => r.prioridade === "alta" || r.prioridade === "critica").length,
+    proximas: abertas
+      .filter((r) => r.prazo)
+      .sort((a, b) => String(a.prazo).localeCompare(String(b.prazo)))
+      .slice(0, 10)
+      .map((r) => ({ titulo: r.titulo, grupo: r.grupo, prazo: r.prazo, prioridade: r.prioridade, status: r.status })),
+  };
+}
+
 function sugerirAjudaPorRota(rota: string): string | null {
   const r = rota.toLowerCase();
   let slug: string | null = null;
@@ -341,6 +368,7 @@ const TOOLS: Record<string, (admin: any, args: any) => Promise<any>> = {
   buscar_base_conhecimento: (a, x) => toolBuscarConhecimento(a, x),
   etapas_status: (a) => toolEtapasStatus(a),
   ajuda_sistema: (_a, x) => toolAjudaSistema(x),
+  minhas_demandas: (a, x) => toolMinhasDemandas(a, x),
 };
 
 const TOOL_DESCRICOES = `
@@ -357,7 +385,8 @@ const TOOL_DESCRICOES = `
 - relatorio_deq_resumo: contagem de chunks DEQ indexados.
 - buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
 - etapas_status: etapas do projeto com progresso e atividades atrasadas.
-- ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".`.trim();
+- ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".
+- minhas_demandas: demandas Kanban atribuídas ao usuário atual (responsável ou colaborador) — total, abertas, atrasadas e próximas.`.trim();
 
 // Auditoria P8 — snapshot ciente de escopo. Professor/auxiliar recebe agregados
 // só de suas turmas (turmasEscopo). Coordenação/adm recebe agregados globais.
@@ -554,6 +583,7 @@ export const orbeChat = createServerFn({ method: "POST" })
       "etapas_status",
       "pendencias",
       "ajuda_sistema",
+      "minhas_demandas",
     ]);
     const ferramentasPermitidas = Object.keys(TOOLS).filter((k) => {
       if (k === "financeiro_resumo" && !podeFinanceiro) return false;
@@ -654,9 +684,10 @@ REGRAS DE TOOL-CALLING:
           mensagensLoop.push({ role: "user", content: `Resultado da ferramenta ${toolCall.tool}:\n${JSON.stringify(negado)}` });
           continue;
         }
+        const baseArgs = { ...(toolCall.args ?? {}), __user_id: context.userId };
         const argsFinais = isInstrutor
-          ? { ...(toolCall.args ?? {}), __turmas_escopo: turmasEscopo }
-          : (toolCall.args ?? {});
+          ? { ...baseArgs, __turmas_escopo: turmasEscopo }
+          : baseArgs;
         const resultado = await safe(() => TOOLS[toolCall!.tool!](admin, argsFinais), { erro: "falha na ferramenta" });
         const resultadoStr = JSON.stringify(resultado).slice(0, MAX_TOOL_RESULT);
         await admin.from("orbe_mensagens").insert({

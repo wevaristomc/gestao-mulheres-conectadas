@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   ListChecks,
@@ -15,6 +16,7 @@ import {
   Clock,
   Milestone,
   HelpCircle,
+  Inbox,
 } from "lucide-react";
 
 import {
@@ -34,6 +36,8 @@ import { useActiveContext } from "@/hooks/use-active-context";
 import { usePermissoes } from "@/hooks/use-permissoes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PMQLogo } from "@/components/pmq-logo";
+import { minhasDemandasOptions } from "@/lib/etapas-queries";
+import { Badge } from "@/components/ui/badge";
 
 type Item = {
   key: ModuleKey;
@@ -44,6 +48,7 @@ type Item = {
 
 const PRIMARY: Item[] = [
   { key: "visao-geral", title: "Visão Geral", url: "/", icon: LayoutDashboard },
+  { key: "minhas-demandas", title: "Minhas Demandas", url: "/minhas-demandas", icon: Inbox },
   { key: "etapas", title: "Etapas do Projeto", url: "/etapas", icon: Milestone },
   { key: "pendencias", title: "Pendências", url: "/pendencias", icon: ListChecks },
 ];
@@ -67,10 +72,13 @@ const APOIO: Item[] = [
 ];
 
 export function AppSidebar() {
-  const { isLoadingRoles } = useActiveContext();
+  const { isLoadingRoles, user, projetoId } = useActiveContext();
   const { can, isLoading: isLoadingPermissoes } = usePermissoes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
+
+  const minhasQ = useQuery(minhasDemandasOptions(user?.id ?? null, projetoId));
+  const openCount = (minhasQ.data?.rows ?? []).filter((a) => a.status !== "concluida").length;
 
   const renderGroup = (label: string, items: Item[]) => {
     if (isLoadingRoles || isLoadingPermissoes) {
@@ -100,6 +108,11 @@ export function AppSidebar() {
                   <Link to={item.url} className="flex items-center gap-2">
                     <item.icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{item.title}</span>
+                    {item.key === "minhas-demandas" && openCount > 0 && (
+                      <Badge variant="secondary" className="ml-auto h-5 px-1.5 text-[10px] group-data-[collapsible=icon]:hidden">
+                        {openCount}
+                      </Badge>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

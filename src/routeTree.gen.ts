@@ -20,6 +20,7 @@ import { Route as AuthenticatedRelacaoHorasRouteImport } from './routes/_authent
 import { Route as AuthenticatedPendenciasRouteImport } from './routes/_authenticated/pendencias'
 import { Route as AuthenticatedPedagogicoRouteImport } from './routes/_authenticated/pedagogico'
 import { Route as AuthenticatedMteRouteImport } from './routes/_authenticated/mte'
+import { Route as AuthenticatedMinhasDemandasRouteImport } from './routes/_authenticated/minhas-demandas'
 import { Route as AuthenticatedFinanceiroRouteImport } from './routes/_authenticated/financeiro'
 import { Route as AuthenticatedEtapasRouteImport } from './routes/_authenticated/etapas'
 import { Route as AuthenticatedDriveRouteImport } from './routes/_authenticated/drive'
@@ -129,6 +130,12 @@ const AuthenticatedMteRoute = AuthenticatedMteRouteImport.update({
   path: '/mte',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMinhasDemandasRoute =
+  AuthenticatedMinhasDemandasRouteImport.update({
+    id: '/minhas-demandas',
+    path: '/minhas-demandas',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedFinanceiroRoute = AuthenticatedFinanceiroRouteImport.update({
   id: '/financeiro',
   path: '/financeiro',
@@ -445,6 +452,7 @@ export interface FileRoutesByFullPath {
   '/drive': typeof AuthenticatedDriveRoute
   '/etapas': typeof AuthenticatedEtapasRoute
   '/financeiro': typeof AuthenticatedFinanceiroRouteWithChildren
+  '/minhas-demandas': typeof AuthenticatedMinhasDemandasRoute
   '/mte': typeof AuthenticatedMteRouteWithChildren
   '/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/pendencias': typeof AuthenticatedPendenciasRoute
@@ -505,6 +513,7 @@ export interface FileRoutesByTo {
   '/captacao': typeof AuthenticatedCaptacaoRoute
   '/drive': typeof AuthenticatedDriveRoute
   '/etapas': typeof AuthenticatedEtapasRoute
+  '/minhas-demandas': typeof AuthenticatedMinhasDemandasRoute
   '/pendencias': typeof AuthenticatedPendenciasRoute
   '/relacao-horas': typeof AuthenticatedRelacaoHorasRoute
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
@@ -566,6 +575,7 @@ export interface FileRoutesById {
   '/_authenticated/drive': typeof AuthenticatedDriveRoute
   '/_authenticated/etapas': typeof AuthenticatedEtapasRoute
   '/_authenticated/financeiro': typeof AuthenticatedFinanceiroRouteWithChildren
+  '/_authenticated/minhas-demandas': typeof AuthenticatedMinhasDemandasRoute
   '/_authenticated/mte': typeof AuthenticatedMteRouteWithChildren
   '/_authenticated/pedagogico': typeof AuthenticatedPedagogicoRouteWithChildren
   '/_authenticated/pendencias': typeof AuthenticatedPendenciasRoute
@@ -633,6 +643,7 @@ export interface FileRouteTypes {
     | '/drive'
     | '/etapas'
     | '/financeiro'
+    | '/minhas-demandas'
     | '/mte'
     | '/pedagogico'
     | '/pendencias'
@@ -693,6 +704,7 @@ export interface FileRouteTypes {
     | '/captacao'
     | '/drive'
     | '/etapas'
+    | '/minhas-demandas'
     | '/pendencias'
     | '/relacao-horas'
     | '/trocar-senha'
@@ -753,6 +765,7 @@ export interface FileRouteTypes {
     | '/_authenticated/drive'
     | '/_authenticated/etapas'
     | '/_authenticated/financeiro'
+    | '/_authenticated/minhas-demandas'
     | '/_authenticated/mte'
     | '/_authenticated/pedagogico'
     | '/_authenticated/pendencias'
@@ -890,6 +903,13 @@ declare module '@tanstack/react-router' {
       path: '/mte'
       fullPath: '/mte'
       preLoaderRoute: typeof AuthenticatedMteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/minhas-demandas': {
+      id: '/_authenticated/minhas-demandas'
+      path: '/minhas-demandas'
+      fullPath: '/minhas-demandas'
+      preLoaderRoute: typeof AuthenticatedMinhasDemandasRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/financeiro': {
@@ -1471,6 +1491,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDriveRoute: typeof AuthenticatedDriveRoute
   AuthenticatedEtapasRoute: typeof AuthenticatedEtapasRoute
   AuthenticatedFinanceiroRoute: typeof AuthenticatedFinanceiroRouteWithChildren
+  AuthenticatedMinhasDemandasRoute: typeof AuthenticatedMinhasDemandasRoute
   AuthenticatedMteRoute: typeof AuthenticatedMteRouteWithChildren
   AuthenticatedPedagogicoRoute: typeof AuthenticatedPedagogicoRouteWithChildren
   AuthenticatedPendenciasRoute: typeof AuthenticatedPendenciasRoute
@@ -1491,6 +1512,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDriveRoute: AuthenticatedDriveRoute,
   AuthenticatedEtapasRoute: AuthenticatedEtapasRoute,
   AuthenticatedFinanceiroRoute: AuthenticatedFinanceiroRouteWithChildren,
+  AuthenticatedMinhasDemandasRoute: AuthenticatedMinhasDemandasRoute,
   AuthenticatedMteRoute: AuthenticatedMteRouteWithChildren,
   AuthenticatedPedagogicoRoute: AuthenticatedPedagogicoRouteWithChildren,
   AuthenticatedPendenciasRoute: AuthenticatedPendenciasRoute,
@@ -1512,13 +1534,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
