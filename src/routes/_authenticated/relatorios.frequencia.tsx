@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Download } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,10 @@ import { useActiveContext } from "@/hooks/use-active-context";
 import { frequenciaResumoOptions } from "@/lib/relatorios-queries";
 import { AnaliseIA } from "@/components/analise-ia";
 import { toCSV, downloadCSV } from "@/lib/csv";
+import {
+  SortableHeader, nextSort, compareStr, compareNum,
+  type SortState,
+} from "@/components/sortable-header";
 
 export const Route = createFileRoute("/_authenticated/relatorios/frequencia")({
   component: Frequencia,
@@ -22,6 +27,29 @@ function Frequencia() {
   const { projetoId, projetoNome } = useActiveContext();
   const q = useQuery(frequenciaResumoOptions(projetoId));
   const d = q.data;
+
+  type SortKey = "nome" | "aulas" | "presencas" | "faltas" | "pct";
+  const [sort, setSort] = useState<SortState<SortKey>>({ key: "nome", dir: "asc" });
+  const onSort = (k: SortKey) => setSort((s) => nextSort(s, k));
+
+  const turmasOrdenadas = useMemo(() => {
+    if (!d) return [];
+    return d.turmas.map((t) => {
+      const cursistas = [...t.cursistas];
+      if (sort) {
+        cursistas.sort((a, b) => {
+          switch (sort.key) {
+            case "nome": return compareStr(a.nome, b.nome, sort.dir);
+            case "aulas": return compareNum(a.aulasTotal, b.aulasTotal, sort.dir);
+            case "presencas": return compareNum(a.presencas, b.presencas, sort.dir);
+            case "faltas": return compareNum(a.faltas, b.faltas, sort.dir);
+            case "pct": return compareNum(a.pct, b.pct, sort.dir);
+          }
+        });
+      }
+      return { ...t, cursistas };
+    });
+  }, [d, sort]);
 
   function exportar() {
     if (!d) return;
@@ -80,7 +108,7 @@ function Frequencia() {
         <p className="text-sm text-muted-foreground">Sem turmas cadastradas neste projeto.</p>
       ) : (
         <div className="space-y-6">
-          {d.turmas.map((t) => (
+          {turmasOrdenadas.map((t) => (
             <div key={t.turmaId} className="rounded-md border">
               <div className="flex items-center justify-between border-b px-3 py-2">
                 <div className="font-medium">{t.turmaNome}</div>
@@ -94,11 +122,11 @@ function Frequencia() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Cursista</TableHead>
-                      <TableHead className="w-20 text-right">Aulas</TableHead>
-                      <TableHead className="w-24 text-right">Presenças</TableHead>
-                      <TableHead className="w-20 text-right">Faltas</TableHead>
-                      <TableHead className="w-24 text-right">%</TableHead>
+                      <SortableHeader sort={sort} sortKey="nome" onSort={onSort}>Cursista</SortableHeader>
+                      <SortableHeader sort={sort} sortKey="aulas" onSort={onSort} className="w-20" align="right">Aulas</SortableHeader>
+                      <SortableHeader sort={sort} sortKey="presencas" onSort={onSort} className="w-24" align="right">Presenças</SortableHeader>
+                      <SortableHeader sort={sort} sortKey="faltas" onSort={onSort} className="w-20" align="right">Faltas</SortableHeader>
+                      <SortableHeader sort={sort} sortKey="pct" onSort={onSort} className="w-24" align="right">%</SortableHeader>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
