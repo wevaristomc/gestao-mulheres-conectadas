@@ -571,7 +571,8 @@ function FrequenciaTab() {
               {fechandoAula ? (
                 <>
                   Aula de{" "}
-                  <strong>{formatarData(pickFirst(fechandoAula, ["data"]))}</strong>.
+                  <strong>{formatarData(pickFirst(fechandoAula, ["data"]))}</strong>
+                  {aulaSubtitulo(fechandoAula) ? ` · ${aulaSubtitulo(fechandoAula)}` : ""}.
                   Todas as cursistas que ainda não foram lançadas serão marcadas
                   como <strong>falta</strong>. Isso pode ser corrigido depois
                   desmarcando individualmente.
@@ -581,6 +582,24 @@ function FrequenciaTab() {
                     {naoMarcadosPorAula.get(fechandoAula.id) ?? 0}
                   </strong>{" "}
                   cursista(s) serão marcadas como falta.
+                  {(() => {
+                    const naoMarcados = cursistasRaw.filter(
+                      (c) => !freqIndex.has(`${fechandoAula.id}:${c.id}`),
+                    );
+                    if (naoMarcados.length === 0) return null;
+                    return (
+                      <div className="mt-2 max-h-40 overflow-auto rounded border bg-muted/40 p-2 text-xs">
+                        <ul className="list-disc pl-4">
+                          {naoMarcados.slice(0, 50).map((c) => (
+                            <li key={c.id}>{nomeCursista(c)}</li>
+                          ))}
+                          {naoMarcados.length > 50 ? (
+                            <li className="opacity-70">… e mais {naoMarcados.length - 50}</li>
+                          ) : null}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : null}
             </AlertDialogDescription>
