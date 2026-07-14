@@ -284,6 +284,25 @@ export async function upsertFrequencia(input: {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Upsert em lote de frequência. Usado por "Fechar chamada" para marcar
+ * como falta todas as cursistas ainda não lançadas em uma aula.
+ */
+export async function upsertFrequenciaBatch(rows: FrequenciaRow[]): Promise<void> {
+  if (!rows.length) return;
+  const tableName = await detectarTabelaFrequencia();
+  if (!tableName) throw new Error("Tabela de frequência não configurada no banco.");
+  const payload = rows.map((r) => ({
+    aula_id: r.aula_id,
+    matricula_id: r.matricula_id,
+    presente: r.presente,
+  }));
+  const { error } = await supabase
+    .from(tableName)
+    .upsert(payload, { onConflict: "aula_id,matricula_id" });
+  if (error) throw new Error(error.message);
+}
+
 // Helpers de apresentação dos rows descobertos em runtime.
 export function pickFirst(row: Row | null | undefined, keys: string[]): string | null {
   if (!row) return null;
