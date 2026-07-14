@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { parseISODateLocal } from "@/lib/date-utils";
+import { isMatriculaAtiva } from "@/lib/contagens";
 
 // Agrega dados para o módulo Relatórios. Todas as queries são defensivas:
 // se uma tabela/coluna não existir, o dado cai para null/0 e a UI mostra "—".
@@ -193,10 +194,8 @@ function pickNum(v: unknown): number {
   if (typeof v === "string" && v.trim() && !Number.isNaN(Number(v))) return Number(v);
   return 0;
 }
-function matriculaAtiva(m: Record<string, unknown>): boolean {
-  const s = String(m.status ?? "").toLowerCase();
-  return s !== "evadida" && s !== "desistente";
-}
+// Fonte única — ver @/lib/contagens.
+const matriculaAtiva = isMatriculaAtiva;
 
 // -------- Aba 1: Frequência por turma --------
 
