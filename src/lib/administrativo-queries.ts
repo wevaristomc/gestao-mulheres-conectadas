@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { gerarCertificadoPDF, slugifyNome } from "@/lib/certificado-pdf";
 import { BUCKET as DOCUMENTOS_BUCKET } from "@/lib/base-conhecimento-queries";
+import { formatarDataBR } from "@/lib/date-utils";
 
 // Padrão: cada query retorna { rows, error? } com descoberta de colunas em runtime.
 // Tabelas esperadas (todas com RLS por projeto): turmas, matriculas, cursistas,
