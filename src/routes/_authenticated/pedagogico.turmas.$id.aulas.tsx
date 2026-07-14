@@ -64,7 +64,11 @@ function AulasTab() {
     return [...rows].sort((a, b) => {
       const da = String(a.data ?? "");
       const db = String(b.data ?? "");
-      return da.localeCompare(db);
+      const byDate = da.localeCompare(db);
+      if (byDate !== 0) return byDate;
+      const ha = String(a.hora_inicio ?? "99:99").slice(0, 5);
+      const hb = String(b.hora_inicio ?? "99:99").slice(0, 5);
+      return ha.localeCompare(hb);
     });
   }, [rows]);
 
@@ -115,6 +119,7 @@ function AulasTab() {
               <TableRow>
                 <TableHead className="w-40">Data</TableHead>
                 <TableHead>Tema</TableHead>
+                <TableHead className="w-32">Horário</TableHead>
                 <TableHead className="w-24">Duração</TableHead>
                 <TableHead className="w-44">Comprovação</TableHead>
                 <TableHead className="w-24 text-right">Ações</TableHead>
@@ -144,6 +149,14 @@ function AulasTab() {
                   <TableRow key={r.id}>
                     <TableCell>{formatarData(pickFirst(r, ["data"]))}</TableCell>
                     <TableCell>{pickFirst(r, ["conteudo_programatico", "titulo", "tema", "assunto", "descricao"]) ?? "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {(() => {
+                        const hi = pickFirst(r, ["hora_inicio"]);
+                        const hf = pickFirst(r, ["hora_fim"]);
+                        if (!hi) return "—";
+                        return hf ? `${String(hi).slice(0, 5)}–${String(hf).slice(0, 5)}` : String(hi).slice(0, 5);
+                      })()}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {(() => {
                         const ch = pickFirst(r, ["ch_prevista"]);

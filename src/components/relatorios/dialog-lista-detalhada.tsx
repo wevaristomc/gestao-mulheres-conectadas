@@ -35,6 +35,21 @@ type Matricula = {
   beneficiarias?: { nome?: string; cpf?: string } | null;
 };
 
+function matriculaAtiva(m: Matricula): boolean {
+  const s = String(m.status ?? "").toLowerCase();
+  return s !== "evadida" && s !== "desistente";
+}
+
+function ordenarAulas(aulas: Aula[]): Aula[] {
+  return [...aulas].sort((a, b) => {
+    const byDate = String(a.data ?? "").localeCompare(String(b.data ?? ""));
+    if (byDate !== 0) return byDate;
+    const byTime = String(a.hora_inicio ?? "99:99").slice(0, 5).localeCompare(String(b.hora_inicio ?? "99:99").slice(0, 5));
+    if (byTime !== 0) return byTime;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export function DialogListaDetalhada({
   open,
   onOpenChange,
@@ -61,9 +76,10 @@ export function DialogListaDetalhada({
         .from("aulas")
         .select("id, data, hora_inicio, hora_fim, ch_prevista")
         .eq("turma_id", turma.id)
-        .order("data", { ascending: true });
+        .order("data", { ascending: true })
+        .order("hora_inicio", { ascending: true, nullsFirst: false });
       if (aulasR.error) throw new Error(aulasR.error.message);
-      const aulas = (aulasR.data ?? []) as Aula[];
+      const aulas = ordenarAulas((aulasR.data ?? []) as Aula[]);
 
       // 2. Matrículas
       const matR = await supabase
@@ -73,9 +89,11 @@ export function DialogListaDetalhada({
         )
         .eq("turma_id", turma.id);
       if (matR.error) throw new Error(matR.error.message);
-      const matriculas = ((matR.data ?? []) as unknown as Matricula[]).sort((a, b) =>
-        (a.beneficiarias?.nome ?? "").localeCompare(b.beneficiarias?.nome ?? "", "pt-BR"),
-      );
+      const matriculas = ((matR.data ?? []) as unknown as Matricula[])
+        .filter(matriculaAtiva)
+        .sort((a, b) =>
+          (a.beneficiarias?.nome ?? "").localeCompare(b.beneficiarias?.nome ?? "", "pt-BR"),
+        );
 
       // 3. Presenças
       const presR = await supabase

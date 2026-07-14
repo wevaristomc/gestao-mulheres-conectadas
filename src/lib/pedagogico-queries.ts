@@ -6,6 +6,20 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type Row = Record<string, unknown> & { id: string };
 
+export function ordenarAulasPorDataHora<T extends Record<string, unknown> & { id?: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const da = String(a.data ?? "");
+    const db = String(b.data ?? "");
+    const byDate = da.localeCompare(db);
+    if (byDate !== 0) return byDate;
+    const ha = String(a.hora_inicio ?? "99:99").slice(0, 5);
+    const hb = String(b.hora_inicio ?? "99:99").slice(0, 5);
+    const byTime = ha.localeCompare(hb);
+    if (byTime !== 0) return byTime;
+    return String(a.id ?? "").localeCompare(String(b.id ?? ""));
+  });
+}
+
 /**
  * Lista as turmas do projeto.
  * Quando `restrictToUserId` é passado (professor/auxiliar), aplica filtro
@@ -68,12 +82,13 @@ export function aulasByTurmaOptions(turmaId: string) {
         .from("aulas")
         .select("*")
         .eq("turma_id", turmaId)
-        .order("data", { ascending: true });
+        .order("data", { ascending: true })
+        .order("hora_inicio", { ascending: true, nullsFirst: false });
       if (res.error && /column .*data.* does not exist/i.test(res.error.message)) {
         res = await supabase.from("aulas").select("*").eq("turma_id", turmaId);
       }
       if (res.error) return { rows: [], error: res.error.message };
-      return { rows: (res.data ?? []) as Row[] };
+      return { rows: ordenarAulasPorDataHora((res.data ?? []) as Row[]) };
     },
   });
 }
