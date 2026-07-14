@@ -365,11 +365,11 @@ function FrequenciaTab() {
       </div>
 
       {/* Desktop / tablet: matrix table with sticky name column */}
-      <div className="hidden max-h-[calc(100vh-18rem)] min-w-0 max-w-full overflow-auto rounded-md border md:block">
-      <table className="w-max min-w-full border-separate border-spacing-0 caption-bottom text-sm">
-        <thead className="[&_tr]:border-b">
-          <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-            <th className="sticky left-0 top-0 z-30 h-10 min-w-[220px] bg-background px-2 text-left align-middle font-medium text-muted-foreground">Cursista</th>
+      <div className="hidden max-h-[calc(100vh-18rem)] min-w-0 w-full max-w-full overflow-auto rounded-md border md:block">
+        <table className="w-max min-w-full border-separate border-spacing-0 caption-bottom text-sm">
+          <thead className="[&_tr]:border-b">
+            <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+              <th className="sticky left-0 top-0 z-30 h-10 min-w-[220px] bg-background px-2 text-left align-middle font-medium text-muted-foreground">Cursista</th>
             {aulas.map((a) => (
               <th key={a.id} className="sticky top-0 z-20 h-10 whitespace-nowrap bg-background px-2 text-center align-middle font-medium text-muted-foreground">
                 <div className="text-xs font-medium">{formatarData(pickFirst(a, ["data"]))}</div>
@@ -411,9 +411,9 @@ function FrequenciaTab() {
                 </div>
               </th>
             ))}
-          </tr>
-        </thead>
-        <tbody className="[&_tr:last-child]:border-0">
+            </tr>
+          </thead>
+          <tbody className="[&_tr:last-child]:border-0">
           {cursistas.map((m) => (
             <tr key={m.id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
               <td className="sticky left-0 z-10 bg-background p-2 align-middle font-medium">
@@ -440,8 +440,8 @@ function FrequenciaTab() {
               })}
             </tr>
           ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
       </div>
 
       {comprovando ? (
