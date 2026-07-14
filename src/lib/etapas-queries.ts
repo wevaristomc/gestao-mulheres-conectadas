@@ -34,6 +34,7 @@ export type Atividade = {
   prioridade: Prioridade;
   ordem_kanban: number;
   descricao_detalhada: string | null;
+  guia_ia: unknown | null;
   comentarios_count?: number;
 };
 
@@ -68,6 +69,7 @@ function normalizeAtividade(row: any): Atividade {
     prioridade: (row.prioridade as Prioridade) ?? "media",
     ordem_kanban: Number(row.ordem_kanban ?? 0),
     descricao_detalhada: row.descricao_detalhada ?? null,
+    guia_ia: row.guia_ia ?? null,
   };
 }
 

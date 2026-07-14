@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, MessageCircle, Send } from "lucide-react";
+import { ExternalLink, MessageCircle, Send, Sparkles } from "lucide-react";
 
 import {
   Sheet,
@@ -38,6 +38,7 @@ import {
 } from "@/lib/etapas-queries";
 import { atribuirResponsavel, listarUsuariosParaDemandas } from "@/lib/demandas.functions";
 import { moduleLink } from "@/lib/etapas-queries";
+import { GuiaPanel } from "./guia-panel";
 import {
   PRIORIDADE_COR,
   PRIORIDADE_LABEL,
@@ -67,6 +68,7 @@ export function AtividadeSheet({
   const qc = useQueryClient();
   const link = atividade ? moduleLink(atividade.vinculo_modulo) : null;
   const [novoComentario, setNovoComentario] = useState("");
+  const [guiaAberto, setGuiaAberto] = useState(false);
 
   const listarUsersFn = useServerFn(listarUsuariosParaDemandas);
   const atribuirFn = useServerFn(atribuirResponsavel);
@@ -327,6 +329,21 @@ export function AtividadeSheet({
             >
               <ExternalLink className="h-3.5 w-3.5" /> {link.label}
             </Link>
+          )}
+
+          <div>
+            <Button
+              variant={guiaAberto ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setGuiaAberto((v) => !v)}
+              className="gap-1"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {guiaAberto ? "Fechar guia" : "Modo guiado (IA)"}
+            </Button>
+          </div>
+          {guiaAberto && (
+            <GuiaPanel atividadeId={atividade.id} guiaCache={atividade.guia_ia} />
           )}
 
           <Separator />

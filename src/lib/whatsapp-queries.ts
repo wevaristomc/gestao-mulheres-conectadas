@@ -24,6 +24,8 @@ export type WaImportacao = {
   total_videos: number | null;
   total_remetentes: number | null;
   created_at?: string;
+  owner_id?: string | null;
+  visibilidade?: "privado" | "compartilhado_todos" | "compartilhado_selecionados";
 };
 
 export type WaMensagem = {

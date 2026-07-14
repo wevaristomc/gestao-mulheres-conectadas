@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { AlertTriangle, Clock, MessageCircle } from "lucide-react";
+import { AlertTriangle, Clock, MessageCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -239,6 +239,11 @@ function KanbanCard({
         <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0", PRIORIDADE_COR[atividade.prioridade])}>
           {PRIORIDADE_LABEL[atividade.prioridade]}
         </Badge>
+        {atividade.guia_ia ? (
+          <Badge variant="outline" className="gap-0.5 border-primary/40 px-1.5 py-0 text-[9px] text-primary">
+            <Sparkles className="h-2.5 w-2.5" /> Guia
+          </Badge>
+        ) : null}
       </div>
       <p className={cn("line-clamp-2 text-sm font-medium leading-snug", atividade.status === "concluida" && "line-through")}>
         {atividade.titulo}

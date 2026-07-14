@@ -27,6 +27,8 @@ import {
   importacaoOptions, mensagensOptions, midiaAnalisesOptions, resumosGrupoOptions,
 } from "@/lib/whatsapp-queries";
 import { supabase } from "@/integrations/supabase/client";
+import { VisibilidadeControl } from "@/components/whatsapp/visibilidade-badge";
+import { useActiveContext } from "@/hooks/use-active-context";
 
 export const Route = createFileRoute("/_authenticated/whatsapp/$importacaoId")({
   component: ImportacaoDetalhe,
@@ -35,6 +37,7 @@ export const Route = createFileRoute("/_authenticated/whatsapp/$importacaoId")({
 function ImportacaoDetalhe() {
   const { importacaoId } = Route.useParams();
   const qc = useQueryClient();
+  const { role, user } = useActiveContext();
   const impQ = useQuery(importacaoOptions(importacaoId));
   const imp = impQ.data;
   const msgsQ = useQuery(mensagensOptions(importacaoId, 500));
@@ -130,6 +133,17 @@ function ImportacaoDetalhe() {
             <Badge variant="secondary"><Mic className="mr-1 h-3 w-3" /> {imp.total_audios ?? 0} áudio</Badge>
             <Badge variant="secondary"><ImageIcon className="mr-1 h-3 w-3" /> {imp.total_imagens ?? 0} img</Badge>
             <Badge variant="secondary"><Users className="mr-1 h-3 w-3" /> {imp.total_remetentes ?? 0} remetentes</Badge>
+            <VisibilidadeControl
+              importacaoId={importacaoId}
+              visibilidade={(imp.visibilidade ?? "compartilhado_todos") as any}
+              ownerId={imp.owner_id ?? null}
+              ownerNome={null}
+              canEdit={
+                (!!user?.id && !!imp.owner_id && user.id === imp.owner_id) ||
+                role === "coordenador_geral" ||
+                role === "administrativo"
+              }
+            />
           </>
         ) : null}
 
