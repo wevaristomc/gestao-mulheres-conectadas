@@ -9,7 +9,7 @@
  * como esse usuário) para descobrir o papel real.
  */
 
-import type { AppRole } from "@/lib/role-access";
+import { resolveHighestRole, type AppRole } from "@/lib/role-access";
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
@@ -61,23 +61,11 @@ export async function papelDoUsuario(
 ): Promise<AppRole | null> {
   const { data, error } = await supabase
     .from("user_roles")
-    .select("role")
+    .select("role, projeto_id, ativo")
     .eq("user_id", userId)
     .eq("ativo", true);
   if (error) throw new Error(`Falha ao ler papel: ${error.message}`);
-  const roles = ((data ?? []) as { role: string }[]).map((r) => r.role);
-  const PRIORIDADE: AppRole[] = [
-    "coordenador_geral",
-    "gestor_financeiro",
-    "coordenador_pedagogico",
-    "administrativo",
-    "professor",
-    "auxiliar_pedagogico",
-  ];
-  for (const r of PRIORIDADE) {
-    if (roles.includes(r)) return r;
-  }
-  return null;
+  return resolveHighestRole((data ?? []) as Array<{ role: string; projeto_id: string | null; ativo?: boolean | null }>, null);
 }
 
 /** Erro plano usado pelas checagens (createServerFn propaga a mensagem). */
@@ -125,8 +113,8 @@ export async function exigirTurmaDoUsuario(
 /* Conjuntos padrão de papéis reutilizados em várias fns. */
 export const PAPEIS_COORDENACAO: AppRole[] = [
   "coordenador_geral",
-  "coordenador_pedagogico",
   "administrativo",
+  "coordenador_pedagogico",
 ];
 export const PAPEIS_COORDENACAO_E_FINANCEIRO: AppRole[] = [
   ...PAPEIS_COORDENACAO,

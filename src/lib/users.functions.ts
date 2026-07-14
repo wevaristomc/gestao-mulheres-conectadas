@@ -21,10 +21,9 @@ async function assertCoordenadorGeral(
     .limit(20);
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as Array<{ role: string; projeto_id: string | null }>;
-  const projectRows = rows.filter((r) => r.projeto_id === projetoId);
-  const allowed = projectRows.length > 0
-    ? projectRows.some((r) => r.role === "coordenador_geral")
-    : rows.some((r) => r.projeto_id === null && r.role === "coordenador_geral");
+  const allowed = rows.some(
+    (r) => r.role === "coordenador_geral" && (r.projeto_id === projetoId || r.projeto_id === null),
+  );
   if (!allowed) throw new Error("Apenas coordenação geral pode executar esta ação.");
 }
 

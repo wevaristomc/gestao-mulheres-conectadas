@@ -7,9 +7,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { APP_ROLES, type AppRole } from "@/lib/role-access";
+import { resolveHighestRole, type AppRole } from "@/lib/role-access";
 import { supabase } from "@/integrations/supabase/client";
 import { setCachedRole } from "@/lib/auth-guard";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Projeto = { id: string; nome: string };
 type RoleRow = { role: string; projeto_id: string | null; ativo?: boolean | null };
@@ -29,37 +30,12 @@ type ActiveContextValue = {
 const ActiveContext = createContext<ActiveContextValue | null>(null);
 const PROJETO_STORAGE_KEY = "mc.active_projeto";
 
-function isAppRole(value: string): value is AppRole {
-  return (APP_ROLES as readonly string[]).includes(value);
-}
-
-// Prioridade (maior → menor). Se o usuário tem mais de uma row, ganha a de maior privilégio.
-const ROLE_PRIORITY: AppRole[] = [
-  "coordenador_geral",
-  "gestor_financeiro",
-  "coordenador_pedagogico",
-  "administrativo",
-  "professor",
-  "auxiliar_pedagogico",
-];
-
 function pickRole(rows: RoleRow[], projetoId: string | null): AppRole | null {
-  if (!rows.length) return null;
-  const active = rows.filter((r) => r.ativo ?? true);
-  const projectRows = projetoId ? active.filter((r) => r.projeto_id === projetoId) : [];
-  const globalRows = active.filter((r) => r.projeto_id === null);
-  const candidates = projectRows.length > 0 ? projectRows : (projetoId ? globalRows : active);
-  const pool = candidates
-    .map((r) => r.role)
-    .filter(isAppRole);
-  if (!pool.length) return null;
-  for (const r of ROLE_PRIORITY) {
-    if (pool.includes(r)) return r;
-  }
-  return pool[0] ?? null;
+  return resolveHighestRole(rows, projetoId);
 }
 
 export function ActiveContextProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
@@ -143,6 +119,11 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCachedRole(role);
   }, [role]);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["pedagogico", "frequencia"] });
+    queryClient.invalidateQueries({ queryKey: ["escopo-turmas"] });
+  }, [queryClient, user?.id, role, projetoId]);
 
   const setProjetoAtivo = useCallback((id: string) => {
     setProjetoId(id);
