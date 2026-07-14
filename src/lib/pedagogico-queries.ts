@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatarDataBR } from "@/lib/date-utils";
 
 // Todas as queries retornam { data, error } no mesmo padrão de dashboard-queries.ts.
 // O schema é descoberto em runtime — colunas ausentes viram "—" na UI.
