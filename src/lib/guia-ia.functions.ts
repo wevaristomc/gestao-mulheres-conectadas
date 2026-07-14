@@ -4,6 +4,15 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executarAiRouter } from "@/lib/ia.functions";
 
+export type GuiaPasso = { n: number; acao: string; rota?: string | null };
+export type GuiaIA = {
+  resumo: string;
+  por_que_importa?: string;
+  passos: GuiaPasso[];
+  proxima_acao?: { label: string; rota?: string | null } | null;
+  referencias?: string[];
+};
+
 /**
  * Retorna o guia IA para uma atividade (Modo guiado). Cacheado em
  * `etapa_atividades.guia_ia`. Passe `regenerar=true` para forçar nova geração.
@@ -29,7 +38,7 @@ export const orbeGuiaAtividade = createServerFn({ method: "POST" })
     if (!atividade) throw new Error("Atividade não encontrada.");
 
     if (!data.regenerar && atividade.guia_ia) {
-      return { guia: atividade.guia_ia, cached: true as const };
+      return { guia: atividade.guia_ia as GuiaIA, cached: true };
     }
 
     const { data: etapa } = await admin
@@ -95,13 +104,33 @@ export const orbeGuiaAtividade = createServerFn({ method: "POST" })
 
     // Extrai JSON — modelo pode devolver com cerca de código
     const texto = (r as any).texto ?? (r as any).conteudo ?? "";
-    let guia: Record<string, unknown> = {};
+    let parsed: any = null;
     try {
       const m = String(texto).match(/\{[\s\S]*\}$/);
-      guia = JSON.parse(m ? m[0] : String(texto)) as Record<string, unknown>;
+      parsed = JSON.parse(m ? m[0] : String(texto));
     } catch {
-      guia = { resumo: String(texto).slice(0, 800), passos: [], referencias: [] };
+      parsed = null;
     }
+    const guia: GuiaIA = {
+      resumo: String(parsed?.resumo ?? String(texto).slice(0, 800) ?? ""),
+      por_que_importa: parsed?.por_que_importa ? String(parsed.por_que_importa) : undefined,
+      passos: Array.isArray(parsed?.passos)
+        ? parsed.passos.slice(0, 10).map((p: any, i: number) => ({
+            n: Number(p?.n ?? i + 1),
+            acao: String(p?.acao ?? p?.texto ?? ""),
+            rota: p?.rota ? String(p.rota) : null,
+          }))
+        : [],
+      proxima_acao: parsed?.proxima_acao
+        ? {
+            label: String(parsed.proxima_acao.label ?? "Abrir"),
+            rota: parsed.proxima_acao.rota ? String(parsed.proxima_acao.rota) : null,
+          }
+        : null,
+      referencias: Array.isArray(parsed?.referencias)
+        ? parsed.referencias.slice(0, 8).map((x: any) => String(x))
+        : [],
+    };
 
     // Cache na atividade
     await admin
@@ -109,5 +138,5 @@ export const orbeGuiaAtividade = createServerFn({ method: "POST" })
       .update({ guia_ia: guia })
       .eq("id", data.atividadeId);
 
-    return { guia: guia as Record<string, unknown>, cached: false as const };
+    return { guia, cached: false };
   });
