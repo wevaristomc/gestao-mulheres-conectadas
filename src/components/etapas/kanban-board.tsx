@@ -239,11 +239,11 @@ function KanbanCard({
         <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0", PRIORIDADE_COR[atividade.prioridade])}>
           {PRIORIDADE_LABEL[atividade.prioridade]}
         </Badge>
-        {atividade.guia_ia && (
+        {atividade.guia_ia ? (
           <Badge variant="outline" className="gap-0.5 border-primary/40 px-1.5 py-0 text-[9px] text-primary">
             <Sparkles className="h-2.5 w-2.5" /> Guia
           </Badge>
-        )}
+        ) : null}
       </div>
       <p className={cn("line-clamp-2 text-sm font-medium leading-snug", atividade.status === "concluida" && "line-through")}>
         {atividade.titulo}
