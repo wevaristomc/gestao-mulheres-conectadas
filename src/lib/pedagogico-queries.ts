@@ -111,24 +111,53 @@ export function cursistasByTurmaOptions(turmaId: string) {
   });
 }
 
-// Cache para não repetir a descoberta a cada montagem.
-let frequenciaTableCache: "frequencias" | "presencas" | "none" | null = null;
+// Cache para não repetir a descoberta a cada montagem. Falhas não são
+// cacheadas: se uma permissão/RLS/transiente falha, a tela deve mostrar erro
+// e uma nova tentativa deve realmente consultar o banco de novo.
+let frequenciaTableCache: "frequencias" | "presencas" | null = null;
 
 async function detectarTabelaFrequencia(): Promise<"frequencias" | "presencas" | null> {
   if (frequenciaTableCache === "frequencias") return "frequencias";
   if (frequenciaTableCache === "presencas") return "presencas";
-  if (frequenciaTableCache === "none") return null;
   // Prefer `presencas` (real table). `frequencias` may exist as a read-only
   // compatibility view over `presencas` and cannot receive upserts.
-  for (const t of ["presencas", "frequencias"] as const) {
-    const { error } = await supabase.from(t).select("id", { head: true, count: "exact" }).limit(1);
-    if (!error) {
-      frequenciaTableCache = t;
-      return t;
-    }
+  const presencasProbe = await supabase
+    .from("presencas")
+    .select("id", { head: true, count: "exact" })
+    .limit(1);
+  if (!presencasProbe.error) {
+    frequenciaTableCache = "presencas";
+    // eslint-disable-next-line no-console
+    console.info("[frequencia] tabela detectada: presencas");
+    return "presencas";
   }
-  frequenciaTableCache = "none";
-  return null;
+
+  const presencasMsg = presencasProbe.error.message || "erro desconhecido";
+  const presencasNaoExiste = /relation .*presencas.* does not exist|could not find .*presencas|schema cache/i.test(presencasMsg);
+  if (!presencasNaoExiste) {
+    // eslint-disable-next-line no-console
+    console.error("[frequencia] falha ao detectar presencas", presencasProbe.error);
+    throw new Error(`Falha ao acessar a tabela presencas: ${presencasMsg}`);
+  }
+
+  const frequenciasProbe = await supabase
+    .from("frequencias")
+    .select("id", { head: true, count: "exact" })
+    .limit(1);
+  if (!frequenciasProbe.error) {
+    frequenciaTableCache = "frequencias";
+    // eslint-disable-next-line no-console
+    console.warn("[frequencia] tabela detectada: frequencias (fallback; presencas ausente)");
+    return "frequencias";
+  }
+
+  const frequenciasMsg = frequenciasProbe.error.message || "erro desconhecido";
+  // eslint-disable-next-line no-console
+  console.error("[frequencia] nenhuma tabela de frequência disponível", {
+    presencas: presencasMsg,
+    frequencias: frequenciasMsg,
+  });
+  throw new Error(`Tabela de frequência indisponível. presencas: ${presencasMsg}; frequencias: ${frequenciasMsg}`);
 }
 
 export type FrequenciaRow = {
@@ -158,7 +187,10 @@ export function frequenciaByTurmaOptions(turmaId: string) {
         .select("*")
         .in("aula_id", aulaIds);
       if (error) return { tableName, rows: [], error: error.message };
-      return { tableName, rows: (data ?? []) as FrequenciaRow[] };
+      const rows = (data ?? []) as FrequenciaRow[];
+      // eslint-disable-next-line no-console
+      console.info(`[frequencia] ${tableName}: ${rows.length} registro(s) para turma ${turmaId} em ${aulaIds.length} aula(s)`);
+      return { tableName, rows };
     },
   });
 }

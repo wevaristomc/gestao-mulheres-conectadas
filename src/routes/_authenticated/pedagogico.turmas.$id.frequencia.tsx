@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCheck, FileCheck2, Info, Paperclip } from "lucide-react";
@@ -95,10 +95,16 @@ function FrequenciaTab() {
   const freqIndex = useMemo(() => {
     const map = new Map<string, boolean>();
     for (const r of freqQ.data?.rows ?? []) {
-      map.set(`${r.aula_id}:${r.matricula_id}`, !!r.presente);
+      map.set(`${String(r.aula_id)}:${String(r.matricula_id)}`, !!r.presente);
     }
     return map;
   }, [freqQ.data?.rows]);
+
+  useEffect(() => {
+    if (freqQ.isError) {
+      toast.error(`Falha ao ler frequências: ${freqQ.error instanceof Error ? freqQ.error.message : String(freqQ.error)}`);
+    }
+  }, [freqQ.isError, freqQ.error]);
 
   type SortMode = "nome-asc" | "nome-desc" | "freq-desc" | "freq-asc";
   const [sortMode, setSortMode] = useState<SortMode>("nome-asc");
@@ -108,7 +114,7 @@ function FrequenciaTab() {
     if (aulas.length === 0) return m;
     for (const c of cursistasRaw) {
       let p = 0;
-      for (const a of aulas) if (freqIndex.get(`${a.id}:${c.id}`)) p += 1;
+      for (const a of aulas) if (freqIndex.get(`${String(a.id)}:${String(c.id)}`)) p += 1;
       m.set(c.id, (p / aulas.length) * 100);
     }
     return m;
@@ -219,7 +225,7 @@ function FrequenciaTab() {
     for (const a of aulas) {
       let p = 0, f = 0, sem = 0;
       for (const c of cursistasRaw) {
-        const v = freqIndex.get(`${a.id}:${c.id}`);
+        const v = freqIndex.get(`${String(a.id)}:${String(c.id)}`);
         if (v === true) p += 1;
         else if (v === false) f += 1;
         else sem += 1;
@@ -251,7 +257,8 @@ function FrequenciaTab() {
     cursistasQ.data?.error ||
     freqQ.data?.error ||
     (aulasQ.isError ? String(aulasQ.error) : null) ||
-    (cursistasQ.isError ? String(cursistasQ.error) : null);
+    (cursistasQ.isError ? String(cursistasQ.error) : null) ||
+    (freqQ.isError ? String(freqQ.error) : null);
 
   if (loading) {
     return <Skeleton className="h-64 w-full" />;
@@ -415,7 +422,7 @@ function FrequenciaTab() {
         </div>
         <ul className="divide-y">
           {cursistas.map((m) => {
-            const key = `${aulaMobileSel?.id}:${m.id}`;
+            const key = `${String(aulaMobileSel?.id)}:${String(m.id)}`;
             const presente = aulaMobileSel ? (freqIndex.get(key) ?? false) : false;
             return (
               <li key={m.id} className="flex min-w-0 items-center justify-between gap-2 p-3">
@@ -525,7 +532,7 @@ function FrequenciaTab() {
                 {nomeCursista(m)}
               </td>
               {aulas.map((a) => {
-                const key = `${a.id}:${m.id}`;
+                const key = `${String(a.id)}:${String(m.id)}`;
                 const presente = freqIndex.get(key) ?? false;
                 return (
                   <td key={a.id} className="p-2 text-center align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]">
@@ -584,7 +591,7 @@ function FrequenciaTab() {
                   cursista(s) serão marcadas como falta.
                   {(() => {
                     const naoMarcados = cursistasRaw.filter(
-                      (c) => !freqIndex.has(`${fechandoAula.id}:${c.id}`),
+                      (c) => !freqIndex.has(`${String(fechandoAula.id)}:${String(c.id)}`),
                     );
                     if (naoMarcados.length === 0) return null;
                     return (

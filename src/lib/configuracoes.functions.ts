@@ -58,10 +58,9 @@ export const salvarProjetoConfiguracoes = createServerFn({ method: "POST" })
 
     if (roleError) throw new Error(roleError.message);
     const rows = (roleRows ?? []) as Array<{ role: string; projeto_id: string | null }>;
-    const projectRows = rows.filter((r) => r.projeto_id === data.projetoId);
-    const allowed = projectRows.length > 0
-      ? projectRows.some((r) => r.role === "coordenador_geral")
-      : rows.some((r) => r.projeto_id === null && r.role === "coordenador_geral");
+    const allowed = rows.some(
+      (r) => r.role === "coordenador_geral" && (r.projeto_id === data.projetoId || r.projeto_id === null),
+    );
     if (!allowed) throw new Error("Apenas Coordenação Geral pode salvar as configurações do projeto.");
 
     const payload: Record<string, unknown> = { ...data.payload };

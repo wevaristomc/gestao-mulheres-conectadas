@@ -1,13 +1,40 @@
 export const APP_ROLES = [
   "coordenador_geral",
-  "gestor_financeiro",
   "administrativo",
   "coordenador_pedagogico",
+  "gestor_financeiro",
   "professor",
   "auxiliar_pedagogico",
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
+
+export const ROLE_PRIORITY: readonly AppRole[] = APP_ROLES;
+
+export function isAppRole(value: string): value is AppRole {
+  return (APP_ROLES as readonly string[]).includes(value);
+}
+
+export type RoleScopeRow = {
+  role: string;
+  projeto_id?: string | null;
+  ativo?: boolean | null;
+};
+
+export function resolveHighestRole(
+  rows: RoleScopeRow[],
+  projetoId: string | null,
+): AppRole | null {
+  const active = rows.filter((r) => r.ativo ?? true);
+  const applicable = projetoId
+    ? active.filter((r) => r.projeto_id === projetoId || r.projeto_id == null)
+    : active;
+  const pool = applicable.map((r) => r.role).filter(isAppRole);
+  for (const role of ROLE_PRIORITY) {
+    if (pool.includes(role)) return role;
+  }
+  return null;
+}
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   coordenador_geral: "Coordenação Geral",
