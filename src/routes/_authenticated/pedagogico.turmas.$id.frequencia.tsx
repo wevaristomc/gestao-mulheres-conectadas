@@ -86,7 +86,7 @@ function FrequenciaTab() {
   const cursistasRaw = useMemo(
     () =>
       cursistasAll.filter((m) => {
-        const s = (m.status as string | undefined) ?? "";
+        const s = String((m.status as string | undefined) ?? "").toLowerCase();
         return s !== "evadida" && s !== "desistente";
       }),
     [cursistasAll],
