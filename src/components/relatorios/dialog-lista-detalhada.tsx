@@ -138,7 +138,7 @@ export function DialogListaDetalhada({
       // Aba FREQUENCIA
       const aulaHeader = aulas.map((a) =>
         [
-          a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : "",
+          formatarDataBR(a.data),
           a.hora_inicio && a.hora_fim ? `${a.hora_inicio}-${a.hora_fim}` : "",
           a.ch_prevista ? `${a.ch_prevista}h` : "",
         ]
