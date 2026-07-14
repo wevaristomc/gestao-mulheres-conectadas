@@ -164,7 +164,7 @@ function FrequenciaTab() {
   const fecharChamada = useMutation({
     mutationFn: async (aulaId: string) => {
       const naoMarcados = cursistasRaw
-        .filter((c) => !freqIndex.has(`${aulaId}:${c.id}`))
+        .filter((c) => !freqIndex.has(`${String(aulaId)}:${String(c.id)}`))
         .map<FrequenciaRow>((c) => ({
           aula_id: aulaId,
           matricula_id: c.id,
@@ -211,7 +211,7 @@ function FrequenciaTab() {
     const m = new Map<string, number>();
     for (const a of aulas) {
       let n = 0;
-      for (const c of cursistasRaw) if (!freqIndex.has(`${a.id}:${c.id}`)) n += 1;
+      for (const c of cursistasRaw) if (!freqIndex.has(`${String(a.id)}:${String(c.id)}`)) n += 1;
       m.set(a.id, n);
     }
     return m;
