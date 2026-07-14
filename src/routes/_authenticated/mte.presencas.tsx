@@ -18,6 +18,10 @@ import {
 import { useHasRole } from "@/hooks/use-active-context";
 import { formatCpf } from "@/lib/cpf";
 import {
+  SortableHeader, nextSort, compareStr, compareNum, compareBool,
+  type SortState,
+} from "@/components/sortable-header";
+import {
   aulasMteListOptions, matriculasListOptions, presencasByAulaOptions,
   turmasMteListOptions, upsertPresencaMTE,
 } from "@/lib/mte-queries";
@@ -54,6 +58,9 @@ function PresencasIndex() {
   const presQ = useQuery(presencasByAulaOptions(effectiveAula || null, restrictToUserId));
 
   const [local, setLocal] = useState<Record<string, Local>>({});
+  type SortKey = "nome" | "freq" | "presenca" | "justificativa";
+  const [sort, setSort] = useState<SortState<SortKey>>({ key: "nome", dir: "asc" });
+  const onSort = (k: SortKey) => setSort((s) => nextSort(s, k));
   useEffect(() => {
     // Reinicializa quando aula/matrículas mudam.
     const next: Record<string, Local> = {};
@@ -66,6 +73,23 @@ function PresencasIndex() {
     }
     setLocal(next);
   }, [effectiveAula, matriculas, presQ.data]);
+
+  const matriculasOrdenadas = useMemo(() => {
+    const rows = [...matriculas];
+    if (!sort) return rows;
+    rows.sort((a, b) => {
+      if (sort.key === "nome") return compareStr(a.beneficiaria?.nome, b.beneficiaria?.nome, sort.dir);
+      if (sort.key === "freq") return compareNum(a.frequencia_percentual as number | null, b.frequencia_percentual as number | null, sort.dir);
+      if (sort.key === "presenca") {
+        return compareBool(!!local[a.id]?.presente, !!local[b.id]?.presente, sort.dir);
+      }
+      // justificativa: preenchida primeiro em asc
+      const aj = (local[a.id]?.justificativa ?? "").trim().length > 0;
+      const bj = (local[b.id]?.justificativa ?? "").trim().length > 0;
+      return compareBool(aj, bj, sort.dir);
+    });
+    return rows;
+  }, [matriculas, sort, local]);
 
   const totals = useMemo(() => {
     let p = 0, f = 0;
@@ -154,11 +178,11 @@ function PresencasIndex() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Beneficiária</TableHead>
+              <SortableHeader sort={sort} sortKey="nome" onSort={onSort}>Beneficiária</SortableHeader>
               <TableHead className="w-36">CPF</TableHead>
-              <TableHead className="w-32">Freq. atual</TableHead>
-              <TableHead className="w-32">Presença</TableHead>
-              <TableHead>Justificativa (se falta)</TableHead>
+              <SortableHeader sort={sort} sortKey="freq" onSort={onSort} className="w-32">Freq. atual</SortableHeader>
+              <SortableHeader sort={sort} sortKey="presenca" onSort={onSort} className="w-32">Presença</SortableHeader>
+              <SortableHeader sort={sort} sortKey="justificativa" onSort={onSort}>Justificativa (se falta)</SortableHeader>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -170,7 +194,7 @@ function PresencasIndex() {
               ))
             ) : matriculas.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">Sem matrículas ativas nesta turma.</TableCell></TableRow>
-            ) : matriculas.map((m) => {
+            ) : matriculasOrdenadas.map((m) => {
               const v = local[m.id] ?? { presente: true, justificativa: "" };
               const freq = m.frequencia_percentual;
               const abaixo = typeof freq === "number" && freq < 75;
