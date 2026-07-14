@@ -1,43 +1,48 @@
-## Ordenação de colunas na frequência
+## Ajustes na Frequência (Pedagógico › Turma)
 
-Adicionar ordenação interativa (clique no cabeçalho) nas três telas de frequência, mantendo tudo em UI/estado local — sem tocar em queries ou backend.
+Dois problemas separados na tela `pedagogico.turmas.$id.frequencia.tsx`.
 
-### Telas e critérios
+### 1. Rolagem horizontal encoberta pela barra lateral
 
-**1. Fiscalização MTE › Presenças** (`src/routes/_authenticated/mte.presencas.tsx`)
-Cabeçalhos clicáveis com indicador de direção (↑/↓):
-- Beneficiária → alfabética A→Z / Z→A
-- Freq. atual → % maior→menor / menor→maior (nulos ao final)
-- Presença → P primeiro / F primeiro (usando estado `local`)
-- Justificativa → preenchidas primeiro / vazias primeiro
+Sintoma: em turmas com muitas aulas, a matriz cresce além da largura do conteúdo e a barra lateral (sidebar) fica sobre as últimas colunas — o `overflow-auto` local não segura o crescimento porque um ancestral flex não tem `min-w-0`, então o próprio `<main>` estica horizontalmente.
 
-**2. Pedagógico › Turma › Frequência** (`src/routes/_authenticated/pedagogico.turmas.$id.frequencia.tsx`)
-Ordena a lista de cursistas (linhas da matriz e lista mobile):
-- Cursista → alfabética A→Z / Z→A
-- % frequência total (calculada a partir do `freqIndex` sobre todas as aulas) → maior→menor / menor→maior
+Correção (apenas layout / CSS, sem mexer em dados):
 
-Adicionar um pequeno seletor acima da tabela (desktop e mobile) já que a matriz tem N colunas de aulas e não faz sentido tornar cada data ordenável. Opções: "Nome (A→Z)", "Nome (Z→A)", "Frequência (maior)", "Frequência (menor)".
+- Garantir que o container da matriz seja o único responsável pela rolagem horizontal:
+  - Envolver a `<Table>` desktop em um wrapper com `w-full max-w-full overflow-x-auto` e largura mínima interna (`min-w-max` no elemento da tabela) para forçar a barra de scroll dentro da caixa, e não na página.
+- Adicionar `min-w-0` no contêiner-pai imediato (o `<div className="space-y-3">` da página) para que ele possa encolher dentro do `<main>` flex.
+- Se necessário, aplicar `min-w-0` também no `<main>` do layout autenticado (`src/routes/_authenticated/route.tsx`) para que o `SidebarInset` não permita que o conteúdo empurre a página inteira.
+- Manter a coluna "Cursista" com `sticky left-0` como já está; adicionar `bg-background` também nas células (`TableCell`) para não vazar quando rola.
 
-**3. Relatórios › Frequência** (`src/routes/_authenticated/relatorios.frequencia.tsx`)
-Cabeçalhos clicáveis conforme colunas existentes na tabela. Critérios:
-- Nome/beneficiária → alfabética
-- % frequência → numérica
-- Presença/status agregado → presentes primeiro / faltosos primeiro
-- Justificativa (se existir coluna) → com motivo / sem motivo
+Nenhuma alteração em query, ordenação ou marcação de presença.
 
-Ler o arquivo antes de editar para mapear as colunas reais e aplicar somente aos campos existentes.
+### 2. Fechar chamada: não marcados = falta
+
+Hoje, cada checkbox faz upsert individual. Quem nunca foi marcado não gera linha em `presencas`/`frequencias`, então relatórios que contam registros explícitos podem tratar como "sem dado" em vez de "falta". O usuário quer um passo explícito de fechamento por aula.
+
+Escopo:
+
+- Adicionar botão **"Fechar chamada"** por aula, tanto no cabeçalho da coluna (desktop, ao lado do link de comprovação) quanto no bloco mobile (topo da lista de cursistas), com ícone e tooltip "Marcar não marcados como falta".
+- Ao clicar:
+  1. Confirmação simples (`AlertDialog`): "Marcar como falta todas as cursistas ainda não lançadas nesta aula?" com contagem prévia (ex.: "12 cursistas serão marcadas como falta").
+  2. Executa um upsert em lote via `upsertFrequenciaBatch` (novo helper em `src/lib/pedagogico-queries.ts`) inserindo `presente = false` para cada `matricula_id` da turma que ainda não tem linha para aquela `aula_id`.
+  3. Otimista: adiciona as linhas ao cache `["pedagogico","frequencia",turmaId]` e invalida em seguida `["mte","presencas"]`, `["mte","matriculas"]` e `["relatorios"]` — mesmos alvos que o `upsertFrequencia` atual já invalida.
+- O botão fica desabilitado quando todas as cursistas já têm status lançado para aquela aula.
+- Sem "modo rascunho": marcar P/F individualmente continua salvando na hora como hoje; o botão apenas fecha o restante como falta.
 
 ### Detalhes técnicos
 
-- Estado local por página: `const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>()`.
-- Clique no `TableHead` alterna direção; segundo critério diferente reseta para `asc`.
-- Ordenação via `useMemo` sobre a lista já filtrada — não altera queries nem invalidações.
-- Componente auxiliar local `SortableHeader` (ícone `ArrowUp`/`ArrowDown`/`ArrowUpDown` de lucide-react) para não repetir markup.
-- Comparação de strings com `localeCompare(pt-BR, { sensitivity: "base" })`; números com fallback para nulos ao final independente da direção.
-- Nada muda em `mte-queries.ts`, `pedagogico-queries.ts`, `relatorios-queries.ts` nem no banco.
+- Novo helper em `pedagogico-queries.ts`:
+  ```ts
+  export async function upsertFrequenciaBatch(rows: FrequenciaRow[]): Promise<void>
+  ```
+  Reusa a lógica de detecção de tabela (`frequencias` ou `presencas`) e faz um único `upsert` com `onConflict: "aula_id,matricula_id"`.
+- Cálculo dos "não marcados" por aula é feito no cliente com o `freqIndex` já existente + `cursistasRaw`.
+- UI: `AlertDialog` de shadcn; ícone `CheckCheck` (lucide-react) para o botão.
+- Nada muda em RLS/migrations nem em `mte-queries.ts` ou `relatorios-queries.ts`.
 
 ### Fora do escopo
 
-- Persistência da ordenação entre sessões.
-- Ordenação server-side / paginação.
-- Reordenar colunas de aulas na matriz pedagógica.
+- Reabrir chamada / desmarcar em lote.
+- Fechar automaticamente ao sair da aula (sempre exige clique explícito).
+- Aplicar o mesmo botão na tela Fiscalização MTE › Presenças (essa já opera por aula única).
