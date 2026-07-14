@@ -433,6 +433,18 @@ export async function upsertAulaMTE(input: Partial<AulaMTE> & { id?: string; tur
 }
 
 export async function deleteAulaMTE(id: string) {
+  // Mesma blindagem de deleteAula() no Pedagógico: nunca deletar uma aula
+  // que já tem chamada preenchida — evita perder marcações por engano.
+  const pres = await supabase
+    .from("presencas")
+    .select("id", { head: true, count: "exact" })
+    .eq("aula_id", id);
+  if (!pres.error && (pres.count ?? 0) > 0) {
+    throw new Error(
+      `Esta aula tem ${pres.count} presença(s) registrada(s). ` +
+        `Remova as marcações na aba MTE › Presenças antes de excluir a aula.`,
+    );
+  }
   const { error } = await supabase.from("aulas").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
