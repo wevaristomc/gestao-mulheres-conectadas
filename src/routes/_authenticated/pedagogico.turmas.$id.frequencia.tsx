@@ -21,9 +21,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
   aulasByTurmaOptions, cursistasByTurmaOptions, frequenciaByTurmaOptions,
   upsertFrequencia, upsertFrequenciaBatch, pickFirst, formatarData, evidenciasCountByTurmaOptions,
   turmaByIdOptions, type FrequenciaRow, type Row,
@@ -368,13 +365,13 @@ function FrequenciaTab() {
       </div>
 
       {/* Desktop / tablet: matrix table with sticky name column */}
-      <div className="hidden min-w-0 w-full max-w-full overflow-x-auto rounded-md border md:block">
-      <Table className="min-w-max">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="sticky left-0 z-10 bg-background min-w-[220px]">Cursista</TableHead>
+      <div className="hidden max-h-[calc(100vh-18rem)] min-w-0 max-w-full overflow-auto rounded-md border md:block">
+      <table className="w-max min-w-full border-separate border-spacing-0 caption-bottom text-sm">
+        <thead className="[&_tr]:border-b">
+          <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+            <th className="sticky left-0 top-0 z-30 h-10 min-w-[220px] bg-background px-2 text-left align-middle font-medium text-muted-foreground">Cursista</th>
             {aulas.map((a) => (
-              <TableHead key={a.id} className="text-center whitespace-nowrap">
+              <th key={a.id} className="sticky top-0 z-20 h-10 whitespace-nowrap bg-background px-2 text-center align-middle font-medium text-muted-foreground">
                 <div className="text-xs font-medium">{formatarData(pickFirst(a, ["data"]))}</div>
                 <div className="text-[10px] font-normal text-muted-foreground truncate max-w-[120px]">
                   {pickFirst(a, ["titulo", "tema", "assunto"]) ?? ""}
@@ -412,21 +409,21 @@ function FrequenciaTab() {
                     ) : null}
                   </button>
                 </div>
-              </TableHead>
+              </th>
             ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+          </tr>
+        </thead>
+        <tbody className="[&_tr:last-child]:border-0">
           {cursistas.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell className="sticky left-0 z-10 bg-background font-medium">
+            <tr key={m.id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+              <td className="sticky left-0 z-10 bg-background p-2 align-middle font-medium">
                 {nomeCursista(m)}
-              </TableCell>
+              </td>
               {aulas.map((a) => {
                 const key = `${a.id}:${m.id}`;
                 const presente = freqIndex.get(key) ?? false;
                 return (
-                  <TableCell key={a.id} className="text-center">
+                  <td key={a.id} className="p-2 text-center align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]">
                     <Checkbox
                       checked={presente}
                       disabled={marcar.isPending}
@@ -438,13 +435,13 @@ function FrequenciaTab() {
                         })
                       }
                     />
-                  </TableCell>
+                  </td>
                 );
               })}
-            </TableRow>
+            </tr>
           ))}
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
       </div>
 
       {comprovando ? (

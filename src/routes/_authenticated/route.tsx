@@ -25,10 +25,10 @@ function AuthenticatedLayout() {
       <PasswordChangeGate />
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset className="bg-background">
+        <SidebarInset className="min-w-0 bg-background">
           <AppTopbar />
           <BackendNotice />
-          <main className="flex-1 px-3 py-4 md:px-6 md:py-6">
+          <main className="min-w-0 flex-1 px-3 py-4 md:px-6 md:py-6">
             <AccessControlledOutlet />
           </main>
           <OrbeNeural />
