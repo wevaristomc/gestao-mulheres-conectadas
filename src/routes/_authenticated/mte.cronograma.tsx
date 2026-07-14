@@ -234,7 +234,9 @@ function CronogramaIndex() {
           {grupos.map(([data, itens]) => (
             <section key={data}>
               <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
-                {data === "sem-data" ? "Sem data definida" : new Date(data + "T00:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+                {data === "sem-data"
+                  ? "Sem data definida"
+                  : (parseISODateLocal(data)?.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) ?? data)}
               </h3>
               <div className="rounded-md border">
                 <Table>
