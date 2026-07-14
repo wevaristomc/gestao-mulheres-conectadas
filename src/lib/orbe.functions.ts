@@ -386,7 +386,7 @@ const TOOL_DESCRICOES = `
 - buscar_conhecimento({query,k?}): busca semântica na Base de Conhecimento (relatórios externos, anotações, áudios transcritos, PDFs).
 - etapas_status: etapas do projeto com progresso e atividades atrasadas.
 - ajuda_sistema({topico}): guias, campos e FAQ oficiais sobre COMO USAR o painel (frequência, PMQ, cotações, DEQ, SEI/TransfereGov, etapas, relação de horas). Use SEMPRE que o usuário pedir explicação de campo, botão, fluxo, regra do programa ou "como faço para…".`.trim();
- // (mantido)
+ // minhas_demandas: adicionada abaixo dinamicamente na descrição.
 
 // Auditoria P8 — snapshot ciente de escopo. Professor/auxiliar recebe agregados
 // só de suas turmas (turmasEscopo). Coordenação/adm recebe agregados globais.
