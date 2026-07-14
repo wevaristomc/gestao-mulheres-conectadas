@@ -1,12 +1,22 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, FileCheck2, Info, Paperclip } from "lucide-react";
+import { AlertCircle, CheckCheck, FileCheck2, Info, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -15,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import {
   aulasByTurmaOptions, cursistasByTurmaOptions, frequenciaByTurmaOptions,
-  upsertFrequencia, pickFirst, formatarData, evidenciasCountByTurmaOptions,
+  upsertFrequencia, upsertFrequenciaBatch, pickFirst, formatarData, evidenciasCountByTurmaOptions,
   turmaByIdOptions, type FrequenciaRow, type Row,
 } from "@/lib/pedagogico-queries";
 import { AulaComprovacaoDialog } from "@/components/pedagogico/aula-comprovacao-dialog";
@@ -50,6 +60,7 @@ function FrequenciaTab() {
 
   const [comprovando, setComprovando] = useState<Row | null>(null);
   const [aulaMobile, setAulaMobile] = useState<string | null>(null);
+  const [fechandoAula, setFechandoAula] = useState<Row | null>(null);
 
   const aulas = useMemo(
     () =>
@@ -123,6 +134,62 @@ function FrequenciaTab() {
     },
   });
 
+  const fecharChamada = useMutation({
+    mutationFn: async (aulaId: string) => {
+      const naoMarcados = cursistasRaw
+        .filter((c) => !freqIndex.has(`${aulaId}:${c.id}`))
+        .map<FrequenciaRow>((c) => ({
+          aula_id: aulaId,
+          matricula_id: c.id,
+          presente: false,
+        }));
+      await upsertFrequenciaBatch(naoMarcados);
+      return naoMarcados;
+    },
+    onMutate: async (aulaId) => {
+      await qc.cancelQueries({ queryKey: ["pedagogico", "frequencia", turmaId] });
+      const prev = qc.getQueryData<FreqCache>(["pedagogico", "frequencia", turmaId]);
+      if (prev) {
+        const existing = new Set(prev.rows.map((r) => `${r.aula_id}:${r.matricula_id}`));
+        const additions: FrequenciaRow[] = cursistasRaw
+          .filter((c) => !existing.has(`${aulaId}:${c.id}`))
+          .map((c) => ({ aula_id: aulaId, matricula_id: c.id, presente: false }));
+        qc.setQueryData<FreqCache>(["pedagogico", "frequencia", turmaId], {
+          ...prev,
+          rows: [...prev.rows, ...additions],
+        });
+      }
+      return { prev };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["pedagogico", "frequencia", turmaId], ctx.prev);
+      toast.error(e.message);
+    },
+    onSuccess: (rows) => {
+      toast.success(
+        rows.length === 0
+          ? "Chamada já estava completa."
+          : `${rows.length} cursista(s) marcada(s) como falta.`,
+      );
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["pedagogico", "frequencia", turmaId] });
+      qc.invalidateQueries({ queryKey: ["mte", "presencas"] });
+      qc.invalidateQueries({ queryKey: ["mte", "matriculas"] });
+      qc.invalidateQueries({ queryKey: ["relatorios"] });
+    },
+  });
+
+  const naoMarcadosPorAula = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of aulas) {
+      let n = 0;
+      for (const c of cursistasRaw) if (!freqIndex.has(`${a.id}:${c.id}`)) n += 1;
+      m.set(a.id, n);
+    }
+    return m;
+  }, [aulas, cursistasRaw, freqIndex]);
+
   const loading = aulasQ.isLoading || cursistasQ.isLoading || freqQ.isLoading;
   const erro =
     aulasQ.data?.error ||
@@ -180,9 +247,10 @@ function FrequenciaTab() {
   const aulaMobileSelId =
     aulaMobile ?? (aulas[0]?.id as string | undefined) ?? null;
   const aulaMobileSel = aulas.find((a) => a.id === aulaMobileSelId) ?? aulas[0];
+  const pendentesMobile = aulaMobileSel ? naoMarcadosPorAula.get(aulaMobileSel.id) ?? 0 : 0;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">Ordenar:</span>
         <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
@@ -214,23 +282,38 @@ function FrequenciaTab() {
             ))}
           </select>
           {aulaMobileSel ? (
-            <button
-              type="button"
-              onClick={() => setComprovando(aulaMobileSel)}
-              className="mt-2 inline-flex items-center gap-1 rounded px-1 py-1 text-xs text-muted-foreground hover:bg-muted"
-            >
-              {(countByAula[aulaMobileSel.id] ?? 0) > 0 ? (
-                <>
-                  <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
-                  <span className="text-emerald-700">{countByAula[aulaMobileSel.id]} evidência(s)</span>
-                </>
-              ) : (
-                <>
-                  <Paperclip className="h-3.5 w-3.5" />
-                  <span>Anexar comprovação</span>
-                </>
-              )}
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setComprovando(aulaMobileSel)}
+                className="inline-flex items-center gap-1 rounded px-1 py-1 text-xs text-muted-foreground hover:bg-muted"
+              >
+                {(countByAula[aulaMobileSel.id] ?? 0) > 0 ? (
+                  <>
+                    <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-emerald-700">{countByAula[aulaMobileSel.id]} evidência(s)</span>
+                  </>
+                ) : (
+                  <>
+                    <Paperclip className="h-3.5 w-3.5" />
+                    <span>Anexar comprovação</span>
+                  </>
+                )}
+              </button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                disabled={pendentesMobile === 0 || fecharChamada.isPending}
+                onClick={() => setFechandoAula(aulaMobileSel)}
+                title="Marcar não marcados como falta"
+              >
+                <CheckCheck className="mr-1 h-3.5 w-3.5" />
+                Fechar chamada
+                {pendentesMobile > 0 ? ` (${pendentesMobile})` : ""}
+              </Button>
+            </div>
           ) : null}
         </div>
         <ul className="divide-y">
@@ -285,8 +368,8 @@ function FrequenciaTab() {
       </div>
 
       {/* Desktop / tablet: matrix table with sticky name column */}
-      <div className="hidden rounded-md border overflow-auto md:block">
-      <Table>
+      <div className="hidden min-w-0 w-full max-w-full overflow-x-auto rounded-md border md:block">
+      <Table className="min-w-max">
         <TableHeader>
           <TableRow>
             <TableHead className="sticky left-0 z-10 bg-background min-w-[220px]">Cursista</TableHead>
@@ -296,24 +379,39 @@ function FrequenciaTab() {
                 <div className="text-[10px] font-normal text-muted-foreground truncate max-w-[120px]">
                   {pickFirst(a, ["titulo", "tema", "assunto"]) ?? ""}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setComprovando(a)}
-                  className="mt-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-normal text-muted-foreground hover:bg-muted"
-                  title="Comprovação da aula"
-                >
-                  {(countByAula[a.id] ?? 0) > 0 ? (
-                    <>
-                      <FileCheck2 className="h-3 w-3 text-emerald-600" />
-                      <span className="text-emerald-700">{countByAula[a.id]}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Paperclip className="h-3 w-3" />
-                      <span>anexar</span>
-                    </>
-                  )}
-                </button>
+                <div className="mt-1 flex items-center justify-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setComprovando(a)}
+                    className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-normal text-muted-foreground hover:bg-muted"
+                    title="Comprovação da aula"
+                  >
+                    {(countByAula[a.id] ?? 0) > 0 ? (
+                      <>
+                        <FileCheck2 className="h-3 w-3 text-emerald-600" />
+                        <span className="text-emerald-700">{countByAula[a.id]}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Paperclip className="h-3 w-3" />
+                        <span>anexar</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFechandoAula(a)}
+                    disabled={(naoMarcadosPorAula.get(a.id) ?? 0) === 0 || fecharChamada.isPending}
+                    className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-normal text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                    title="Marcar não marcados como falta"
+                  >
+                    <CheckCheck className="h-3 w-3" />
+                    <span>fechar</span>
+                    {(naoMarcadosPorAula.get(a.id) ?? 0) > 0 ? (
+                      <span className="text-amber-700">({naoMarcadosPorAula.get(a.id)})</span>
+                    ) : null}
+                  </button>
+                </div>
               </TableHead>
             ))}
           </TableRow>
@@ -359,6 +457,47 @@ function FrequenciaTab() {
           dataAula={pickFirst(comprovando, ["data"])}
         />
       ) : null}
+
+      <AlertDialog
+        open={!!fechandoAula}
+        onOpenChange={(o) => !o && setFechandoAula(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fechar chamada desta aula?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {fechandoAula ? (
+                <>
+                  Aula de{" "}
+                  <strong>{formatarData(pickFirst(fechandoAula, ["data"]))}</strong>.
+                  Todas as cursistas que ainda não foram lançadas serão marcadas
+                  como <strong>falta</strong>. Isso pode ser corrigido depois
+                  desmarcando individualmente.
+                  <br />
+                  <br />
+                  <strong>
+                    {naoMarcadosPorAula.get(fechandoAula.id) ?? 0}
+                  </strong>{" "}
+                  cursista(s) serão marcadas como falta.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (fechandoAula) {
+                  fecharChamada.mutate(fechandoAula.id);
+                  setFechandoAula(null);
+                }
+              }}
+            >
+              Fechar chamada
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
