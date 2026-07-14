@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { parseISODateLocal } from "@/lib/date-utils";
-import { isMatriculaAtiva } from "@/lib/contagens";
+import { isMatriculaAtiva, FILTRO_STATUS_INATIVOS } from "@/lib/contagens";
 
 // Agrega dados para o módulo Relatórios. Todas as queries são defensivas:
 // se uma tabela/coluna não existir, o dado cai para null/0 e a UI mostra "—".
