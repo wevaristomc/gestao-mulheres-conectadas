@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect } from "react";
-import { useMutation, useQuery, useServerFn, useQueryClient } from "@tanstack/react-query";
-import { useServerFn as useSFn } from "@tanstack/react-start";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Globe2, Lock, Users, Loader2, Check } from "lucide-react";
 
@@ -46,9 +46,9 @@ export function VisibilidadeControl({
   const [modo, setModo] = useState<Visibilidade>(visibilidade);
   const [sel, setSel] = useState<Set<string>>(new Set());
 
-  const listarUsersFn = useSFn(listarUsuariosParaDemandas);
-  const listarShareFn = useSFn(listarCompartilhamentos);
-  const salvarFn = useSFn(atualizarVisibilidadeImportacao);
+  const listarUsersFn = useServerFn(listarUsuariosParaDemandas);
+  const listarShareFn = useServerFn(listarCompartilhamentos);
+  const salvarFn = useServerFn(atualizarVisibilidadeImportacao);
 
   const usersQ = useQuery({
     queryKey: ["demandas-users", projetoId],
@@ -160,6 +160,3 @@ export function VisibilidadeControl({
     </div>
   );
 }
-
-// Prevent bundler misuse: this file only exports a component.
-void useMemo;
