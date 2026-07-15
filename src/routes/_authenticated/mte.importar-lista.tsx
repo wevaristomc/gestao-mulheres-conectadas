@@ -586,7 +586,124 @@ function ImportarListaPage() {
             <Badge className="bg-red-100 text-red-800">❌ {contadores.naoId} não identificadas</Badge>
             <Badge variant="outline">Presenças: {contadores.presentes}</Badge>
             <Badge variant="outline">Lanches: {contadores.lanches}</Badge>
+            <Badge variant="outline">Duvidosas: {contadores.duvidosas}</Badge>
+            <label className="ml-2 inline-flex items-center gap-1.5 text-xs">
+              <Checkbox checked={soDuvidosas} onCheckedChange={(v) => setSoDuvidosas(v === true)} />
+              Só duvidosas
+            </label>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2"
+              onClick={() => {
+                setLinhas((prev) =>
+                  prev.map((l) =>
+                    (l.confianca ?? 1) >= 0.85 && l.matricula_id
+                      ? { ...l, decisao: "usar_sugerido" }
+                      : l,
+                  ),
+                );
+                toast.success("Confiança alta aceita em massa.");
+              }}
+            >
+              Aceitar todas ≥ 0.85
+            </Button>
           </div>
+
+          {avisosConfronto.length ? (
+            <div className="space-y-2">
+              {avisosConfronto.map((a) => (
+                <div
+                  key={a.chave}
+                  className={
+                    a.nivel === "bloqueante"
+                      ? "rounded-md border border-red-500/40 bg-red-50 p-3 text-xs text-red-900"
+                      : a.nivel === "atencao"
+                      ? "rounded-md border border-amber-500/40 bg-amber-50 p-3 text-xs text-amber-900"
+                      : "rounded-md border p-3 text-xs"
+                  }
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold">{a.mensagem}</div>
+                      {a.detalhe ? <div className="mt-0.5">{a.detalhe}</div> : null}
+                    </div>
+                    {a.nivel === "bloqueante" ? (
+                      <label className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <Checkbox
+                          checked={bloqueantesAceitos.has(a.chave)}
+                          onCheckedChange={(v) => {
+                            setBloqueantesAceitos((prev) => {
+                              const next = new Set(prev);
+                              if (v === true) next.add(a.chave); else next.delete(a.chave);
+                              return next;
+                            });
+                          }}
+                        />
+                        Reconheço e desejo prosseguir
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {conflitos.length ? (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+              <div className="text-sm font-semibold">Conflito com lançamento manual existente</div>
+              <p className="text-xs text-muted-foreground">
+                Estas linhas têm valor manual atual diferente do sugerido. Escolha por linha — sem escolha explícita, o valor manual é preservado.
+              </p>
+              <div className="max-h-64 overflow-auto rounded border bg-background">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cursista</TableHead>
+                      <TableHead className="text-center">Atual</TableHead>
+                      <TableHead className="text-center">Sugerido</TableHead>
+                      <TableHead>Decisão</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {conflitos.map((c) => {
+                      const idx = linhas.findIndex((l) => l.matricula_id === c.matricula_id);
+                      const linha = idx >= 0 ? linhas[idx] : null;
+                      const dec = linha?.decisao ?? "manter_atual";
+                      return (
+                        <TableRow key={c.matricula_id}>
+                          <TableCell className="text-xs">{c.nome}</TableCell>
+                          <TableCell className="text-center text-xs">{c.atual ? "P" : "F"}</TableCell>
+                          <TableCell className="text-center text-xs">{c.sugerido ? "P" : "F"}</TableCell>
+                          <TableCell>
+                            <Select
+                              value={dec}
+                              onValueChange={(v) => {
+                                if (idx >= 0) {
+                                  atualizarLinha(idx, {
+                                    decisao: v as "manter_atual" | "usar_sugerido",
+                                    presente: v === "usar_sugerido" ? c.sugerido : c.atual,
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="manter_atual">Manter manual atual</SelectItem>
+                                <SelectItem value="usar_sugerido">Usar valor sugerido</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-md border overflow-auto">
             <Table>
