@@ -145,6 +145,65 @@ function ImportarListaPage() {
     }
   }
 
+  async function processarLote(picked: GDriveFile[]) {
+    setLoteDrivePicker(false);
+    if (!turmaId) { toast.error("Selecione a turma antes de rodar o lote."); return; }
+    const inicial = picked
+      .filter((p) => p.mimeType === "application/pdf" || p.name.toLowerCase().endsWith(".pdf"))
+      .map((p) => ({ id: p.id, nome: p.name, status: "aguardando" as string }));
+    if (!inicial.length) { toast.error("Selecione ao menos um PDF."); return; }
+    setLoteFiles(picked);
+    setLoteAndamento(inicial);
+    const mats = await carregarMatriculasDaTurma(turmaId);
+    const elenco = mats.map((m, i) => ({ ordem: i + 1, nome: m.nome, cpf: m.cpf ?? null }));
+    for (const item of inicial) {
+      try {
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "baixando" } : s));
+        const dl = await baixarDriveFn({ data: { fileId: item.id } });
+        const f = await base64ToFile(dl.base64, dl.mime, dl.nome);
+        const hash = await hashArquivo(f);
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "lendo" } : s));
+        const imagens = await arquivoParaImagensBase64(f);
+        const res = (await lerFn({ data: { imagens, elenco } })) as ResultadoLeitura;
+        let linhas1 = cruzarComMatriculas(res.alunas, mats);
+        let obs = res.observacoes ?? [];
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "verificando" } : s));
+        try {
+          const ver = await verificarFn({
+            data: { imagens, leitura: { cabecalho: res.cabecalho, alunas: res.alunas } },
+          });
+          const aplicado = aplicarVerificacao(
+            linhas1,
+            ver.correcoes ?? [],
+            ver.total_presentes_contado ?? null,
+            res.cabecalho?.quantidade_presentes_manuscrita ?? null,
+          );
+          linhas1 = aplicado.linhas;
+          obs = [...obs, ...aplicado.avisos, ...(ver.observacoes ?? [])];
+        } catch (e) {
+          obs.push(`2ª passada falhou: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        const up = await uploadArquivoLista(turmaId, f);
+        const sid = await criarSugestao({
+          turmaId,
+          arquivoUrl: up.url,
+          arquivoNome: f.name,
+          arquivoHash: hash,
+          cabecalho: res.cabecalho ?? {},
+          linhas: linhas1,
+          observacoes: obs,
+          confiancaMedia: confiancaMedia(linhas1),
+        });
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "sugestao_criada", sugestao_id: sid } : s));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "erro", erro: msg } : s));
+      }
+    }
+    qc.invalidateQueries({ queryKey: ["mte", "importacoes-presenca"] });
+    toast.success("Lote processado. Confirme cada sugestão no histórico.");
+  }
+
   const processar = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Selecione o PDF/imagem da lista.");
