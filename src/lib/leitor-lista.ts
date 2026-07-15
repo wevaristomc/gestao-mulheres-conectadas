@@ -250,6 +250,9 @@ export type ConfirmarInput = {
   observacoes: string[];
   codigoTurma: string | null;
   nomeCurso: string | null;
+  arquivoHash?: string | null;
+  confiancaMedia?: number | null;
+  sugestaoId?: string | null; // quando presente, promove sugestão existente
 };
 
 export type ConfirmarResultado = {
@@ -358,19 +361,51 @@ export async function confirmarImportacao(input: ConfirmarInput): Promise<Confir
   // matriculas da turma para marcar ausentes
   const matriculas = await carregarMatriculasDaTurma(input.turmaId);
 
+  // Carrega presencas atuais da aula para NUNCA sobrescrever silenciosamente
+  // um lançamento manual — o operador precisa ter decidido "usar_sugerido".
+  const atuaisRes = await supabase
+    .from("presencas")
+    .select("matricula_id, presente")
+    .eq("aula_id", aulaId);
+  if (atuaisRes.error) throw new Error("Falha ao ler presenças atuais: " + atuaisRes.error.message);
+  const atuais = new Map<string, boolean>();
+  for (const r of (atuaisRes.data ?? []) as Array<{ matricula_id: string; presente: boolean }>) {
+    atuais.set(r.matricula_id, !!r.presente);
+  }
+
   const linhasIdentificadas = input.linhas.filter((l) => l.matricula_id);
-  const idsPresentes = new Set(linhasIdentificadas.filter((l) => l.presente).map((l) => l.matricula_id!));
   const idsLidos = new Set(linhasIdentificadas.map((l) => l.matricula_id!));
+
+  // Resolve o valor final de cada matrícula identificada respeitando decisão do operador.
+  const finalPresente = new Map<string, boolean>();
+  for (const l of linhasIdentificadas) {
+    const id = l.matricula_id!;
+    const atual = atuais.get(id);
+    const sugerido = !!l.presente;
+    if (atual !== undefined && atual !== sugerido && l.decisao !== "usar_sugerido") {
+      // preserva o lançamento manual atual (default seguro)
+      finalPresente.set(id, atual);
+    } else {
+      finalPresente.set(id, sugerido);
+    }
+  }
+  const idsPresentes = new Set<string>();
+  for (const [id, val] of finalPresente) if (val) idsPresentes.add(id);
 
   // Presencas: presentes primeiro, ausentes depois (para todas matriculadas)
   const presencasPayload: any[] = [];
   for (const m of matriculas) {
-    const presente = idsPresentes.has(m.matricula_id);
+    // Se a matrícula não foi lida, preserva o valor atual se existir
+    const presente = idsLidos.has(m.matricula_id)
+      ? idsPresentes.has(m.matricula_id)
+      : (atuais.get(m.matricula_id) ?? false);
     presencasPayload.push({
       aula_id: aulaId,
       matricula_id: m.matricula_id,
       presente,
-      justificativa: !idsLidos.has(m.matricula_id) ? "Não constava na lista escaneada" : null,
+      justificativa: !idsLidos.has(m.matricula_id) && atuais.get(m.matricula_id) === undefined
+        ? "Não constava na lista escaneada"
+        : null,
     });
   }
   if (presencasPayload.length) {
@@ -435,8 +470,20 @@ export async function confirmarImportacao(input: ConfirmarInput): Promise<Confir
     nao_identificados: naoIdent,
     avisos: input.observacoes,
     status: "concluida",
+    arquivo_hash: input.arquivoHash ?? null,
+    confianca_media: input.confiancaMedia ?? null,
+    status_sugestao: "confirmada",
+    confirmado_em: new Date().toISOString(),
   }).select("id").single();
   if (impIns.error) throw new Error("Falha ao gravar importação: " + impIns.error.message);
+
+  // Se veio de uma sugestão prévia, marca-a como rejeitada (evita 2 ativas).
+  if (input.sugestaoId) {
+    await supabase
+      .from("importacoes_presenca")
+      .update({ status_sugestao: "rejeitada" })
+      .eq("id", input.sugestaoId);
+  }
 
   return {
     aula_id: aulaId,
@@ -446,6 +493,71 @@ export async function confirmarImportacao(input: ConfirmarInput): Promise<Confir
     importacao_id: (impIns.data as any).id,
     nao_identificadas: naoIdent,
   };
+}
+
+// ---------------- Staging: sugestão sem gravar em presencas ----------------
+
+export type SugestaoInput = {
+  turmaId: string;
+  arquivoUrl: string;
+  arquivoNome: string;
+  arquivoHash: string;
+  cabecalho: CabecalhoExtraido;
+  linhas: LinhaConferencia[];
+  observacoes: string[];
+  confiancaMedia: number | null;
+};
+
+export async function criarSugestao(input: SugestaoInput): Promise<string> {
+  const ins = await supabase.from("importacoes_presenca").insert({
+    turma_id: input.turmaId,
+    arquivo_url: input.arquivoUrl,
+    arquivo_nome: input.arquivoNome,
+    arquivo_hash: input.arquivoHash,
+    data_aula: input.cabecalho.data ?? null,
+    conteudo: input.cabecalho.conteudo ?? null,
+    instrutor: input.cabecalho.instrutor ?? null,
+    horario: input.cabecalho.horario ?? null,
+    ch_dia: input.cabecalho.ch_dia ?? null,
+    turma_identificada: input.cabecalho.turma ?? null,
+    itens: input.linhas,
+    nao_identificados: input.linhas.filter((l) => l.status !== "identificada"),
+    avisos: input.observacoes,
+    status: "sugestao",
+    status_sugestao: "sugerida",
+    confianca_media: input.confiancaMedia,
+  }).select("id").single();
+  if (ins.error) throw new Error("Falha ao criar sugestão: " + ins.error.message);
+  return (ins.data as any).id as string;
+}
+
+export async function rejeitarSugestao(id: string, motivo?: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("importacoes_presenca")
+    .update({
+      status_sugestao: "rejeitada",
+      status: "rejeitada",
+      avisos: motivo ? [motivo] : undefined,
+    })
+    .eq("id", id);
+  if (error) throw new Error("Falha ao rejeitar sugestão: " + error.message);
+}
+
+// ---------------- Verificar duplicidade por hash ----------------
+
+export async function buscarSugestaoPorHash(hash: string): Promise<
+  { id: string; criado_em: string; status_sugestao: string } | null
+> {
+  const { data, error } = await supabase
+    .from("importacoes_presenca")
+    .select("id, criado_em, status_sugestao")
+    .eq("arquivo_hash", hash)
+    .neq("status_sugestao", "rejeitada")
+    .order("criado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return (data as any) ?? null;
 }
 
 // ---------------- Relatório .txt de itens não cruzados ----------------
