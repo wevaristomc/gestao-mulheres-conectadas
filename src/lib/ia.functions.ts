@@ -686,6 +686,11 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
         mime: z.string().default("image/png"),
         base64: z.string().min(10),
       })).min(1).max(8),
+      elenco: z.array(z.object({
+        ordem: z.number().int().positive(),
+        nome: z.string().min(1),
+        cpf: z.string().nullable().optional(),
+      })).optional(),
     }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -718,11 +723,19 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
       const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "");
       if (!modelo) continue;
       const tipo = selecionarChamador(String(prov.provedor), prov.base_url);
+      const usarAncorado = Array.isArray(data.elenco) && data.elenco.length > 0;
+      const prompt = usarAncorado
+        ? promptListaAncorado(data.elenco!.map((e) => ({
+            ordem: e.ordem,
+            nome: e.nome,
+            cpf: e.cpf ? String(e.cpf).replace(/\D+/g, "").slice(0, 11) : null,
+          })))
+        : PROMPT_LISTA_ABERTO;
       const base = {
         base_url: prov.base_url,
         api_key: prov.api_key,
         modelo,
-        prompt: PROMPT_LISTA,
+        prompt,
         imagens: data.imagens,
         max_tokens: maxTokens,
       };
@@ -732,11 +745,43 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
           : tipo === "anthropic" ? await chamarAnthropicVision(base)
           : await chamarOpenAICompatVision(base);
         const parsed = parseJsonFlexivel(r.content);
-        // Normaliza CPF nas alunas.
-        const alunas = Array.isArray(parsed?.alunas) ? parsed.alunas : [];
+        // Modo ancorado devolve `linhas` (só marcas manuscritas). Reconstituímos
+        // o shape `alunas` (compat com o fluxo antigo) hidratando nome/CPF pelo
+        // elenco enviado — a IA NÃO re-OCR de identidade.
+        let alunas: any[] = [];
+        if (usarAncorado && Array.isArray(parsed?.linhas)) {
+          const porOrdem = new Map<number, { ordem: number; nome: string; cpf: string | null }>();
+          for (const e of data.elenco!) {
+            porOrdem.set(e.ordem, {
+              ordem: e.ordem,
+              nome: e.nome,
+              cpf: e.cpf ? String(e.cpf).replace(/\D+/g, "").slice(0, 11) : null,
+            });
+          }
+          alunas = parsed.linhas.map((l: any) => {
+            const ord = Number(l?.elenco_ordem);
+            const ref = Number.isFinite(ord) ? porOrdem.get(ord) : undefined;
+            const num = Number(l?.num_linha ?? ord);
+            const conf = Number.isFinite(Number(l?.confianca)) ? Number(l.confianca) : 0.7;
+            return {
+              num: Number.isFinite(num) ? num : null,
+              nome: ref?.nome ?? null,
+              cpf: ref?.cpf ?? null,
+              elenco_ordem: Number.isFinite(ord) ? ord : null,
+              frequencia_sim: !!l?.frequencia_sim,
+              lanche_sim: !!l?.lanche_sim,
+              assinatura_presente: !!l?.assinatura_presente,
+              legivel: ref != null,
+              confianca: Math.max(0, Math.min(1, conf)),
+            };
+          });
+        } else {
+          alunas = Array.isArray(parsed?.alunas) ? parsed.alunas : [];
+        }
         for (const a of alunas) {
           a.cpf = a.cpf ? normalizeCpfDigits(String(a.cpf)) : null;
           if (a.cpf && a.cpf.length !== 11) a.cpf = null;
+          if (typeof a.confianca !== "number") a.confianca = 0.7;
         }
         await admin.from("ia_logs_uso").insert({
           processo: "leitura_lista_presenca",
