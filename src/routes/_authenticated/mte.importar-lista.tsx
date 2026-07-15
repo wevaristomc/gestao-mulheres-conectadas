@@ -960,6 +960,44 @@ function ImportarListaPage() {
         description="Navegue pela pasta do projeto ou busque pelo nome do PDF."
         busy={driveBusy}
       />
+      <GDrivePicker
+        open={loteDrivePicker}
+        onOpenChange={setLoteDrivePicker}
+        onPick={(files) => void processarLote(files)}
+        multi={true}
+        title="Lote de listas de presença — Drive"
+        description="Selecione múltiplos PDFs. Cada um gera uma SUGESTÃO — confirme depois no histórico."
+      />
+
+      {loteAndamento.length ? (
+        <div className="rounded-md border p-3">
+          <div className="mb-2 text-sm font-semibold">Andamento do lote</div>
+          <div className="max-h-64 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Arquivo</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Erro</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loteAndamento.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="text-xs">{s.nome}</TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={s.status === "erro" ? "destructive" : s.status === "sugestao_criada" ? "default" : "secondary"}>
+                        {s.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-red-700">{s.erro ?? ""}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
