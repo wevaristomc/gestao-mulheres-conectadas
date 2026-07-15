@@ -713,13 +713,14 @@ function ImportarListaPage() {
                   <TableHead>Nome (OCR)</TableHead>
                   <TableHead>CPF</TableHead>
                   <TableHead>Match</TableHead>
+                  <TableHead className="text-center">Conf.</TableHead>
                   <TableHead className="text-center">Presente</TableHead>
                   <TableHead className="text-center">Lanche</TableHead>
                   <TableHead>Vincular manualmente</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linhas.map((l, i) => (
+                {linhasVisiveis.map(({ l, i }) => (
                   <TableRow key={i} className={
                     l.status === "identificada" ? "" :
                     l.status === "divergencia" ? "bg-amber-50/60" : "bg-red-50/60"
@@ -735,6 +736,12 @@ function ImportarListaPage() {
                       ) : (
                         <span className="text-red-700 inline-flex items-center gap-1"><HelpCircle className="h-3 w-3" /> {l.motivo ?? "—"}</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className={`text-[10px] ${corConfianca(l.confianca)}`}>
+                        {typeof l.confianca === "number" ? l.confianca.toFixed(2) : "—"}
+                        {l.flag === "verificar" ? " ⚑" : ""}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-center">
                       <Checkbox checked={l.presente} onCheckedChange={(v) => atualizarLinha(i, { presente: v === true })} />
@@ -767,10 +774,19 @@ function ImportarListaPage() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => confirmar.mutate()} disabled={confirmar.isPending}>
+            <Button
+              onClick={() => confirmar.mutate()}
+              disabled={confirmar.isPending || bloqueantesPendentes.length > 0}
+            >
               {confirmar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
               Confirmar e registrar
             </Button>
+            {sugestaoId ? (
+              <Button variant="destructive" onClick={() => rejeitar.mutate()} disabled={rejeitar.isPending}>
+                {rejeitar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Rejeitar sugestão
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               onClick={() => baixarTxt(
