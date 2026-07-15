@@ -482,6 +482,16 @@ function ImportarListaPage() {
                     : <FolderOpen className="mr-1.5 h-4 w-4" />}
                   Escolher do Google Drive
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLoteDrivePicker(true)}
+                  disabled={!turmaId || loteAndamento.some((s) => s.status === "lendo" || s.status === "verificando")}
+                >
+                  <FolderOpen className="mr-1.5 h-4 w-4" />
+                  Lote do Drive
+                </Button>
               </div>
               {file ? (
                 <div className="text-xs text-muted-foreground">
