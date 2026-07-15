@@ -587,40 +587,84 @@ async function chamarOpenAICompatVision(params: {
   };
 }
 
-const PROMPT_LISTA = `Você é um extrator de dados de listas de presença escaneadas do programa Mulheres Conectadas (MTE/PMQ).
+const PROMPT_LISTA_ABERTO = `Você é um extrator de dados de listas de presença escaneadas do programa Mulheres Conectadas (MTE/PMQ).
 Cada página tem um cabeçalho e uma tabela com as colunas: Nº, NOME COMPLETO, CPF, Frequência ("Sim" manuscrito ou vazio), Entrega do Lanche, Assinatura manuscrita.
 O CPF às vezes vem com ";" no lugar de "." — normalize retornando apenas os 11 dígitos.
-Retorne APENAS JSON válido, sem markdown, no exato formato:
+Retorne APENAS JSON válido, sem markdown, no formato:
 {
   "cabecalho": {
-    "turma": "identificação da turma (ex: BET-MC-01-MANHÃ)",
-    "data": "AAAA-MM-DD",
-    "conteudo": "conteúdo das aulas do dia",
-    "instrutor": "nome do instrutor",
-    "horario": "ex: 08:00 às 12:00",
-    "ch_dia": 4,
-    "endereco": "endereço da unidade onde a aula foi ministrada (rua, número, bairro, cidade) ou null se não constar"
+    "turma": "...", "data": "AAAA-MM-DD", "conteudo": "...", "instrutor": "...",
+    "horario": "08:00 às 12:00", "ch_dia": 4, "endereco": "...",
+    "quantidade_presentes_manuscrita": 16,
+    "confianca_cabecalho": 0.9
   },
   "alunas": [
+    { "num": 1, "nome": "NOME", "cpf": "11 dígitos ou null",
+      "frequencia_sim": true, "lanche_sim": true, "assinatura_presente": true,
+      "legivel": true, "confianca": 0.9 }
+  ],
+  "observacoes": ["..."]
+}
+Regras: confianca em [0,1]; "quantidade_presentes_manuscrita" é o total escrito à mão no rodapé (ou null). Não invente linhas em branco.`;
+
+function promptListaAncorado(elenco: Array<{ ordem: number; nome: string; cpf: string | null }>) {
+  const ficha = elenco
+    .map((e) => `  ${e.ordem}. ${e.nome}${e.cpf ? ` (CPF ${e.cpf})` : ""}`)
+    .join("\n");
+  return `Você está lendo uma lista de presença ESCANEADA do programa Mulheres Conectadas (MTE/PMQ).
+A lista foi IMPRESSA pelo sistema com este elenco fixo (nome e CPF já são conhecidos — NÃO precisa re-OCR de identidade):
+ELENCO (índice.ordem — nome):
+${ficha}
+
+A tabela impressa tem, em cada linha, uma cursista deste elenco (mesma ordem), e as colunas: Nº, NOME, CPF, Frequência ("Sim" manuscrito), Entrega do Lanche (marcado), Assinatura manuscrita.
+
+SUA TAREFA: para CADA linha impressa da lista, retornar apenas as marcas MANUSCRITAS e o mapeamento com o elenco. NÃO re-extraia nome/CPF.
+
+Retorne APENAS JSON válido, sem markdown, no formato:
+{
+  "cabecalho": {
+    "turma": "...", "data": "AAAA-MM-DD", "conteudo": "...", "instrutor": "...",
+    "horario": "08:00 às 12:00", "ch_dia": 4, "endereco": "...",
+    "quantidade_presentes_manuscrita": 16,
+    "confianca_cabecalho": 0.9
+  },
+  "linhas": [
     {
-      "num": 1,
-      "nome": "NOME COMPLETO",
-      "cpf": "somente 11 dígitos ou null se ilegível",
+      "num_linha": 1,
+      "elenco_ordem": 1,
       "frequencia_sim": true,
       "lanche_sim": true,
       "assinatura_presente": true,
-      "legivel": true
+      "confianca": 0.9
     }
   ],
-  "observacoes": ["linha X ilegível", "..."]
+  "observacoes": ["linha 5 ilegível", "..."]
 }
+
 Regras:
-- "frequencia_sim": true se aparecer "Sim" manuscrito na coluna Frequência (aceitar variações do OCR); false se em branco.
-- "assinatura_presente": true quando houver qualquer traço/rubrica manuscrita na coluna Assinatura.
-- "lanche_sim": true se marcado na coluna Entrega do Lanche.
-- "legivel": false quando você não conseguir ler nome OU cpf com confiança.
-- NÃO invente alunas. Se a linha estiver totalmente em branco, ignore.
-- Preserve a ordem/numeração original.`;
+- "elenco_ordem" DEVE bater com a posição na tabela impressa (a linha 1 corresponde ao item 1 do elenco, e assim por diante). Se algum trecho estiver ilegível a ponto de você não conseguir confirmar o mapeamento, use null e adicione uma observação.
+- "frequencia_sim": true quando houver "Sim" manuscrito na coluna Frequência (aceitar variações do OCR); false se em branco.
+- "assinatura_presente": true quando houver traço/rubrica manuscrita na coluna Assinatura.
+- "lanche_sim": true quando a coluna de Entrega do Lanche estiver marcada.
+- "confianca" é a certeza da leitura manuscrita da linha (0.0 a 1.0). Use < 0.6 quando a assinatura/marca estiver fraca ou ambígua.
+- "quantidade_presentes_manuscrita": número escrito à mão no rodapé da página (ou null).
+- NÃO invente linhas em branco no fim da tabela.
+- Não repita nome/CPF na saída (o sistema já os conhece via elenco).`;
+}
+
+const PROMPT_LISTA_VERIFICACAO_HEAD = `Você é um verificador de leitura de lista de presença. Recebe (1) as imagens da lista e (2) o resultado JSON de uma primeira leitura.
+SUA TAREFA: conferir linha a linha as MARCAS MANUSCRITAS (Frequência "Sim", Entrega do Lanche, Assinatura) contra as imagens e retornar apenas as CORREÇÕES.
+
+Retorne APENAS JSON válido no formato:
+{
+  "correcoes": [
+    { "num_linha": 3, "frequencia_sim": false, "assinatura_presente": false, "confianca": 0.4, "motivo": "assinatura muito fraca, pode ser rasura" }
+  ],
+  "total_presentes_contado": 16,
+  "observacoes": ["..."]
+}
+
+Não inclua linhas que já estão corretas. Cada correção tem apenas os campos que mudam. "total_presentes_contado" é o número de linhas com PRESENÇA (Sim ou assinatura visível) que você contou re-conferindo.`;
 
 function normalizeCpfDigits(s: string | null | undefined): string {
   return String(s ?? "").replace(/\D+/g, "").slice(0, 11);
@@ -642,6 +686,11 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
         mime: z.string().default("image/png"),
         base64: z.string().min(10),
       })).min(1).max(8),
+      elenco: z.array(z.object({
+        ordem: z.number().int().positive(),
+        nome: z.string().min(1),
+        cpf: z.string().nullable().optional(),
+      })).optional(),
     }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -674,11 +723,19 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
       const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "");
       if (!modelo) continue;
       const tipo = selecionarChamador(String(prov.provedor), prov.base_url);
+      const usarAncorado = Array.isArray(data.elenco) && data.elenco.length > 0;
+      const prompt = usarAncorado
+        ? promptListaAncorado(data.elenco!.map((e) => ({
+            ordem: e.ordem,
+            nome: e.nome,
+            cpf: e.cpf ? String(e.cpf).replace(/\D+/g, "").slice(0, 11) : null,
+          })))
+        : PROMPT_LISTA_ABERTO;
       const base = {
         base_url: prov.base_url,
         api_key: prov.api_key,
         modelo,
-        prompt: PROMPT_LISTA,
+        prompt,
         imagens: data.imagens,
         max_tokens: maxTokens,
       };
@@ -688,11 +745,43 @@ export const lerListaPresenca = createServerFn({ method: "POST" })
           : tipo === "anthropic" ? await chamarAnthropicVision(base)
           : await chamarOpenAICompatVision(base);
         const parsed = parseJsonFlexivel(r.content);
-        // Normaliza CPF nas alunas.
-        const alunas = Array.isArray(parsed?.alunas) ? parsed.alunas : [];
+        // Modo ancorado devolve `linhas` (só marcas manuscritas). Reconstituímos
+        // o shape `alunas` (compat com o fluxo antigo) hidratando nome/CPF pelo
+        // elenco enviado — a IA NÃO re-OCR de identidade.
+        let alunas: any[] = [];
+        if (usarAncorado && Array.isArray(parsed?.linhas)) {
+          const porOrdem = new Map<number, { ordem: number; nome: string; cpf: string | null }>();
+          for (const e of data.elenco!) {
+            porOrdem.set(e.ordem, {
+              ordem: e.ordem,
+              nome: e.nome,
+              cpf: e.cpf ? String(e.cpf).replace(/\D+/g, "").slice(0, 11) : null,
+            });
+          }
+          alunas = parsed.linhas.map((l: any) => {
+            const ord = Number(l?.elenco_ordem);
+            const ref = Number.isFinite(ord) ? porOrdem.get(ord) : undefined;
+            const num = Number(l?.num_linha ?? ord);
+            const conf = Number.isFinite(Number(l?.confianca)) ? Number(l.confianca) : 0.7;
+            return {
+              num: Number.isFinite(num) ? num : null,
+              nome: ref?.nome ?? null,
+              cpf: ref?.cpf ?? null,
+              elenco_ordem: Number.isFinite(ord) ? ord : null,
+              frequencia_sim: !!l?.frequencia_sim,
+              lanche_sim: !!l?.lanche_sim,
+              assinatura_presente: !!l?.assinatura_presente,
+              legivel: ref != null,
+              confianca: Math.max(0, Math.min(1, conf)),
+            };
+          });
+        } else {
+          alunas = Array.isArray(parsed?.alunas) ? parsed.alunas : [];
+        }
         for (const a of alunas) {
           a.cpf = a.cpf ? normalizeCpfDigits(String(a.cpf)) : null;
           if (a.cpf && a.cpf.length !== 11) a.cpf = null;
+          if (typeof a.confianca !== "number") a.confianca = 0.7;
         }
         await admin.from("ia_logs_uso").insert({
           processo: "leitura_lista_presenca",
@@ -910,3 +999,59 @@ export async function executarTranscricaoRouter(input: {
   }
   throw new Error(`Nenhum provedor de transcrição funcionou. Primeiro erro: ${primeiroErro ?? "sem provedores utilizáveis"}`);
 }
+
+// -----------------------------------------------------------------------------
+// 2ª passada de verificação — confere marcas manuscritas contra a 1ª leitura.
+// -----------------------------------------------------------------------------
+
+export const verificarListaPresenca = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
+  .inputValidator((input) =>
+    z.object({
+      imagens: z.array(z.object({
+        mime: z.string().default("image/png"),
+        base64: z.string().min(10),
+      })).min(1).max(8),
+      leitura: z.object({
+        cabecalho: z.record(z.any()).optional().nullable(),
+        alunas: z.array(z.record(z.any())),
+      }),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+
+    const resumo = data.leitura.alunas.map((a: any) => ({
+      num_linha: a?.num ?? null,
+      nome: a?.nome ?? null,
+      frequencia_sim: !!a?.frequencia_sim,
+      lanche_sim: !!a?.lanche_sim,
+      assinatura_presente: !!a?.assinatura_presente,
+    }));
+    const prompt = `${PROMPT_LISTA_VERIFICACAO_HEAD}
+
+RESULTADO DA 1ª LEITURA (para conferir):
+${JSON.stringify({ linhas: resumo }, null, 2)}`;
+
+    const r = await executarVisaoRouter({
+      admin,
+      processo: "leitura_lista_verificacao",
+      prompt,
+      imagens: data.imagens,
+      defaults: { max_tokens: 4096 },
+    });
+    let parsed: any = {};
+    try { parsed = parseJsonFlexivel(r.content); } catch { parsed = {}; }
+    const correcoes = Array.isArray(parsed?.correcoes) ? parsed.correcoes : [];
+    const total = Number.isFinite(Number(parsed?.total_presentes_contado))
+      ? Number(parsed.total_presentes_contado) : null;
+    return {
+      correcoes,
+      total_presentes_contado: total,
+      observacoes: Array.isArray(parsed?.observacoes) ? parsed.observacoes : [],
+      provedor: r.provedor,
+      modelo: r.modelo,
+      tokens: r.tokens_entrada + r.tokens_saida,
+    };
+  });

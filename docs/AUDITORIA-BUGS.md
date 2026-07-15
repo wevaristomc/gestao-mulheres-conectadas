@@ -67,3 +67,23 @@ formatarHoras(90, "min", "hh:mm");             // "01:30"
 ```
 
 _Última varredura: 2026-07-14. Rodadas 1 e 2 (P1/P2/P3/P4/P5/P6/P8/P9/P10/P11/P12) aplicadas — auditoria de código 100% executada. Restante (P7) é ajuste de SQL nas views DEQ, tratado em migration própria._
+
+---
+
+## Rodada 3 — Reforço de assertividade do leitor de listas (2026-07-15)
+
+Alvo: leitor OCR de listas de presença. Diagnóstico: (a) IA re-extraia nome/CPF em campo aberto (mesmo dado que o sistema imprimiu); (b) render 2× pouco para "Sim" manuscrito; (c) sem verificação nem confiança por linha; (d) `confirmarImportacao` gravava direto em `presencas` (podia sobrescrever manual).
+
+| Chave | Correção | Arquivo(s) | Status |
+|---|---|---|---|
+| P13a | Leitura **ancorada no elenco** (closed-set): IA recebe `elenco: {ordem,nome,cpf}[]` e retorna só `elenco_ordem` + marcas manuscritas + `confianca` — não re-OCR de identidade. | `src/lib/ia.functions.ts` (`lerListaPresenca`) | ✅ |
+| P13b | Resolução dinâmica ~2200px de largura por página; JPEG q=0.9 quando PNG passa de ~4MB. | `src/lib/leitor-lista.ts` (`arquivoParaImagensBase64`) | ✅ |
+| P13c | **2ª passada de verificação** (`verificarListaPresenca`) — reconfere marcas manuscritas, devolve correções e total contado; consistências (marcado vs manuscrito vs verificação) viram avisos. | `src/lib/ia.functions.ts`, `src/lib/leitor-confronto.ts` (`aplicarVerificacao`) | ✅ |
+| P13d | **Confronto forte** antes da confirmação: turma (bloqueante se divergir), data (aviso se aula inexistente), professor (aviso se ≠ `professor_nome`), duplicidade por hash SHA-256, e DIFF por linha com `presencas` existentes. | `src/lib/leitor-confronto.ts` | ✅ |
+| P13e | **Staging obrigatório**: `criarSugestao` grava em `importacoes_presenca` com `status_sugestao='sugerida'` sem tocar em `presencas`; `confirmarImportacao` preserva lançamento manual salvo `decisao='usar_sugerido'` por linha; `rejeitarSugestao` fecha o ciclo. Índice único parcial em `arquivo_hash` (sugestões ativas). | `src/lib/leitor-lista.ts`, `docs/migrations/leitor-assertivo.sql` | ✅ |
+| P13f | UI de conferência: badge de **confiança por linha** (verde ≥0.85, amarelo, vermelho <0.6), filtro "só duvidosas", botão "Aceitar todas ≥0.85", painel de conflitos com decisão por linha, bloqueio do "Confirmar" enquanto houver avisos bloqueantes não reconhecidos. | `src/routes/_authenticated/mte.importar-lista.tsx` | ✅ |
+| P13g | **Lote via Google Drive**: multi-seleção no `GDrivePicker`, fila FIFO 1 PDF por vez, cada PDF gera SUGESTÃO (confirmação manual continua obrigatória). | `src/routes/_authenticated/mte.importar-lista.tsx` | ✅ |
+
+**Migração pendente de aplicação**: `docs/migrations/leitor-assertivo.sql` (usuário aplica). Backfill marca importações antigas como `confirmada` para não bloquear o histórico.
+
+**Compatibilidade retroativa**: `lerListaPresenca` sem `elenco` mantém o prompt aberto antigo. `confirmarImportacao` sem `sugestaoId`/`arquivoHash` continua funcionando (fluxo direto).

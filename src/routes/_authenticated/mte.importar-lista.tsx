@@ -25,7 +25,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { turmasMteListOptions } from "@/lib/mte-queries";
-import { lerListaPresenca } from "@/lib/ia.functions";
+import { lerListaPresenca, verificarListaPresenca } from "@/lib/ia.functions";
 import { baixarPdfDoDrive } from "@/lib/leitor-drive.functions";
 import { GDrivePicker, type GDriveFile } from "@/components/gdrive/gdrive-picker";
 import { ImportarTurmaCsvCard } from "@/components/mte/importar-turma-csv-card";
@@ -48,6 +48,9 @@ import {
   atualizarEnderecoTurma,
   atualizarProfessorTurma,
   marcarRevisaoImportacao,
+  hashArquivo,
+  criarSugestao,
+  rejeitarSugestao,
   type ImportacaoLista,
   type RevisaoStatus,
   type CabecalhoExtraido,
@@ -55,6 +58,13 @@ import {
   type MatriculaLite,
   type ResultadoLeitura,
 } from "@/lib/leitor-lista";
+import {
+  confrontarComSistema,
+  aplicarVerificacao,
+  confiancaMedia,
+  type AvisoConfronto,
+  type ConflitoLinha,
+} from "@/lib/leitor-confronto";
 import { useEscopoTurmas } from "@/hooks/use-escopo-turmas";
 
 export const Route = createFileRoute("/_authenticated/mte/importar-lista")({
@@ -84,8 +94,20 @@ function ImportarListaPage() {
   const [leitura, setLeitura] = useState<ResultadoLeitura | null>(null);
   const [imagensCapturadas, setImagensCapturadas] = useState<{ mime: string; base64: string }[]>([]);
   const [aulaComprovada, setAulaComprovada] = useState<{ aula_id: string; data: string | null } | null>(null);
+  const [arquivoHash, setArquivoHash] = useState<string | null>(null);
+  const [sugestaoId, setSugestaoId] = useState<string | null>(null);
+  const [avisosConfronto, setAvisosConfronto] = useState<AvisoConfronto[]>([]);
+  const [conflitos, setConflitos] = useState<ConflitoLinha[]>([]);
+  const [soDuvidosas, setSoDuvidosas] = useState(false);
+  const [bloqueantesAceitos, setBloqueantesAceitos] = useState<Set<string>>(new Set());
+  const [loteFiles, setLoteFiles] = useState<GDriveFile[]>([]);
+  const [loteDrivePicker, setLoteDrivePicker] = useState(false);
+  const [loteAndamento, setLoteAndamento] = useState<
+    Array<{ id: string; nome: string; status: string; sugestao_id?: string; erro?: string }>
+  >([]);
 
   const lerFn = useServerFn(lerListaPresenca);
+  const verificarFn = useServerFn(verificarListaPresenca);
   const baixarDriveFn = useServerFn(baixarPdfDoDrive);
   const historicoQ = useQuery({
     queryKey: ["mte", "importacoes-presenca", turmaId || null],
@@ -123,35 +145,165 @@ function ImportarListaPage() {
     }
   }
 
+  async function processarLote(picked: GDriveFile[]) {
+    setLoteDrivePicker(false);
+    if (!turmaId) { toast.error("Selecione a turma antes de rodar o lote."); return; }
+    const inicial = picked
+      .filter((p) => p.mimeType === "application/pdf" || p.name.toLowerCase().endsWith(".pdf"))
+      .map((p) => ({ id: p.id, nome: p.name, status: "aguardando" as string }));
+    if (!inicial.length) { toast.error("Selecione ao menos um PDF."); return; }
+    setLoteFiles(picked);
+    setLoteAndamento(inicial);
+    const mats = await carregarMatriculasDaTurma(turmaId);
+    const elenco = mats.map((m, i) => ({ ordem: i + 1, nome: m.nome, cpf: m.cpf ?? null }));
+    for (const item of inicial) {
+      try {
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "baixando" } : s));
+        const dl = await baixarDriveFn({ data: { fileId: item.id } });
+        const f = await base64ToFile(dl.base64, dl.mime, dl.nome);
+        const hash = await hashArquivo(f);
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "lendo" } : s));
+        const imagens = await arquivoParaImagensBase64(f);
+        const res = (await lerFn({ data: { imagens, elenco } })) as ResultadoLeitura;
+        let linhas1 = cruzarComMatriculas(res.alunas, mats);
+        let obs = res.observacoes ?? [];
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "verificando" } : s));
+        try {
+          const ver = await verificarFn({
+            data: { imagens, leitura: { cabecalho: res.cabecalho, alunas: res.alunas } },
+          });
+          const aplicado = aplicarVerificacao(
+            linhas1,
+            ver.correcoes ?? [],
+            ver.total_presentes_contado ?? null,
+            res.cabecalho?.quantidade_presentes_manuscrita ?? null,
+          );
+          linhas1 = aplicado.linhas;
+          obs = [...obs, ...aplicado.avisos, ...(ver.observacoes ?? [])];
+        } catch (e) {
+          obs.push(`2ª passada falhou: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        const up = await uploadArquivoLista(turmaId, f);
+        const sid = await criarSugestao({
+          turmaId,
+          arquivoUrl: up.url,
+          arquivoNome: f.name,
+          arquivoHash: hash,
+          cabecalho: res.cabecalho ?? {},
+          linhas: linhas1,
+          observacoes: obs,
+          confiancaMedia: confiancaMedia(linhas1),
+        });
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "sugestao_criada", sugestao_id: sid } : s));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setLoteAndamento((prev) => prev.map((s) => s.id === item.id ? { ...s, status: "erro", erro: msg } : s));
+      }
+    }
+    qc.invalidateQueries({ queryKey: ["mte", "importacoes-presenca"] });
+    toast.success("Lote processado. Confirme cada sugestão no histórico.");
+  }
+
   const processar = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error("Selecione o PDF/imagem da lista.");
       if (!turmaId) throw new Error("Selecione a turma.");
-      // 1. upload
-      const up = await uploadArquivoLista(turmaId, file);
-      setUploaded({ url: up.url, nome: file.name });
-      // 2. pdf -> imagens
-      const imagens = await arquivoParaImagensBase64(file);
-      setImagensCapturadas(imagens);
-      // 3. IA
-      const res = (await lerFn({ data: { imagens } })) as ResultadoLeitura;
-      setLeitura(res);
-      setCabecalho(res.cabecalho ?? {});
-      setObservacoes(res.observacoes ?? []);
-      // 4. cruzar
+      // 0. hash — dedup rápida antes de subir o arquivo
+      const hash = await hashArquivo(file);
+      setArquivoHash(hash);
+      // 1. matrículas da turma (elenco ancorado)
       const mats = await carregarMatriculasDaTurma(turmaId);
       setMatriculas(mats);
-      const cruzadas = cruzarComMatriculas(res.alunas, mats);
-      setLinhas(cruzadas);
+      const elenco = mats.map((m, i) => ({ ordem: i + 1, nome: m.nome, cpf: m.cpf ?? null }));
+      // 2. imagens
+      const imagens = await arquivoParaImagensBase64(file);
+      setImagensCapturadas(imagens);
+      // 3. leitura 1ª passada (com elenco)
+      const res = (await lerFn({ data: { imagens, elenco } })) as ResultadoLeitura;
+      const observacoes1 = res.observacoes ?? [];
+      // 4. 2ª passada — verificação (não crítica; falha vira aviso)
+      let linhas1 = cruzarComMatriculas(res.alunas, mats);
+      let observacoesFinal = [...observacoes1];
+      try {
+        const ver = await verificarFn({
+          data: {
+            imagens,
+            leitura: { cabecalho: res.cabecalho, alunas: res.alunas },
+          },
+        });
+        const aplicado = aplicarVerificacao(
+          linhas1,
+          ver.correcoes ?? [],
+          ver.total_presentes_contado ?? null,
+          res.cabecalho?.quantidade_presentes_manuscrita ?? null,
+        );
+        linhas1 = aplicado.linhas;
+        observacoesFinal = [...observacoesFinal, ...aplicado.avisos, ...(ver.observacoes ?? [])];
+      } catch (e) {
+        observacoesFinal.push(
+          `2ª passada de verificação falhou: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      // 5. upload do arquivo original
+      const up = await uploadArquivoLista(turmaId, file);
+      setUploaded({ url: up.url, nome: file.name });
+      // 6. estado
+      setLeitura(res);
+      setCabecalho(res.cabecalho ?? {});
+      setLinhas(linhas1);
+      setObservacoes(observacoesFinal);
+      // 7. confronto forte com o sistema
+      const conf = await confrontarComSistema({
+        turmaId,
+        turma: {
+          codigo_turma: turmaAtual?.codigo_turma ?? null,
+          nome_curso: turmaAtual?.nome_curso ?? null,
+          professor_nome: (turmaAtual as any)?.professor_nome ?? null,
+        },
+        cabecalho: res.cabecalho ?? {},
+        linhas: linhas1,
+        arquivoHash: hash,
+      });
+      setAvisosConfronto(conf.avisos);
+      setConflitos(conf.conflitos);
+      setBloqueantesAceitos(new Set());
+      // 8. cria SUGESTÃO (staging — não grava presencas ainda)
+      try {
+        const sid = await criarSugestao({
+          turmaId,
+          arquivoUrl: up.url,
+          arquivoNome: file.name,
+          arquivoHash: hash,
+          cabecalho: res.cabecalho ?? {},
+          linhas: linhas1,
+          observacoes: observacoesFinal,
+          confiancaMedia: confiancaMedia(linhas1),
+        });
+        setSugestaoId(sid);
+      } catch (e) {
+        // duplicidade cai aqui (índice único parcial) — apenas anota
+        observacoesFinal.push(`Não foi possível criar sugestão: ${e instanceof Error ? e.message : String(e)}`);
+        setObservacoes(observacoesFinal);
+      }
     },
     onSuccess: () => toast.success("Lista lida com sucesso — confira antes de gravar."),
     onError: (e: Error) => toast.error(e.message || "Falha ao processar"),
   });
 
+  const bloqueantesPendentes = useMemo(
+    () => avisosConfronto.filter((a) => a.nivel === "bloqueante" && !bloqueantesAceitos.has(a.chave)),
+    [avisosConfronto, bloqueantesAceitos],
+  );
+
   const confirmar = useMutation({
     mutationFn: async () => {
       if (!uploaded) throw new Error("Arquivo não enviado.");
       if (!turmaId) throw new Error("Turma inválida.");
+      if (bloqueantesPendentes.length) {
+        throw new Error(
+          `Existe(m) ${bloqueantesPendentes.length} aviso(s) bloqueante(s) pendente(s) — reconheça-os antes de confirmar.`,
+        );
+      }
       return confirmarImportacao({
         turmaId,
         arquivoUrl: uploaded.url,
@@ -161,6 +313,9 @@ function ImportarListaPage() {
         observacoes,
         codigoTurma: turmaAtual?.codigo_turma ?? null,
         nomeCurso: turmaAtual?.nome_curso ?? null,
+        arquivoHash,
+        confiancaMedia: confiancaMedia(linhas),
+        sugestaoId,
       });
     },
     onSuccess: (r) => {
@@ -168,12 +323,27 @@ function ImportarListaPage() {
         `Aula registrada · ${r.presencas_registradas} presenças · ${r.lanches_registrados} lanches`,
       );
       setAulaComprovada({ aula_id: r.aula_id, data: cabecalho.data ?? null });
+      setSugestaoId(null);
       qc.invalidateQueries({ queryKey: ["mte"] });
       qc.invalidateQueries({ queryKey: ["pedagogico"] });
       qc.invalidateQueries({ queryKey: ["administrativo"] });
       qc.invalidateQueries({ queryKey: ["relatorios"] });
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao gravar"),
+  });
+
+  const rejeitar = useMutation({
+    mutationFn: async () => {
+      if (!sugestaoId) throw new Error("Sem sugestão ativa.");
+      await rejeitarSugestao(sugestaoId, "Rejeitada pelo operador na revisão.");
+    },
+    onSuccess: () => {
+      toast.success("Sugestão rejeitada.");
+      finalizarSemAnexar();
+      setSugestaoId(null);
+      qc.invalidateQueries({ queryKey: ["mte", "importacoes-presenca"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const salvarImagensComoEvidencia = useMutation({
@@ -217,6 +387,8 @@ function ImportarListaPage() {
     setOrigem(null); setDriveFileName(null);
     setCabecalho({}); setObservacoes([]);
     setImagensCapturadas([]); setAulaComprovada(null);
+    setArquivoHash(null); setAvisosConfronto([]); setConflitos([]);
+    setBloqueantesAceitos(new Set());
   }
 
   const salvarEndereco = useMutation({
@@ -278,7 +450,20 @@ function ImportarListaPage() {
     naoId: linhas.filter((l) => l.status === "nao_identificada").length,
     presentes: linhas.filter((l) => l.presente && l.matricula_id).length,
     lanches: linhas.filter((l) => l.lanche_sim && l.matricula_id).length,
+    duvidosas: linhas.filter((l) => (l.confianca ?? 1) < 0.85).length,
   }), [linhas]);
+
+  const linhasVisiveis = useMemo(
+    () => (soDuvidosas ? linhas.map((l, i) => ({ l, i })).filter(({ l }) => (l.confianca ?? 1) < 0.85) : linhas.map((l, i) => ({ l, i }))),
+    [linhas, soDuvidosas],
+  );
+
+  function corConfianca(c: number | undefined): string {
+    const v = typeof c === "number" ? c : 1;
+    if (v >= 0.85) return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    if (v >= 0.6) return "bg-amber-100 text-amber-800 border-amber-200";
+    return "bg-red-100 text-red-800 border-red-200";
+  }
 
   return (
     <div className="space-y-6">
@@ -355,6 +540,16 @@ function ImportarListaPage() {
                     ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                     : <FolderOpen className="mr-1.5 h-4 w-4" />}
                   Escolher do Google Drive
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLoteDrivePicker(true)}
+                  disabled={!turmaId || loteAndamento.some((s) => s.status === "lendo" || s.status === "verificando")}
+                >
+                  <FolderOpen className="mr-1.5 h-4 w-4" />
+                  Lote do Drive
                 </Button>
               </div>
               {file ? (
@@ -460,7 +655,124 @@ function ImportarListaPage() {
             <Badge className="bg-red-100 text-red-800">❌ {contadores.naoId} não identificadas</Badge>
             <Badge variant="outline">Presenças: {contadores.presentes}</Badge>
             <Badge variant="outline">Lanches: {contadores.lanches}</Badge>
+            <Badge variant="outline">Duvidosas: {contadores.duvidosas}</Badge>
+            <label className="ml-2 inline-flex items-center gap-1.5 text-xs">
+              <Checkbox checked={soDuvidosas} onCheckedChange={(v) => setSoDuvidosas(v === true)} />
+              Só duvidosas
+            </label>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2"
+              onClick={() => {
+                setLinhas((prev) =>
+                  prev.map((l) =>
+                    (l.confianca ?? 1) >= 0.85 && l.matricula_id
+                      ? { ...l, decisao: "usar_sugerido" }
+                      : l,
+                  ),
+                );
+                toast.success("Confiança alta aceita em massa.");
+              }}
+            >
+              Aceitar todas ≥ 0.85
+            </Button>
           </div>
+
+          {avisosConfronto.length ? (
+            <div className="space-y-2">
+              {avisosConfronto.map((a) => (
+                <div
+                  key={a.chave}
+                  className={
+                    a.nivel === "bloqueante"
+                      ? "rounded-md border border-red-500/40 bg-red-50 p-3 text-xs text-red-900"
+                      : a.nivel === "atencao"
+                      ? "rounded-md border border-amber-500/40 bg-amber-50 p-3 text-xs text-amber-900"
+                      : "rounded-md border p-3 text-xs"
+                  }
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold">{a.mensagem}</div>
+                      {a.detalhe ? <div className="mt-0.5">{a.detalhe}</div> : null}
+                    </div>
+                    {a.nivel === "bloqueante" ? (
+                      <label className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <Checkbox
+                          checked={bloqueantesAceitos.has(a.chave)}
+                          onCheckedChange={(v) => {
+                            setBloqueantesAceitos((prev) => {
+                              const next = new Set(prev);
+                              if (v === true) next.add(a.chave); else next.delete(a.chave);
+                              return next;
+                            });
+                          }}
+                        />
+                        Reconheço e desejo prosseguir
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {conflitos.length ? (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+              <div className="text-sm font-semibold">Conflito com lançamento manual existente</div>
+              <p className="text-xs text-muted-foreground">
+                Estas linhas têm valor manual atual diferente do sugerido. Escolha por linha — sem escolha explícita, o valor manual é preservado.
+              </p>
+              <div className="max-h-64 overflow-auto rounded border bg-background">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cursista</TableHead>
+                      <TableHead className="text-center">Atual</TableHead>
+                      <TableHead className="text-center">Sugerido</TableHead>
+                      <TableHead>Decisão</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {conflitos.map((c) => {
+                      const idx = linhas.findIndex((l) => l.matricula_id === c.matricula_id);
+                      const linha = idx >= 0 ? linhas[idx] : null;
+                      const dec = linha?.decisao ?? "manter_atual";
+                      return (
+                        <TableRow key={c.matricula_id}>
+                          <TableCell className="text-xs">{c.nome}</TableCell>
+                          <TableCell className="text-center text-xs">{c.atual ? "P" : "F"}</TableCell>
+                          <TableCell className="text-center text-xs">{c.sugerido ? "P" : "F"}</TableCell>
+                          <TableCell>
+                            <Select
+                              value={dec}
+                              onValueChange={(v) => {
+                                if (idx >= 0) {
+                                  atualizarLinha(idx, {
+                                    decisao: v as "manter_atual" | "usar_sugerido",
+                                    presente: v === "usar_sugerido" ? c.sugerido : c.atual,
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="manter_atual">Manter manual atual</SelectItem>
+                                <SelectItem value="usar_sugerido">Usar valor sugerido</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-md border overflow-auto">
             <Table>
@@ -470,13 +782,14 @@ function ImportarListaPage() {
                   <TableHead>Nome (OCR)</TableHead>
                   <TableHead>CPF</TableHead>
                   <TableHead>Match</TableHead>
+                  <TableHead className="text-center">Conf.</TableHead>
                   <TableHead className="text-center">Presente</TableHead>
                   <TableHead className="text-center">Lanche</TableHead>
                   <TableHead>Vincular manualmente</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linhas.map((l, i) => (
+                {linhasVisiveis.map(({ l, i }) => (
                   <TableRow key={i} className={
                     l.status === "identificada" ? "" :
                     l.status === "divergencia" ? "bg-amber-50/60" : "bg-red-50/60"
@@ -492,6 +805,12 @@ function ImportarListaPage() {
                       ) : (
                         <span className="text-red-700 inline-flex items-center gap-1"><HelpCircle className="h-3 w-3" /> {l.motivo ?? "—"}</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className={`text-[10px] ${corConfianca(l.confianca)}`}>
+                        {typeof l.confianca === "number" ? l.confianca.toFixed(2) : "—"}
+                        {l.flag === "verificar" ? " ⚑" : ""}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-center">
                       <Checkbox checked={l.presente} onCheckedChange={(v) => atualizarLinha(i, { presente: v === true })} />
@@ -524,10 +843,19 @@ function ImportarListaPage() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => confirmar.mutate()} disabled={confirmar.isPending}>
+            <Button
+              onClick={() => confirmar.mutate()}
+              disabled={confirmar.isPending || bloqueantesPendentes.length > 0}
+            >
               {confirmar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
               Confirmar e registrar
             </Button>
+            {sugestaoId ? (
+              <Button variant="destructive" onClick={() => rejeitar.mutate()} disabled={rejeitar.isPending}>
+                {rejeitar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Rejeitar sugestão
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               onClick={() => baixarTxt(
@@ -632,6 +960,44 @@ function ImportarListaPage() {
         description="Navegue pela pasta do projeto ou busque pelo nome do PDF."
         busy={driveBusy}
       />
+      <GDrivePicker
+        open={loteDrivePicker}
+        onOpenChange={setLoteDrivePicker}
+        onPick={(files) => void processarLote(files)}
+        multi={true}
+        title="Lote de listas de presença — Drive"
+        description="Selecione múltiplos PDFs. Cada um gera uma SUGESTÃO — confirme depois no histórico."
+      />
+
+      {loteAndamento.length ? (
+        <div className="rounded-md border p-3">
+          <div className="mb-2 text-sm font-semibold">Andamento do lote</div>
+          <div className="max-h-64 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Arquivo</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Erro</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loteAndamento.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="text-xs">{s.nome}</TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={s.status === "erro" ? "destructive" : s.status === "sugestao_criada" ? "default" : "secondary"}>
+                        {s.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-red-700">{s.erro ?? ""}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

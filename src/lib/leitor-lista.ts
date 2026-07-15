@@ -14,6 +14,9 @@ export type AlunaExtraida = {
   lanche_sim: boolean;
   assinatura_presente: boolean;
   legivel: boolean;
+  confianca?: number;
+  elenco_ordem?: number | null;
+  flag?: "verificar" | null;
 };
 
 export type CabecalhoExtraido = {
@@ -24,6 +27,8 @@ export type CabecalhoExtraido = {
   horario?: string | null;
   ch_dia?: number | null;
   endereco?: string | null;
+  quantidade_presentes_manuscrita?: number | null;
+  confianca_cabecalho?: number | null;
 };
 
 export type ResultadoLeitura = {
@@ -52,6 +57,9 @@ export type LinhaConferencia = AlunaExtraida & {
   status: StatusCruzamento;
   motivo?: string;
   presente: boolean; // valor final que será gravado
+  // decisão do operador quando há conflito com lançamento manual existente
+  decisao?: "manter_atual" | "usar_sugerido" | null;
+  atual_presente?: boolean | null; // valor atual de presenças no banco (se houver)
 };
 
 // ---------------- PDF/imagem -> PNG base64 ----------------
@@ -95,16 +103,36 @@ export async function arquivoParaImagensBase64(file: File): Promise<{ mime: stri
   const MAX = Math.min(doc.numPages, 6);
   for (let i = 1; i <= MAX; i += 1) {
     const page = await doc.getPage(i);
-    // ~2x resolução para OCR
-    const viewport = page.getViewport({ scale: 2 });
+    // Escala dinâmica visando ~2200px de largura (melhor OCR de manuscrito).
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.max(2, Math.min(4, 2200 / Math.max(1, base.width)));
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
     const ctx = canvas.getContext("2d")!;
     await page.render({ canvasContext: ctx, viewport }).promise;
-    imagens.push({ mime: "image/png", base64: await canvasToPngBase64(canvas) });
+    // PNG por padrão; se ficar acima de ~4MB (base64), refaz em JPEG q=0.9.
+    let dataUrl = canvas.toDataURL("image/png");
+    let mime = "image/png";
+    if (dataUrl.length > 4 * 1024 * 1024 * 1.34) {
+      dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      mime = "image/jpeg";
+    }
+    imagens.push({ mime, base64: dataUrlToBase64(dataUrl) });
   }
   return imagens;
+}
+
+// ---------------- Hash SHA-256 do arquivo (para deduplicação) ----------------
+
+export async function hashArquivo(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  const bytes = new Uint8Array(digest);
+  let hex = "";
+  for (let i = 0; i < bytes.length; i += 1) hex += bytes[i].toString(16).padStart(2, "0");
+  return hex;
 }
 
 // ---------------- Cruzamento com matrículas ----------------
@@ -222,6 +250,9 @@ export type ConfirmarInput = {
   observacoes: string[];
   codigoTurma: string | null;
   nomeCurso: string | null;
+  arquivoHash?: string | null;
+  confiancaMedia?: number | null;
+  sugestaoId?: string | null; // quando presente, promove sugestão existente
 };
 
 export type ConfirmarResultado = {
@@ -330,19 +361,51 @@ export async function confirmarImportacao(input: ConfirmarInput): Promise<Confir
   // matriculas da turma para marcar ausentes
   const matriculas = await carregarMatriculasDaTurma(input.turmaId);
 
+  // Carrega presencas atuais da aula para NUNCA sobrescrever silenciosamente
+  // um lançamento manual — o operador precisa ter decidido "usar_sugerido".
+  const atuaisRes = await supabase
+    .from("presencas")
+    .select("matricula_id, presente")
+    .eq("aula_id", aulaId);
+  if (atuaisRes.error) throw new Error("Falha ao ler presenças atuais: " + atuaisRes.error.message);
+  const atuais = new Map<string, boolean>();
+  for (const r of (atuaisRes.data ?? []) as Array<{ matricula_id: string; presente: boolean }>) {
+    atuais.set(r.matricula_id, !!r.presente);
+  }
+
   const linhasIdentificadas = input.linhas.filter((l) => l.matricula_id);
-  const idsPresentes = new Set(linhasIdentificadas.filter((l) => l.presente).map((l) => l.matricula_id!));
   const idsLidos = new Set(linhasIdentificadas.map((l) => l.matricula_id!));
+
+  // Resolve o valor final de cada matrícula identificada respeitando decisão do operador.
+  const finalPresente = new Map<string, boolean>();
+  for (const l of linhasIdentificadas) {
+    const id = l.matricula_id!;
+    const atual = atuais.get(id);
+    const sugerido = !!l.presente;
+    if (atual !== undefined && atual !== sugerido && l.decisao !== "usar_sugerido") {
+      // preserva o lançamento manual atual (default seguro)
+      finalPresente.set(id, atual);
+    } else {
+      finalPresente.set(id, sugerido);
+    }
+  }
+  const idsPresentes = new Set<string>();
+  for (const [id, val] of finalPresente) if (val) idsPresentes.add(id);
 
   // Presencas: presentes primeiro, ausentes depois (para todas matriculadas)
   const presencasPayload: any[] = [];
   for (const m of matriculas) {
-    const presente = idsPresentes.has(m.matricula_id);
+    // Se a matrícula não foi lida, preserva o valor atual se existir
+    const presente = idsLidos.has(m.matricula_id)
+      ? idsPresentes.has(m.matricula_id)
+      : (atuais.get(m.matricula_id) ?? false);
     presencasPayload.push({
       aula_id: aulaId,
       matricula_id: m.matricula_id,
       presente,
-      justificativa: !idsLidos.has(m.matricula_id) ? "Não constava na lista escaneada" : null,
+      justificativa: !idsLidos.has(m.matricula_id) && atuais.get(m.matricula_id) === undefined
+        ? "Não constava na lista escaneada"
+        : null,
     });
   }
   if (presencasPayload.length) {
@@ -407,8 +470,20 @@ export async function confirmarImportacao(input: ConfirmarInput): Promise<Confir
     nao_identificados: naoIdent,
     avisos: input.observacoes,
     status: "concluida",
+    arquivo_hash: input.arquivoHash ?? null,
+    confianca_media: input.confiancaMedia ?? null,
+    status_sugestao: "confirmada",
+    confirmado_em: new Date().toISOString(),
   }).select("id").single();
   if (impIns.error) throw new Error("Falha ao gravar importação: " + impIns.error.message);
+
+  // Se veio de uma sugestão prévia, marca-a como rejeitada (evita 2 ativas).
+  if (input.sugestaoId) {
+    await supabase
+      .from("importacoes_presenca")
+      .update({ status_sugestao: "rejeitada" })
+      .eq("id", input.sugestaoId);
+  }
 
   return {
     aula_id: aulaId,
@@ -418,6 +493,71 @@ export async function confirmarImportacao(input: ConfirmarInput): Promise<Confir
     importacao_id: (impIns.data as any).id,
     nao_identificadas: naoIdent,
   };
+}
+
+// ---------------- Staging: sugestão sem gravar em presencas ----------------
+
+export type SugestaoInput = {
+  turmaId: string;
+  arquivoUrl: string;
+  arquivoNome: string;
+  arquivoHash: string;
+  cabecalho: CabecalhoExtraido;
+  linhas: LinhaConferencia[];
+  observacoes: string[];
+  confiancaMedia: number | null;
+};
+
+export async function criarSugestao(input: SugestaoInput): Promise<string> {
+  const ins = await supabase.from("importacoes_presenca").insert({
+    turma_id: input.turmaId,
+    arquivo_url: input.arquivoUrl,
+    arquivo_nome: input.arquivoNome,
+    arquivo_hash: input.arquivoHash,
+    data_aula: input.cabecalho.data ?? null,
+    conteudo: input.cabecalho.conteudo ?? null,
+    instrutor: input.cabecalho.instrutor ?? null,
+    horario: input.cabecalho.horario ?? null,
+    ch_dia: input.cabecalho.ch_dia ?? null,
+    turma_identificada: input.cabecalho.turma ?? null,
+    itens: input.linhas,
+    nao_identificados: input.linhas.filter((l) => l.status !== "identificada"),
+    avisos: input.observacoes,
+    status: "sugestao",
+    status_sugestao: "sugerida",
+    confianca_media: input.confiancaMedia,
+  }).select("id").single();
+  if (ins.error) throw new Error("Falha ao criar sugestão: " + ins.error.message);
+  return (ins.data as any).id as string;
+}
+
+export async function rejeitarSugestao(id: string, motivo?: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("importacoes_presenca")
+    .update({
+      status_sugestao: "rejeitada",
+      status: "rejeitada",
+      avisos: motivo ? [motivo] : undefined,
+    })
+    .eq("id", id);
+  if (error) throw new Error("Falha ao rejeitar sugestão: " + error.message);
+}
+
+// ---------------- Verificar duplicidade por hash ----------------
+
+export async function buscarSugestaoPorHash(hash: string): Promise<
+  { id: string; criado_em: string; status_sugestao: string } | null
+> {
+  const { data, error } = await supabase
+    .from("importacoes_presenca")
+    .select("id, criado_em, status_sugestao")
+    .eq("arquivo_hash", hash)
+    .neq("status_sugestao", "rejeitada")
+    .order("criado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return (data as any) ?? null;
 }
 
 // ---------------- Relatório .txt de itens não cruzados ----------------
