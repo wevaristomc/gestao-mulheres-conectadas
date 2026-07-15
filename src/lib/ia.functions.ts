@@ -999,3 +999,59 @@ export async function executarTranscricaoRouter(input: {
   }
   throw new Error(`Nenhum provedor de transcrição funcionou. Primeiro erro: ${primeiroErro ?? "sem provedores utilizáveis"}`);
 }
+
+// -----------------------------------------------------------------------------
+// 2ª passada de verificação — confere marcas manuscritas contra a 1ª leitura.
+// -----------------------------------------------------------------------------
+
+export const verificarListaPresenca = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO_E_FINANCEIRO)])
+  .inputValidator((input) =>
+    z.object({
+      imagens: z.array(z.object({
+        mime: z.string().default("image/png"),
+        base64: z.string().min(10),
+      })).min(1).max(8),
+      leitura: z.object({
+        cabecalho: z.record(z.any()).optional().nullable(),
+        alunas: z.array(z.record(z.any())),
+      }),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+
+    const resumo = data.leitura.alunas.map((a: any) => ({
+      num_linha: a?.num ?? null,
+      nome: a?.nome ?? null,
+      frequencia_sim: !!a?.frequencia_sim,
+      lanche_sim: !!a?.lanche_sim,
+      assinatura_presente: !!a?.assinatura_presente,
+    }));
+    const prompt = `${PROMPT_LISTA_VERIFICACAO_HEAD}
+
+RESULTADO DA 1ª LEITURA (para conferir):
+${JSON.stringify({ linhas: resumo }, null, 2)}`;
+
+    const r = await executarVisaoRouter({
+      admin,
+      processo: "leitura_lista_verificacao",
+      prompt,
+      imagens: data.imagens,
+      defaults: { max_tokens: 4096 },
+    });
+    let parsed: any = {};
+    try { parsed = parseJsonFlexivel(r.content); } catch { parsed = {}; }
+    const correcoes = Array.isArray(parsed?.correcoes) ? parsed.correcoes : [];
+    const total = Number.isFinite(Number(parsed?.total_presentes_contado))
+      ? Number(parsed.total_presentes_contado) : null;
+    return {
+      correcoes,
+      total_presentes_contado: total,
+      observacoes: Array.isArray(parsed?.observacoes) ? parsed.observacoes : [],
+      provedor: r.provedor,
+      modelo: r.modelo,
+      tokens: r.tokens_entrada + r.tokens_saida,
+    };
+  });
