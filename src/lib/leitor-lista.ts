@@ -14,6 +14,9 @@ export type AlunaExtraida = {
   lanche_sim: boolean;
   assinatura_presente: boolean;
   legivel: boolean;
+  confianca?: number;
+  elenco_ordem?: number | null;
+  flag?: "verificar" | null;
 };
 
 export type CabecalhoExtraido = {
@@ -24,6 +27,8 @@ export type CabecalhoExtraido = {
   horario?: string | null;
   ch_dia?: number | null;
   endereco?: string | null;
+  quantidade_presentes_manuscrita?: number | null;
+  confianca_cabecalho?: number | null;
 };
 
 export type ResultadoLeitura = {
@@ -52,6 +57,9 @@ export type LinhaConferencia = AlunaExtraida & {
   status: StatusCruzamento;
   motivo?: string;
   presente: boolean; // valor final que será gravado
+  // decisão do operador quando há conflito com lançamento manual existente
+  decisao?: "manter_atual" | "usar_sugerido" | null;
+  atual_presente?: boolean | null; // valor atual de presenças no banco (se houver)
 };
 
 // ---------------- PDF/imagem -> PNG base64 ----------------
@@ -95,16 +103,36 @@ export async function arquivoParaImagensBase64(file: File): Promise<{ mime: stri
   const MAX = Math.min(doc.numPages, 6);
   for (let i = 1; i <= MAX; i += 1) {
     const page = await doc.getPage(i);
-    // ~2x resolução para OCR
-    const viewport = page.getViewport({ scale: 2 });
+    // Escala dinâmica visando ~2200px de largura (melhor OCR de manuscrito).
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.max(2, Math.min(4, 2200 / Math.max(1, base.width)));
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
     const ctx = canvas.getContext("2d")!;
     await page.render({ canvasContext: ctx, viewport }).promise;
-    imagens.push({ mime: "image/png", base64: await canvasToPngBase64(canvas) });
+    // PNG por padrão; se ficar acima de ~4MB (base64), refaz em JPEG q=0.9.
+    let dataUrl = canvas.toDataURL("image/png");
+    let mime = "image/png";
+    if (dataUrl.length > 4 * 1024 * 1024 * 1.34) {
+      dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      mime = "image/jpeg";
+    }
+    imagens.push({ mime, base64: dataUrlToBase64(dataUrl) });
   }
   return imagens;
+}
+
+// ---------------- Hash SHA-256 do arquivo (para deduplicação) ----------------
+
+export async function hashArquivo(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  const bytes = new Uint8Array(digest);
+  let hex = "";
+  for (let i = 0; i < bytes.length; i += 1) hex += bytes[i].toString(16).padStart(2, "0");
+  return hex;
 }
 
 // ---------------- Cruzamento com matrículas ----------------
