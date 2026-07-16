@@ -271,16 +271,18 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
     const admin = getSupabaseAdmin();
 
     // Seleciona pendentes: status pendente, OU aguardando_selecao com transcrever=true.
+    const agora = new Date().toISOString();
     const { data: pend, error: pendErr } = await admin
       .from("drive_arquivos")
       .select("*")
       .or("status.eq.pendente,and(status.eq.aguardando_selecao,transcrever.eq.true)")
+      .or(`proxima_tentativa.is.null,proxima_tentativa.lte.${agora}`)
       .order("modified_time", { ascending: false })
       .limit(MAX_BATCH);
     if (pendErr) throw new Error(`Falha ao carregar fila: ${pendErr.message}`);
     const fila = (pend ?? []) as Array<any>;
 
-    let processados = 0, erros = 0, ignorados = 0;
+    let processados = 0, erros = 0, ignorados = 0, aguardandoRetry = 0;
     const { executarVisaoRouter, executarTranscricaoRouter } = await import("@/lib/ia.functions");
     const { indexarDocumentoInterno } = await import("@/lib/base-conhecimento.functions");
 
