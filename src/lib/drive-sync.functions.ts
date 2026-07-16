@@ -39,6 +39,8 @@ function isRateLimitError(msg: string): boolean {
   return /\b429\b|rate ?limit|quota|too many requests/i.test(msg);
 }
 
+const RETRY_BACKOFF_MS = 2 * 60 * 60 * 1000; // 2h
+
 function classificarTipo(mimeType: string, nome: string): string {
   const m = (mimeType || "").toLowerCase();
   const n = (nome || "").toLowerCase();
