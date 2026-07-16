@@ -928,13 +928,31 @@ export async function executarVisaoRouter(input: {
 
   let primeiroErro: string | null = null;
   let fallbackDe: string | undefined;
+  let algumProvedorTentou = false;
+  let todosPorCota = true;
+  const pulados: string[] = [];
+  const temPdf = imagens.some((im) => (im.mime || "").toLowerCase() === "application/pdf");
   for (const prov of ordenados) {
     if (!prov.api_key || !String(prov.api_key).trim()) continue;
-    const modelo = prov.modelo_padrao || (Array.isArray(prov.modelos_disponiveis) ? prov.modelos_disponiveis[0] : "") || "";
-    if (!modelo) continue;
     const codigo = String(prov.provedor);
+    // 1) Escolhe um modelo MULTIMODAL viável para este provedor (não usa o
+    //    modelo_padrao de texto). Sem modelo → skip silencioso.
+    const modelo = modeloVisaoFor(codigo, prov.base_url, prov.modelos_disponiveis, prov.modelo_padrao);
+    if (!modelo) {
+      pulados.push(`${codigo} (sem modelo de visão)`);
+      continue;
+    }
     const tipo = selecionarChamador(codigo, prov.base_url);
+    // 2) Se a entrada tem PDF inline, só provedores que aceitam PDF inline
+    //    (gemini/anthropic) podem tentar — os demais receberiam application/pdf
+    //    em image_url e retornariam 400. Renderização servidor-side de PDF→PNG
+    //    não é viável no runtime do Worker; ficamos limitados a esses provedores.
+    if (temPdf && !provedorAceitaPdfInline(codigo, prov.base_url)) {
+      pulados.push(`${codigo} (não aceita PDF inline)`);
+      continue;
+    }
     const base = { base_url: prov.base_url, api_key: prov.api_key, modelo, prompt, imagens, max_tokens: maxTokens };
+    algumProvedorTentou = true;
     try {
       const r =
         tipo === "gemini" ? await chamarGeminiVision(base)
@@ -961,11 +979,19 @@ export async function executarVisaoRouter(input: {
         sucesso: false, erro: msg.slice(0, 500),
       });
       if (!primeiroErro) primeiroErro = `${codigo}: ${msg}`;
+      if (!isVisaoRateLimit(msg)) todosPorCota = false;
+      // Billing (402) → skip provedor, mas não conta como "tudo por cota".
+      if (isBillingError(msg)) todosPorCota = false;
       if (!usarFallback) break;
       if (!fallbackDe) fallbackDe = codigo;
     }
   }
-  throw new Error(`Nenhum provedor de visão conseguiu processar. Primeiro erro: ${primeiroErro ?? "sem provedores com api_key"}`);
+  const detalhe = primeiroErro ?? (pulados.length ? `pulados: ${pulados.join(", ")}` : "sem provedores com api_key");
+  const finalMsg = `Nenhum provedor de visão conseguiu processar. ${detalhe}`;
+  if (algumProvedorTentou && todosPorCota) {
+    throw new VisaoQuotaEsgotadaError(finalMsg);
+  }
+  throw new Error(finalMsg);
 }
 
 // -----------------------------------------------------------------------------
