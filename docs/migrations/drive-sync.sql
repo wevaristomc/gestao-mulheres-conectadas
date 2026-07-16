@@ -105,3 +105,16 @@ VALUES
 ON CONFLICT (processo) DO NOTHING;
 
 COMMIT;
+
+-- ============================================================================
+-- APPEND (2026-07-16): backoff de re-tentativa quando a cota da IA estoura.
+-- Sync do Drive passa a marcar drive_arquivos.tentativas + proxima_tentativa em
+-- vez de status='erro' quando o roteador de visão/transcrição responde 429.
+-- ============================================================================
+ALTER TABLE public.drive_arquivos
+  ADD COLUMN IF NOT EXISTS tentativas int NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS proxima_tentativa timestamptz;
+
+CREATE INDEX IF NOT EXISTS drive_arquivos_proxima_tentativa_idx
+  ON public.drive_arquivos(proxima_tentativa)
+  WHERE proxima_tentativa IS NOT NULL;

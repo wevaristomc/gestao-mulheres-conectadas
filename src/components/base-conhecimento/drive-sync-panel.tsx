@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  AlertCircle, CheckCircle2, Film, HardDrive, Loader2, RefreshCw, Search, Video,
+  AlertCircle, CheckCircle2, Clock, Film, HardDrive, Loader2, RefreshCw, Search, Video,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,7 +21,7 @@ import {
 import { formatarData } from "@/lib/base-conhecimento-queries";
 import {
   driveSyncLista, driveSyncMarcarTranscricao, driveSyncProcessar,
-  driveSyncReindexar, driveSyncStatus, driveSyncVarredura,
+  driveSyncReindexar, driveSyncStatus, driveSyncTentarAgora, driveSyncVarredura,
 } from "@/lib/drive-sync.functions";
 
 type Arquivo = {
@@ -66,6 +66,7 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
   const processarFn = useServerFn(driveSyncProcessar);
   const marcarFn = useServerFn(driveSyncMarcarTranscricao);
   const reindexFn = useServerFn(driveSyncReindexar);
+  const tentarAgoraFn = useServerFn(driveSyncTentarAgora);
 
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
@@ -114,9 +115,16 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
         mensagem: `${total} arquivos catalogados. Processando fila…`,
       });
       let done = 0;
+      let cotaAvisada = false;
       for (let i = 0; i < 10; i += 1) {
         const p = await processarFn({ data: { projetoId } });
         done += p.processados + p.ignorados + p.erros;
+        if (!cotaAvisada && (p.aguardandoRetry ?? 0) > 0) {
+          toast.info(
+            `Cota de IA esgotada em ${p.aguardandoRetry} arquivo(s) — nova tentativa automática em ~2h.`,
+          );
+          cotaAvisada = true;
+        }
         setProgresso({
           fase: "processamento",
           done,
@@ -145,6 +153,16 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
     onError: (e: Error) => {
       toast.error(e.message || "Falha na sincronização");
     },
+  });
+
+  const tentarAgora = useMutation({
+    mutationFn: () => tentarAgoraFn(),
+    onSuccess: (r) => {
+      toast.success(`Backoff removido de ${r.liberados ?? 0} arquivo(s). Rode "Sincronizar agora".`);
+      qc.invalidateQueries({ queryKey: ["drive-sync-status"] });
+      qc.invalidateQueries({ queryKey: ["drive-sync-lista"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Falha"),
   });
 
   const isSyncing = syncMutation.isPending;
@@ -245,10 +263,34 @@ export function DriveSyncPanel({ projetoId }: { projetoId: string | null }) {
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi label="Indexados" value={String(cs.indexado ?? 0)} />
-          <Kpi label="Pendentes" value={String((cs.pendente ?? 0) + (cs.processando ?? 0))} />
+          <Kpi
+            label="Pendentes"
+            value={String(Math.max(0, (cs.pendente ?? 0) + (cs.processando ?? 0) - (statusQ.data?.aguardandoRetry ?? 0)))}
+          />
           <Kpi label="Erros" value={String(cs.erro ?? 0)} />
           <Kpi label="Vídeos aguardando" value={String(cs.aguardando_selecao ?? 0)} />
         </div>
+        {(statusQ.data?.aguardandoRetry ?? 0) > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+            <Clock className="h-3.5 w-3.5 text-amber-600" />
+            <span>
+              <strong>{statusQ.data?.aguardandoRetry}</strong> arquivo(s) aguardando nova tentativa (cota de IA).
+              {statusQ.data?.proximaTentativa ? (
+                <> Próxima tentativa: <strong>{formatarData(statusQ.data.proximaTentativa)}</strong>.</>
+              ) : null}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-7"
+              onClick={() => tentarAgora.mutate()}
+              disabled={tentarAgora.isPending}
+            >
+              {tentarAgora.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              Tentar agora
+            </Button>
+          </div>
+        ) : null}
         <div className="mt-3 text-xs text-muted-foreground">
           Última varredura: {statusQ.data?.estado?.ultima_varredura ? formatarData(statusQ.data.estado.ultima_varredura) : "—"}
           {" · "}

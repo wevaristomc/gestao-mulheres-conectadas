@@ -39,6 +39,8 @@ function isRateLimitError(msg: string): boolean {
   return /\b429\b|rate ?limit|quota|too many requests/i.test(msg);
 }
 
+const RETRY_BACKOFF_MS = 2 * 60 * 60 * 1000; // 2h
+
 function classificarTipo(mimeType: string, nome: string): string {
   const m = (mimeType || "").toLowerCase();
   const n = (nome || "").toLowerCase();
@@ -269,16 +271,18 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
     const admin = getSupabaseAdmin();
 
     // Seleciona pendentes: status pendente, OU aguardando_selecao com transcrever=true.
+    const agora = new Date().toISOString();
     const { data: pend, error: pendErr } = await admin
       .from("drive_arquivos")
       .select("*")
       .or("status.eq.pendente,and(status.eq.aguardando_selecao,transcrever.eq.true)")
+      .or(`proxima_tentativa.is.null,proxima_tentativa.lte.${agora}`)
       .order("modified_time", { ascending: false })
       .limit(MAX_BATCH);
     if (pendErr) throw new Error(`Falha ao carregar fila: ${pendErr.message}`);
     const fila = (pend ?? []) as Array<any>;
 
-    let processados = 0, erros = 0, ignorados = 0;
+    let processados = 0, erros = 0, ignorados = 0, aguardandoRetry = 0;
     const { executarVisaoRouter, executarTranscricaoRouter } = await import("@/lib/ia.functions");
     const { indexarDocumentoInterno } = await import("@/lib/base-conhecimento.functions");
 
@@ -406,29 +410,48 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
         processados += 1;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        // 429 do Google Drive / provedores de IA → mantém como pendente para nova tentativa.
-        const novoStatus = isRateLimitError(msg) ? "pendente" : "erro";
-        await admin
-          .from("drive_arquivos")
-          .update({
-            status: novoStatus,
-            erro: msg.slice(0, 800),
-            processado_em: new Date().toISOString(),
-          })
-          .eq("id", id);
-        if (novoStatus === "erro") erros += 1;
+        // 429 / cota esgotada em TODOS os provedores → mantém como pendente com
+        // backoff (2h) para nova tentativa automática. Não conta como erro.
+        const isQuota =
+          (e instanceof Error && e.name === "VisaoQuotaEsgotadaError") || isRateLimitError(msg);
+        if (isQuota) {
+          const tentativas = (arq.tentativas ?? 0) + 1;
+          const proxima = new Date(Date.now() + RETRY_BACKOFF_MS).toISOString();
+          await admin
+            .from("drive_arquivos")
+            .update({
+              status: "pendente",
+              erro: `Cota de IA esgotada — nova tentativa após ${new Date(proxima).toLocaleString("pt-BR")}. ${msg.slice(0, 500)}`,
+              tentativas,
+              proxima_tentativa: proxima,
+            })
+            .eq("id", id);
+          aguardandoRetry += 1;
+        } else {
+          await admin
+            .from("drive_arquivos")
+            .update({
+              status: "erro",
+              erro: msg.slice(0, 800),
+              processado_em: new Date().toISOString(),
+            })
+            .eq("id", id);
+          erros += 1;
+        }
       }
       // pequeno respiro entre itens (protege quotas do Drive/IA)
       await sleep(300);
     }
 
-    // Restam pendentes?
+    // Restam pendentes disponíveis (fora do backoff)?
+    const agora2 = new Date().toISOString();
     const { count } = await admin
       .from("drive_arquivos")
       .select("id", { count: "exact", head: true })
-      .or("status.eq.pendente,and(status.eq.aguardando_selecao,transcrever.eq.true)");
+      .or("status.eq.pendente,and(status.eq.aguardando_selecao,transcrever.eq.true)")
+      .or(`proxima_tentativa.is.null,proxima_tentativa.lte.${agora2}`);
 
-    return { processados, erros, ignorados, restantes: count ?? 0 };
+    return { processados, erros, ignorados, aguardandoRetry, restantes: count ?? 0 };
   });
 
 // ---------------------------------------------------------------------------
@@ -469,12 +492,31 @@ export const driveSyncStatus = createServerFn({ method: "GET" })
       .limit(20);
 
     const rootConfigured = !!process.env.GDRIVE_ROOT_FOLDER_ID;
+
+    // Aguardando nova tentativa (cota de IA) — pendentes com backoff futuro.
+    const nowIso = new Date().toISOString();
+    const { count: aguardandoRetry } = await admin
+      .from("drive_arquivos")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pendente")
+      .gt("proxima_tentativa", nowIso);
+    const { data: proxAg } = await admin
+      .from("drive_arquivos")
+      .select("proxima_tentativa")
+      .eq("status", "pendente")
+      .gt("proxima_tentativa", nowIso)
+      .order("proxima_tentativa", { ascending: true })
+      .limit(1);
+    const proximaTentativa = (proxAg?.[0] as { proxima_tentativa?: string } | undefined)?.proxima_tentativa ?? null;
+
     return {
       estado: estado ?? null,
       contadoresStatus,
       contadoresTipo,
       erros: (erros ?? []) as Array<any>,
       rootConfigured,
+      aguardandoRetry: aguardandoRetry ?? 0,
+      proximaTentativa,
     };
   });
 
@@ -553,4 +595,24 @@ export const driveSyncReindexar = createServerFn({ method: "POST" })
       .update({ status: proximoStatus, erro: null, documento_id: null, processado_em: null })
       .eq("id", data.id);
     return { ok: true };
+  });
+
+// ---------------------------------------------------------------------------
+// 6) "Tentar agora": zera proxima_tentativa em pendentes aguardando retry.
+// ---------------------------------------------------------------------------
+
+export const driveSyncTentarAgora = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .handler(async ({ context }) => {
+    await assertCoordRole(context);
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const nowIso = new Date().toISOString();
+    const { error, count } = await admin
+      .from("drive_arquivos")
+      .update({ proxima_tentativa: null }, { count: "exact" })
+      .eq("status", "pendente")
+      .gt("proxima_tentativa", nowIso);
+    if (error) throw new Error(error.message);
+    return { ok: true, liberados: count ?? 0 };
   });
