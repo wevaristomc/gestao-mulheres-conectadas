@@ -492,12 +492,31 @@ export const driveSyncStatus = createServerFn({ method: "GET" })
       .limit(20);
 
     const rootConfigured = !!process.env.GDRIVE_ROOT_FOLDER_ID;
+
+    // Aguardando nova tentativa (cota de IA) — pendentes com backoff futuro.
+    const nowIso = new Date().toISOString();
+    const { count: aguardandoRetry } = await admin
+      .from("drive_arquivos")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pendente")
+      .gt("proxima_tentativa", nowIso);
+    const { data: proxAg } = await admin
+      .from("drive_arquivos")
+      .select("proxima_tentativa")
+      .eq("status", "pendente")
+      .gt("proxima_tentativa", nowIso)
+      .order("proxima_tentativa", { ascending: true })
+      .limit(1);
+    const proximaTentativa = (proxAg?.[0] as { proxima_tentativa?: string } | undefined)?.proxima_tentativa ?? null;
+
     return {
       estado: estado ?? null,
       contadoresStatus,
       contadoresTipo,
       erros: (erros ?? []) as Array<any>,
       rootConfigured,
+      aguardandoRetry: aguardandoRetry ?? 0,
+      proximaTentativa,
     };
   });
 
