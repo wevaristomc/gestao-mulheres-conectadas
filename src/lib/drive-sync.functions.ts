@@ -410,29 +410,48 @@ export const driveSyncProcessar = createServerFn({ method: "POST" })
         processados += 1;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        // 429 do Google Drive / provedores de IA → mantém como pendente para nova tentativa.
-        const novoStatus = isRateLimitError(msg) ? "pendente" : "erro";
-        await admin
-          .from("drive_arquivos")
-          .update({
-            status: novoStatus,
-            erro: msg.slice(0, 800),
-            processado_em: new Date().toISOString(),
-          })
-          .eq("id", id);
-        if (novoStatus === "erro") erros += 1;
+        // 429 / cota esgotada em TODOS os provedores → mantém como pendente com
+        // backoff (2h) para nova tentativa automática. Não conta como erro.
+        const isQuota =
+          (e instanceof Error && e.name === "VisaoQuotaEsgotadaError") || isRateLimitError(msg);
+        if (isQuota) {
+          const tentativas = (arq.tentativas ?? 0) + 1;
+          const proxima = new Date(Date.now() + RETRY_BACKOFF_MS).toISOString();
+          await admin
+            .from("drive_arquivos")
+            .update({
+              status: "pendente",
+              erro: `Cota de IA esgotada — nova tentativa após ${new Date(proxima).toLocaleString("pt-BR")}. ${msg.slice(0, 500)}`,
+              tentativas,
+              proxima_tentativa: proxima,
+            })
+            .eq("id", id);
+          aguardandoRetry += 1;
+        } else {
+          await admin
+            .from("drive_arquivos")
+            .update({
+              status: "erro",
+              erro: msg.slice(0, 800),
+              processado_em: new Date().toISOString(),
+            })
+            .eq("id", id);
+          erros += 1;
+        }
       }
       // pequeno respiro entre itens (protege quotas do Drive/IA)
       await sleep(300);
     }
 
-    // Restam pendentes?
+    // Restam pendentes disponíveis (fora do backoff)?
+    const agora2 = new Date().toISOString();
     const { count } = await admin
       .from("drive_arquivos")
       .select("id", { count: "exact", head: true })
-      .or("status.eq.pendente,and(status.eq.aguardando_selecao,transcrever.eq.true)");
+      .or("status.eq.pendente,and(status.eq.aguardando_selecao,transcrever.eq.true)")
+      .or(`proxima_tentativa.is.null,proxima_tentativa.lte.${agora2}`);
 
-    return { processados, erros, ignorados, restantes: count ?? 0 };
+    return { processados, erros, ignorados, aguardandoRetry, restantes: count ?? 0 };
   });
 
 // ---------------------------------------------------------------------------
