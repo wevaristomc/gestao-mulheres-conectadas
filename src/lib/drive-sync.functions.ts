@@ -596,3 +596,23 @@ export const driveSyncReindexar = createServerFn({ method: "POST" })
       .eq("id", data.id);
     return { ok: true };
   });
+
+// ---------------------------------------------------------------------------
+// 6) "Tentar agora": zera proxima_tentativa em pendentes aguardando retry.
+// ---------------------------------------------------------------------------
+
+export const driveSyncTentarAgora = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .handler(async ({ context }) => {
+    await assertCoordRole(context);
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdmin();
+    const nowIso = new Date().toISOString();
+    const { error, count } = await admin
+      .from("drive_arquivos")
+      .update({ proxima_tentativa: null }, { count: "exact" })
+      .eq("status", "pendente")
+      .gt("proxima_tentativa", nowIso);
+    if (error) throw new Error(error.message);
+    return { ok: true, liberados: count ?? 0 };
+  });
