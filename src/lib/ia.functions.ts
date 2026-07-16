@@ -187,6 +187,80 @@ function selecionarChamador(codigo: string, baseUrl?: string | null) {
   return "openai_compat"; // openrouter, groq, openai, e outros
 }
 
+// -----------------------------------------------------------------------------
+// Capacidade de VISÃO por provedor
+// -----------------------------------------------------------------------------
+// Diferente do texto: nem todo modelo cadastrado como padrão do provedor aceita
+// imagens. Aqui escolhemos, para cada provedor, um modelo multimodal viável.
+// Retorna null quando o provedor não tem modelo de visão utilizável → o
+// roteador pula silenciosamente (não conta como erro).
+function modeloVisaoFor(
+  codigo: string,
+  baseUrl?: string | null,
+  modelosDisponiveis?: unknown,
+  modeloPadrao?: string | null,
+): string | null {
+  const c = (codigo || "").toLowerCase();
+  const b = (baseUrl || "").toLowerCase();
+  const lista = Array.isArray(modelosDisponiveis) ? (modelosDisponiveis as string[]) : [];
+  const tipo = selecionarChamador(codigo, baseUrl);
+  const padrao = String(modeloPadrao ?? "").trim() || null;
+
+  if (tipo === "gemini") {
+    // Gemini flash/pro aceitam imagens e PDFs inline.
+    const achado = lista.find((m) => /gemini-\d|flash|pro|vision/i.test(m));
+    return achado || padrao || "gemini-2.5-flash";
+  }
+  if (tipo === "anthropic") {
+    // Claude 3+ aceita imagens (e PDFs via documents; aqui usamos imagens).
+    const achado = lista.find((m) => /claude-3|claude-4|haiku|sonnet|opus/i.test(m));
+    return achado || padrao || "claude-3-5-haiku-latest";
+  }
+  // openai-compat: precisa de modelo MULTIMODAL. Nunca cai no modelo_padrao
+  // de texto (foi por isso que openrouter/groq quebravam antes: nemotron-nano
+  // e llama-3.3-70b são só-texto).
+  if (c.includes("groq") || b.includes("groq")) {
+    const achado = lista.find((m) => /scout|llava|vision|maverick|llama-4/i.test(m));
+    return achado || "meta-llama/llama-4-scout-17b-16e-instruct";
+  }
+  if (c.includes("openrouter") || b.includes("openrouter")) {
+    const achado = lista.find((m) => /vision|-vl|gemini|gpt-4o|claude-3|llama-4|scout/i.test(m));
+    return achado || "google/gemini-2.0-flash-001";
+  }
+  if (c.includes("openai") || b.includes("api.openai.com")) {
+    const achado = lista.find((m) => /gpt-4o|4o-mini|vision/i.test(m));
+    return achado || "gpt-4o-mini";
+  }
+  // Provedor desconhecido: só entra na fila se a lista declarar capacidade multimodal.
+  const achado = lista.find((m) => /vision|-vl|4o|gemini|claude|scout|llama-4/i.test(m));
+  return achado || null;
+}
+
+// Provedores que aceitam PDF nativo inline (sem precisar renderizar páginas).
+function provedorAceitaPdfInline(codigo: string, baseUrl?: string | null): boolean {
+  const tipo = selecionarChamador(codigo, baseUrl);
+  return tipo === "gemini" || tipo === "anthropic";
+}
+
+// Reconhece erros transientes (cota/rate limit) para permitir re-tentativa.
+export function isVisaoRateLimit(msg: string): boolean {
+  return /\b429\b|rate ?limit|quota|too many requests|resource[_ ]exhausted/i.test(msg);
+}
+
+// Distingue falha de billing/créditos (não adianta re-tentar sem intervenção).
+function isBillingError(msg: string): boolean {
+  return /\b402\b|billing|insufficient[_ ]balance|credit/i.test(msg);
+}
+
+// Exceção especial marcada pelo roteador de visão quando TODOS os provedores
+// caíram por cota — o chamador (drive-sync) trata como "retry mais tarde".
+export class VisaoQuotaEsgotadaError extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "VisaoQuotaEsgotadaError";
+  }
+}
+
 /**
  * Núcleo do ai-router: dado um processo (ex: "chat_geral", "classificacao_edital",
  * "resumo_edital"), lê a política, chama o provedor preferido, faz fallback nos
