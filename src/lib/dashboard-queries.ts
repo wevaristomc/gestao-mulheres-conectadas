@@ -15,7 +15,7 @@ export function kpiCursistasAtivasOptions(projetoId: string | null) {
     enabled: !!projetoId,
     queryFn: async (): Promise<KpiResult> => {
       if (!projetoId) return { value: null };
-      // matriculas ativas (status NOT IN evadida/desistente/cancelada) → turmas!inner(projeto_id = X)
+      // matrículas ativas (status NOT IN evadida/desistente) → turmas!inner(projeto_id = X)
       // Fonte única em @/lib/contagens — mantém dashboard/relatórios/orbe consistentes.
       const { count, error } = await supabase
         .from("matriculas")
@@ -48,14 +48,22 @@ export function kpiExecucaoOrcamentariaOptions(projetoId: string | null) {
   return queryOptions({
     queryKey: ["kpi", "execucao-orcamentaria", projetoId],
     enabled: !!projetoId,
-    queryFn: async (): Promise<{ value: number | null; error?: string; previsto?: number; executado?: number }> => {
+    queryFn: async (): Promise<{
+      value: number | null;
+      error?: string;
+      previsto?: number;
+      executado?: number;
+    }> => {
       if (!projetoId) return { value: null };
       const { data, error } = await supabase
         .from("orcamento_itens")
         .select("valor_previsto, valor_executado")
         .eq("projeto_id", projetoId);
       if (error) return { value: null, error: error.message };
-      const rows = (data ?? []) as Array<{ valor_previsto: number | null; valor_executado: number | null }>;
+      const rows = (data ?? []) as Array<{
+        valor_previsto: number | null;
+        valor_executado: number | null;
+      }>;
       const previsto = rows.reduce((s, r) => s + Number(r.valor_previsto ?? 0), 0);
       const executado = rows.reduce((s, r) => s + Number(r.valor_executado ?? 0), 0);
       const pct = previsto > 0 ? (executado / previsto) * 100 : 0;
