@@ -11,7 +11,9 @@ export const STATUS_EVADIDOS = ["evadida", "desistente"] as const;
 export const STATUS_CONCLUINTE = "concluinte";
 
 function norm(s: unknown): string {
-  return String(s ?? "").trim().toLowerCase();
+  return String(s ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 export function isMatriculaAtiva(m: { status?: unknown } | Record<string, unknown>): boolean {
@@ -28,16 +30,22 @@ export function isMatriculaEvadida(m: { status?: unknown } | Record<string, unkn
   return STATUS_EVADIDOS.includes(s as (typeof STATUS_EVADIDOS)[number]);
 }
 
-// Filtro PostgREST para `.not("status", "in", FILTRO_STATUS_INATIVOS)` — usado
-// em queries com `{ count: "exact", head: true }` que não trazem as linhas.
-export const FILTRO_STATUS_INATIVOS = `(${STATUS_INATIVOS.join(",")})`;
+// O enum do banco não possui o valor legado "cancelada". O filtro remoto usa
+// somente valores válidos; o helper local ainda tolera dados antigos em texto.
+export const FILTRO_STATUS_INATIVOS = `(${STATUS_EVADIDOS.join(",")})`;
 
-export function contarAtivas<T extends Record<string, unknown>>(rows: T[] | null | undefined): number {
+export function contarAtivas<T extends Record<string, unknown>>(
+  rows: T[] | null | undefined,
+): number {
   return (rows ?? []).filter(isMatriculaAtiva).length;
 }
-export function contarConcluintes<T extends Record<string, unknown>>(rows: T[] | null | undefined): number {
+export function contarConcluintes<T extends Record<string, unknown>>(
+  rows: T[] | null | undefined,
+): number {
   return (rows ?? []).filter(isMatriculaConcluinte).length;
 }
-export function contarEvadidas<T extends Record<string, unknown>>(rows: T[] | null | undefined): number {
+export function contarEvadidas<T extends Record<string, unknown>>(
+  rows: T[] | null | undefined,
+): number {
   return (rows ?? []).filter(isMatriculaEvadida).length;
 }
