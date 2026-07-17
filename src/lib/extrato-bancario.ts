@@ -243,16 +243,28 @@ export async function lerArquivoExtrato(file: File) {
 }
 
 export function pontuarCorrespondencia(
-  lancamento: Pick<LancamentoExtrato, "valor" | "contraparte" | "descricao">,
-  beneficio: { valor: number; nome: string },
+  lancamento: Pick<LancamentoExtrato, "valor" | "contraparte" | "descricao" | "documento">,
+  beneficio: { valor: number; nome: string; cpf?: string | null; conta?: string | null },
 ) {
   const diferenca = Math.abs(lancamento.valor - beneficio.valor);
-  const valorScore = diferenca <= 0.01 ? 55 : diferenca <= 1 ? 35 : 0;
+  const valorScore = diferenca <= 0.01 ? 45 : diferenca <= 1 ? 28 : 0;
   const origem = normalizarNome(`${lancamento.contraparte} ${lancamento.descricao}`);
   const destino = normalizarNome(beneficio.nome);
-  if (!origem || !destino) return valorScore;
-  const tokens = destino.split(" ").filter((token) => token.length >= 3);
-  const matched = tokens.filter((token) => origem.includes(token)).length;
-  const nomeScore = tokens.length ? Math.round((matched / tokens.length) * 45) : 0;
-  return Math.min(100, valorScore + nomeScore);
+
+  let nomeScore = 0;
+  if (origem && destino) {
+    const tokens = destino.split(" ").filter((token) => token.length >= 3);
+    const matched = tokens.filter((token) => origem.includes(token)).length;
+    nomeScore = tokens.length ? Math.round((matched / tokens.length) * 35) : 0;
+  }
+
+  // Reforços por dados bancários / documento — fortes indicadores de pagamento.
+  const textoRaw = `${lancamento.contraparte} ${lancamento.descricao} ${lancamento.documento ?? ""}`;
+  const digitos = textoRaw.replace(/\D/g, "");
+  const cpfDigits = (beneficio.cpf ?? "").replace(/\D/g, "");
+  const cpfScore = cpfDigits.length === 11 && digitos.includes(cpfDigits) ? 15 : 0;
+  const contaClean = (beneficio.conta ?? "").replace(/[^0-9]/g, "");
+  const contaScore = contaClean.length >= 4 && digitos.includes(contaClean) ? 15 : 0;
+
+  return Math.min(100, valorScore + nomeScore + cpfScore + contaScore);
 }
