@@ -98,11 +98,18 @@ export function cursistasByTurmaOptions(turmaId: string) {
   return queryOptions({
     queryKey: ["pedagogico", "cursistas", turmaId],
     queryFn: async (): Promise<{ rows: Row[]; error?: string }> => {
-      // matriculas com join em cursistas — se o embed falhar, cai para matriculas simples.
+      // matriculas com join em cursistas + beneficiárias (dados bancários).
+      // Se o embed falhar, cai para embeds mais simples.
       let res = await supabase
         .from("matriculas")
-        .select("*, cursistas(*)")
+        .select("*, cursistas(*), beneficiarias(*)")
         .eq("turma_id", turmaId);
+      if (res.error) {
+        res = await supabase
+          .from("matriculas")
+          .select("*, cursistas(*)")
+          .eq("turma_id", turmaId);
+      }
       if (res.error) {
         res = await supabase.from("matriculas").select("*").eq("turma_id", turmaId);
       }
