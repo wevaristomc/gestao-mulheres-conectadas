@@ -10,12 +10,14 @@ import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import {
-  carregarElegiveisCertificado,
-  gerarLoteCertificados,
-} from "@/lib/certificados.functions";
+import { carregarElegiveisCertificado, gerarLoteCertificados } from "@/lib/certificados.functions";
 import { gerarCertificadoPDF, slugifyNome } from "@/lib/certificado-pdf";
 import { turmaByIdOptions, pickFirst } from "@/lib/pedagogico-queries";
 import {
@@ -191,30 +193,30 @@ function CertificadosTab() {
         <div>
           <div className="text-sm font-medium">Certificados</div>
           <div className="text-xs text-muted-foreground">
-            Elegíveis: frequência ≥ 75% e não emitido.
+            Elegíveis: qualificadas, frequência ≥ 75% e certificado ainda não emitido.
           </div>
         </div>
         <div className="flex gap-2">
-        <Button
-          variant="outline"
-          onClick={baixarListaEntregaCertificados}
-          disabled={rows.length === 0}
-          className="gap-1.5"
-        >
-          <FileSignature className="h-4 w-4" /> Lista de entrega
-        </Button>
-        <Button
-          onClick={() => gerarLote.mutate()}
-          disabled={!selecionadas.length || gerarLote.isPending}
-          className="gap-1.5"
-        >
-          {gerarLote.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Award className="h-4 w-4" />
-          )}
-          Gerar {selecionadas.length ? `(${selecionadas.length})` : ""}
-        </Button>
+          <Button
+            variant="outline"
+            onClick={baixarListaEntregaCertificados}
+            disabled={rows.length === 0}
+            className="gap-1.5"
+          >
+            <FileSignature className="h-4 w-4" /> Lista de entrega
+          </Button>
+          <Button
+            onClick={() => gerarLote.mutate()}
+            disabled={!selecionadas.length || gerarLote.isPending}
+            className="gap-1.5"
+          >
+            {gerarLote.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Award className="h-4 w-4" />
+            )}
+            Gerar {selecionadas.length ? `(${selecionadas.length})` : ""}
+          </Button>
         </div>
       </div>
 
@@ -273,7 +275,9 @@ function CertificadosTab() {
                       ) : null}
                     </TableCell>
                     <TableCell>{r.beneficiarias?.nome ?? "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.beneficiarias?.cpf ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {r.beneficiarias?.cpf ?? "—"}
+                    </TableCell>
                     <TableCell className="text-right">{freq.toFixed(1)}%</TableCell>
                     <TableCell className="text-right">{r.status ?? "—"}</TableCell>
                     <TableCell className="text-right font-mono text-xs">
