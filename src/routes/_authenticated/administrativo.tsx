@@ -13,6 +13,7 @@ export const Route = createFileRoute("/_authenticated/administrativo")({
 function AdministrativoLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const tabs = [
+    { to: "/administrativo/inscricoes", label: "Inscrições" },
     { to: "/administrativo/qualificacao", label: "Qualificação para Certificado" },
     { to: "/administrativo/beneficios", label: "Benefícios" },
     { to: "/administrativo/materiais", label: "Materiais" },
@@ -21,9 +22,9 @@ function AdministrativoLayout() {
     <div>
       <PageHeader
         title="Administrativo"
-        description="Qualificação para certificados e entregas de benefícios e materiais."
+        description="Inscrições, qualificação para certificados e entregas de benefícios e materiais."
       />
-      <nav className="mb-4 flex gap-1 border-b">
+      <nav className="mb-4 flex gap-1 overflow-x-auto border-b">
         {tabs.map((t) => {
           const active = pathname.startsWith(t.to);
           return (
@@ -31,7 +32,7 @@ function AdministrativoLayout() {
               key={t.to}
               to={t.to}
               className={cn(
-                "border-b-2 px-3 py-2 text-sm transition-colors",
+                "whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors",
                 active
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",

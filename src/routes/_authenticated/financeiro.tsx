@@ -7,11 +7,12 @@ import { requireModuleAccess } from "@/lib/auth-guard";
 import { cn } from "@/lib/utils";
 import { useActiveContext } from "@/hooks/use-active-context";
 import {
-  orcamentoItensOptions,
   despesasListOptions,
   formatBRL,
+  orcamentoItensOptions,
   toNumber,
 } from "@/lib/financeiro-queries";
+import { rubricasListOptions } from "@/lib/rubricas-queries";
 
 export const Route = createFileRoute("/_authenticated/financeiro")({
   head: () => ({ meta: [{ title: "Financeiro · Painel Mulheres Conectadas" }] }),
@@ -20,23 +21,33 @@ export const Route = createFileRoute("/_authenticated/financeiro")({
 });
 
 function FinanceiroLayout() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { projetoId } = useActiveContext();
-  const orcQ = useQuery(orcamentoItensOptions(projetoId));
-  const despQ = useQuery(despesasListOptions(projetoId));
+  const orcamentoQ = useQuery(orcamentoItensOptions(projetoId));
+  const despesasQ = useQuery(despesasListOptions(projetoId));
+  const rubricasQ = useQuery(rubricasListOptions());
 
-  const rows = orcQ.data?.rows ?? [];
-  const previsto = rows.reduce((s, r) => s + toNumber(r.valor_previsto), 0);
-  // Executado autoritativo vem do somatório das despesas; se indisponível,
-  // usa o campo agregado da tabela de orçamento.
-  const despesas = despQ.data?.rows ?? [];
-  const executadoDespesas = despesas.reduce((s, r) => s + toNumber(r.valor), 0);
-  const executadoOrc = rows.reduce((s, r) => s + toNumber(r.valor_executado), 0);
-  const executado = despesas.length > 0 ? executadoDespesas : executadoOrc;
+  const itensOrcamento = orcamentoQ.data?.rows ?? [];
+  const rubricas = rubricasQ.data?.rows ?? [];
+  const despesas = despesasQ.data?.rows ?? [];
+  const previstoOrcamento = itensOrcamento.reduce(
+    (total, row) => total + toNumber(row.valor_previsto),
+    0,
+  );
+  const previstoRubricas = rubricas.reduce((total, row) => total + toNumber(row.valor_previsto), 0);
+  const previsto = previstoOrcamento > 0 ? previstoOrcamento : previstoRubricas;
+  const executadoDespesas = despesas
+    .filter((row) => String(row.status ?? "").toLowerCase() !== "cancelada")
+    .reduce((total, row) => total + toNumber(row.valor), 0);
+  const executadoOrcamento = itensOrcamento.reduce(
+    (total, row) => total + toNumber(row.valor_executado),
+    0,
+  );
+  const executado = despesas.length > 0 ? executadoDespesas : executadoOrcamento;
   const saldo = previsto - executado;
-  const pct = previsto > 0 ? (executado / previsto) * 100 : 0;
-  const loading = orcQ.isLoading || despQ.isLoading;
-  const semDados = !loading && !!orcQ.data?.error;
+  const percentual = previsto > 0 ? (executado / previsto) * 100 : 0;
+  const loading = orcamentoQ.isLoading || despesasQ.isLoading || rubricasQ.isLoading;
+  const semDados = !loading && !!orcamentoQ.data?.error && !!rubricasQ.data?.error;
 
   const tabs = [
     { to: "/financeiro/orcamento", label: "Orçamento" },
@@ -52,12 +63,24 @@ function FinanceiroLayout() {
       <PageHeader
         helpId="cotacoes.tres"
         title="Financeiro"
-        description="Orçamento previsto vs executado, fornecedores e despesas do projeto."
+        description="Orçamento, despesas, rubricas, fornecedores e conferência dos pagamentos do projeto."
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Previsto" value={formatBRL(previsto)} loading={loading} erro={semDados} />
-        <KpiCard label="Executado" value={formatBRL(executado)} loading={loading} erro={semDados} />
+        <KpiCard
+          label="Previsto"
+          value={formatBRL(previsto)}
+          loading={loading}
+          erro={semDados}
+          hint={previstoOrcamento > 0 ? "Itens do orçamento" : "Plano de rubricas"}
+        />
+        <KpiCard
+          label="Executado"
+          value={formatBRL(executado)}
+          loading={loading}
+          erro={semDados}
+          hint="Despesas não canceladas"
+        />
         <KpiCard
           label="Saldo"
           value={formatBRL(saldo)}
@@ -69,27 +92,27 @@ function FinanceiroLayout() {
         <div className="rounded-lg border bg-card p-4">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">% Execução</div>
           <div className="mt-1 text-2xl font-semibold text-foreground">
-            {loading ? "…" : semDados ? "—" : `${pct.toFixed(1)}%`}
+            {loading ? "…" : semDados ? "—" : `${percentual.toFixed(1)}%`}
           </div>
-          <Progress value={Math.min(pct, 100)} className="mt-3 h-2" />
+          <Progress value={Math.min(percentual, 100)} className="mt-3 h-2" />
         </div>
       </div>
 
-      <nav className="mb-4 flex gap-1 border-b">
-        {tabs.map((t) => {
-          const active = pathname.startsWith(t.to);
+      <nav className="mb-4 flex gap-1 overflow-x-auto border-b">
+        {tabs.map((tab) => {
+          const active = pathname.startsWith(tab.to);
           return (
             <Link
-              key={t.to}
-              to={t.to}
+              key={tab.to}
+              to={tab.to}
               className={cn(
-                "border-b-2 px-3 py-2 text-sm transition-colors",
+                "whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors",
                 active
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
-              {t.label}
+              {tab.label}
             </Link>
           );
         })}
