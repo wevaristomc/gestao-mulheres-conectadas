@@ -30,6 +30,10 @@ create unique index if not exists qualificados_matricula_uniq
 
 alter table public.qualificados enable row level security;
 
+-- Remove a policy legada permissiva, criada no bootstrap inicial do projeto.
+-- Sem isto, policies permissivas sao combinadas com OR e anulam as regras abaixo.
+drop policy if exists "auth users manage qualificados" on public.qualificados;
+
 do $policies$
 begin
   if not exists (
@@ -44,7 +48,7 @@ begin
       to authenticated
       using (
         public.has_role_any(
-          auth.uid(),
+          (select auth.uid()),
           array[
             'coordenador_geral',
             'coordenador_pedagogico',
@@ -67,10 +71,10 @@ begin
       to authenticated
       with check (
         public.has_role_any(
-          auth.uid(),
+          (select auth.uid()),
           array['coordenador_geral', 'coordenador_pedagogico', 'administrativo']
         )
-        and qualificado_por = auth.uid()
+        and qualificado_por = (select auth.uid())
       );
   end if;
 
@@ -86,13 +90,13 @@ begin
       to authenticated
       using (
         public.has_role_any(
-          auth.uid(),
+          (select auth.uid()),
           array['coordenador_geral', 'coordenador_pedagogico', 'administrativo']
         )
       )
       with check (
         public.has_role_any(
-          auth.uid(),
+          (select auth.uid()),
           array['coordenador_geral', 'coordenador_pedagogico', 'administrativo']
         )
       );
@@ -110,7 +114,7 @@ begin
       to authenticated
       using (
         public.has_role_any(
-          auth.uid(),
+          (select auth.uid()),
           array['coordenador_geral', 'coordenador_pedagogico', 'administrativo']
         )
         and coalesce(certificado_emitido, false) = false
