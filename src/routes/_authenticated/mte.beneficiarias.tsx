@@ -129,6 +129,15 @@ function BeneficiariasIndex() {
                 <div className="text-xs text-muted-foreground">
                   {(b.municipio ?? "—")}{b.telefone ? ` • ${formatPhone(b.telefone)}` : ""}
                 </div>
+                <div className="text-xs">
+                  {b.banco || b.agencia || b.conta ? (
+                    <span className="text-muted-foreground">
+                      {b.banco ?? "—"} • Ag. {b.agencia ?? "—"} • Conta {b.conta ?? "—"}
+                    </span>
+                  ) : (
+                    <Badge variant="destructive" className="text-[10px]">sem conta bancária</Badge>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {b.pcd ? <Badge variant="secondary" className="text-[10px]">PcD</Badge> : null}
                   {b.beneficiaria_programa_social ? <Badge variant="secondary" className="text-[10px]">Prog. social</Badge> : null}
@@ -137,6 +146,9 @@ function BeneficiariasIndex() {
               </div>
               {canWrite ? (
                 <div className="flex shrink-0 gap-1">
+                  <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => abrirBanco(b)} title="Dados bancários">
+                    <Landmark className="h-4 w-4" />
+                  </Button>
                   <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setEditing(b); setDialogOpen(true); }} title="Editar">
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -156,6 +168,7 @@ function BeneficiariasIndex() {
               <TableHead className="w-40">CPF</TableHead>
               <TableHead>Município</TableHead>
               <TableHead>Telefone</TableHead>
+              <TableHead>Dados bancários</TableHead>
               <TableHead>Perfil</TableHead>
               <TableHead className="text-right"></TableHead>
             </TableRow>
@@ -164,14 +177,14 @@ function BeneficiariasIndex() {
             {q.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                   Nenhuma beneficiária encontrada.
                 </TableCell>
               </TableRow>
@@ -181,6 +194,15 @@ function BeneficiariasIndex() {
                 <TableCell className="text-sm">{formatCpf(b.cpf)}</TableCell>
                 <TableCell>{b.municipio ?? "—"}</TableCell>
                 <TableCell className="text-sm">{b.telefone ? formatPhone(b.telefone) : "—"}</TableCell>
+                <TableCell className="text-sm">
+                  {b.banco || b.agencia || b.conta ? (
+                    <span className="text-muted-foreground">
+                      {b.banco ?? "—"} • Ag. {b.agencia ?? "—"} • Conta {b.conta ?? "—"}
+                    </span>
+                  ) : (
+                    <Badge variant="destructive" className="text-[10px]">sem conta</Badge>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {b.pcd ? <Badge variant="secondary">PcD</Badge> : null}
@@ -191,6 +213,9 @@ function BeneficiariasIndex() {
                 <TableCell className="text-right">
                   {canWrite ? (
                     <div className="inline-flex items-center gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => abrirBanco(b)} title="Dados bancários">
+                        <Landmark className="h-3.5 w-3.5" />
+                      </Button>
                       <Button size="icon" variant="ghost" onClick={() => { setEditing(b); setDialogOpen(true); }} title="Editar">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -209,6 +234,12 @@ function BeneficiariasIndex() {
 
       <BeneficiariaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} beneficiaria={editing} />
       <BeneficiariasCsvImport open={csvOpen} onOpenChange={setCsvOpen} />
+      <BankFieldsInlineDialog
+        open={!!bankTarget}
+        onOpenChange={(o) => !o && setBankTarget(null)}
+        target={bankTarget}
+        invalidateKeys={[["mte", "beneficiarias"]]}
+      />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
