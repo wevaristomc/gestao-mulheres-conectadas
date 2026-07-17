@@ -202,7 +202,7 @@ export function beneficiariasListOptions(search: string = "") {
     queryFn: async (): Promise<{ rows: Beneficiaria[]; error?: string }> => {
       let q = supabase.from("beneficiarias").select("*").order("nome", { ascending: true }).limit(500);
       const s = search.trim();
-      if (s) q = q.or(`nome.ilike.%${s}%,cpf.ilike.%${s}%`);
+      if (s) q = q.or(`nome.ilike.%${s}%,cpf.ilike.%${s}%,banco.ilike.%${s}%,conta.ilike.%${s}%`);
       const { data, error } = await q;
       if (error) return { rows: [], error: error.message };
       return { rows: (data ?? []) as Beneficiaria[] };

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, Landmark, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -18,8 +18,10 @@ import {
 } from "@/components/ui/table";
 import { BeneficiariaFormDialog } from "@/components/mte/beneficiaria-form-dialog";
 import { BeneficiariasCsvImport } from "@/components/mte/beneficiarias-csv-import";
+import { BankFieldsInlineDialog, type BankInlineTarget } from "@/components/mte/bank-fields-inline-dialog";
 import { useHasRole } from "@/hooks/use-active-context";
 import { formatCpf, formatPhone } from "@/lib/cpf";
+import { downloadCSV, toCSV } from "@/lib/csv";
 import {
   beneficiariasListOptions, deleteBeneficiaria, type Beneficiaria,
 } from "@/lib/mte-queries";
@@ -40,6 +42,7 @@ function BeneficiariasIndex() {
   const [csvOpen, setCsvOpen] = useState(false);
   const [editing, setEditing] = useState<Beneficiaria | null>(null);
   const [deleting, setDeleting] = useState<Beneficiaria | null>(null);
+  const [bankTarget, setBankTarget] = useState<BankInlineTarget | null>(null);
 
   const del = useMutation({
     mutationFn: (id: string) => deleteBeneficiaria(id),
@@ -51,6 +54,31 @@ function BeneficiariasIndex() {
     onError: (e: Error) => toast.error(e.message || "Falha ao excluir"),
   });
 
+  const exportarContas = () => {
+    const cols = ["nome", "cpf", "banco", "agencia", "conta", "telefone", "municipio"];
+    const data = rows.map((b) => ({
+      nome: b.nome,
+      cpf: formatCpf(b.cpf),
+      banco: b.banco ?? "",
+      agencia: b.agencia ?? "",
+      conta: b.conta ?? "",
+      telefone: b.telefone ? formatPhone(b.telefone) : "",
+      municipio: b.municipio ?? "",
+    }));
+    downloadCSV(`contas-beneficiarias-${new Date().toISOString().slice(0, 10)}.csv`, toCSV(data, cols));
+  };
+
+  const abrirBanco = (b: Beneficiaria) =>
+    setBankTarget({
+      kind: "beneficiaria",
+      beneficiariaId: b.id,
+      nome: b.nome,
+      cpf: b.cpf,
+      banco: b.banco,
+      agencia: b.agencia,
+      conta: b.conta,
+    });
+
   return (
     <div>
       <PageHeader
@@ -60,6 +88,9 @@ function BeneficiariasIndex() {
         actions={
           canWrite ? (
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={exportarContas} disabled={rows.length === 0}>
+                <Download className="mr-1 h-4 w-4" /> Exportar contas
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setCsvOpen(true)}>
                 <Upload className="mr-1 h-4 w-4" /> Importar CSV
               </Button>
@@ -76,7 +107,7 @@ function BeneficiariasIndex() {
         <Input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por nome ou CPF…"
+          placeholder="Buscar por nome, CPF, banco ou conta…"
           className="pl-7"
         />
       </div>
@@ -98,6 +129,15 @@ function BeneficiariasIndex() {
                 <div className="text-xs text-muted-foreground">
                   {(b.municipio ?? "—")}{b.telefone ? ` • ${formatPhone(b.telefone)}` : ""}
                 </div>
+                <div className="text-xs">
+                  {b.banco || b.agencia || b.conta ? (
+                    <span className="text-muted-foreground">
+                      {b.banco ?? "—"} • Ag. {b.agencia ?? "—"} • Conta {b.conta ?? "—"}
+                    </span>
+                  ) : (
+                    <Badge variant="destructive" className="text-[10px]">sem conta bancária</Badge>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {b.pcd ? <Badge variant="secondary" className="text-[10px]">PcD</Badge> : null}
                   {b.beneficiaria_programa_social ? <Badge variant="secondary" className="text-[10px]">Prog. social</Badge> : null}
@@ -106,6 +146,9 @@ function BeneficiariasIndex() {
               </div>
               {canWrite ? (
                 <div className="flex shrink-0 gap-1">
+                  <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => abrirBanco(b)} title="Dados bancários">
+                    <Landmark className="h-4 w-4" />
+                  </Button>
                   <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => { setEditing(b); setDialogOpen(true); }} title="Editar">
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -125,6 +168,7 @@ function BeneficiariasIndex() {
               <TableHead className="w-40">CPF</TableHead>
               <TableHead>Município</TableHead>
               <TableHead>Telefone</TableHead>
+              <TableHead>Dados bancários</TableHead>
               <TableHead>Perfil</TableHead>
               <TableHead className="text-right"></TableHead>
             </TableRow>
@@ -133,14 +177,14 @@ function BeneficiariasIndex() {
             {q.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                   Nenhuma beneficiária encontrada.
                 </TableCell>
               </TableRow>
@@ -150,6 +194,15 @@ function BeneficiariasIndex() {
                 <TableCell className="text-sm">{formatCpf(b.cpf)}</TableCell>
                 <TableCell>{b.municipio ?? "—"}</TableCell>
                 <TableCell className="text-sm">{b.telefone ? formatPhone(b.telefone) : "—"}</TableCell>
+                <TableCell className="text-sm">
+                  {b.banco || b.agencia || b.conta ? (
+                    <span className="text-muted-foreground">
+                      {b.banco ?? "—"} • Ag. {b.agencia ?? "—"} • Conta {b.conta ?? "—"}
+                    </span>
+                  ) : (
+                    <Badge variant="destructive" className="text-[10px]">sem conta</Badge>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {b.pcd ? <Badge variant="secondary">PcD</Badge> : null}
@@ -160,6 +213,9 @@ function BeneficiariasIndex() {
                 <TableCell className="text-right">
                   {canWrite ? (
                     <div className="inline-flex items-center gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => abrirBanco(b)} title="Dados bancários">
+                        <Landmark className="h-3.5 w-3.5" />
+                      </Button>
                       <Button size="icon" variant="ghost" onClick={() => { setEditing(b); setDialogOpen(true); }} title="Editar">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -178,6 +234,12 @@ function BeneficiariasIndex() {
 
       <BeneficiariaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} beneficiaria={editing} />
       <BeneficiariasCsvImport open={csvOpen} onOpenChange={setCsvOpen} />
+      <BankFieldsInlineDialog
+        open={!!bankTarget}
+        onOpenChange={(o) => !o && setBankTarget(null)}
+        target={bankTarget}
+        invalidateKeys={[["mte", "beneficiarias"]]}
+      />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>

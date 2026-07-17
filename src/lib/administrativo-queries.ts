@@ -275,10 +275,14 @@ export function entregasListOptions(tabela: EntregaTabela, projetoId: string | n
       // tenta filtrar por projeto_id; se não existir, retorna tudo (RLS filtra).
       let res = await supabase
         .from(tabela)
-        .select("*, cursistas(*), turmas(*)")
+        .select("*, cursistas(*), turmas(*), beneficiarias(*)")
         .eq("projeto_id", projetoId)
         .order("data_entrega", { ascending: false });
       if (res.error && /column .* does not exist/i.test(res.error.message)) {
+        res = await supabase.from(tabela).select("*, cursistas(*), turmas(*), beneficiarias(*)");
+      }
+      if (res.error) {
+        // fallback sem beneficiarias (pode faltar FK no schema)
         res = await supabase.from(tabela).select("*, cursistas(*), turmas(*)");
       }
       if (res.error) {

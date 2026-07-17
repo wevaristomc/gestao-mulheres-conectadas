@@ -49,18 +49,29 @@ type Beneficio = {
   descricao: string;
   status: string;
   data: string | null;
+  cpf: string | null;
+  conta: string | null;
 };
 const mesAtual = () => new Date().toISOString().slice(0, 7);
 
 function toBeneficio(row: Row): Beneficio {
   const cursista = (row.cursistas as Row | null | undefined) ?? null;
+  const beneficiaria = (row.beneficiarias as Row | null | undefined) ?? null;
   return {
     id: row.id,
-    nome: pickFirst(cursista, ["nome", "nome_completo"]) ?? "Beneficiária não identificada",
+    nome:
+      (pickFirst(beneficiaria, ["nome", "nome_completo"]) as string | null) ??
+      (pickFirst(cursista, ["nome", "nome_completo"]) as string | null) ??
+      "Beneficiária não identificada",
     valor: Number(row.valor ?? 0),
     descricao: String(row.descricao ?? "Benefício"),
     status: String(row.status ?? "previsto"),
     data: row.data_entrega ? String(row.data_entrega) : null,
+    cpf:
+      (pickFirst(beneficiaria, ["cpf"]) as string | null) ??
+      (pickFirst(cursista, ["cpf"]) as string | null) ??
+      null,
+    conta: (pickFirst(beneficiaria, ["conta"]) as string | null) ?? null,
   };
 }
 
