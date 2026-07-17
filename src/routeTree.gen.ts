@@ -59,6 +59,7 @@ import { Route as AuthenticatedFinanceiroRelacoesHorasRouteImport } from './rout
 import { Route as AuthenticatedFinanceiroOrcamentoRouteImport } from './routes/_authenticated/financeiro.orcamento'
 import { Route as AuthenticatedFinanceiroFornecedoresRouteImport } from './routes/_authenticated/financeiro.fornecedores'
 import { Route as AuthenticatedFinanceiroDespesasRouteImport } from './routes/_authenticated/financeiro.despesas'
+import { Route as AuthenticatedFinanceiroConciliacaoRouteImport } from './routes/_authenticated/financeiro.conciliacao'
 import { Route as AuthenticatedConfiguracoesUsuariosRouteImport } from './routes/_authenticated/configuracoes.usuarios'
 import { Route as AuthenticatedConfiguracoesPermissoesRouteImport } from './routes/_authenticated/configuracoes.permissoes'
 import { Route as AuthenticatedConfiguracoesLocaisRouteImport } from './routes/_authenticated/configuracoes.locais'
@@ -355,6 +356,12 @@ const AuthenticatedFinanceiroDespesasRoute =
     path: '/despesas',
     getParentRoute: () => AuthenticatedFinanceiroRoute,
   } as any)
+const AuthenticatedFinanceiroConciliacaoRoute =
+  AuthenticatedFinanceiroConciliacaoRouteImport.update({
+    id: '/conciliacao',
+    path: '/conciliacao',
+    getParentRoute: () => AuthenticatedFinanceiroRoute,
+  } as any)
 const AuthenticatedConfiguracoesUsuariosRoute =
   AuthenticatedConfiguracoesUsuariosRouteImport.update({
     id: '/usuarios',
@@ -468,6 +475,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes/locais': typeof AuthenticatedConfiguracoesLocaisRoute
   '/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/financeiro/conciliacao': typeof AuthenticatedFinanceiroConciliacaoRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
@@ -526,6 +534,7 @@ export interface FileRoutesByTo {
   '/configuracoes/locais': typeof AuthenticatedConfiguracoesLocaisRoute
   '/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/financeiro/conciliacao': typeof AuthenticatedFinanceiroConciliacaoRoute
   '/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
@@ -592,6 +601,7 @@ export interface FileRoutesById {
   '/_authenticated/configuracoes/locais': typeof AuthenticatedConfiguracoesLocaisRoute
   '/_authenticated/configuracoes/permissoes': typeof AuthenticatedConfiguracoesPermissoesRoute
   '/_authenticated/configuracoes/usuarios': typeof AuthenticatedConfiguracoesUsuariosRoute
+  '/_authenticated/financeiro/conciliacao': typeof AuthenticatedFinanceiroConciliacaoRoute
   '/_authenticated/financeiro/despesas': typeof AuthenticatedFinanceiroDespesasRoute
   '/_authenticated/financeiro/fornecedores': typeof AuthenticatedFinanceiroFornecedoresRoute
   '/_authenticated/financeiro/orcamento': typeof AuthenticatedFinanceiroOrcamentoRoute
@@ -659,6 +669,7 @@ export interface FileRouteTypes {
     | '/configuracoes/locais'
     | '/configuracoes/permissoes'
     | '/configuracoes/usuarios'
+    | '/financeiro/conciliacao'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
@@ -717,6 +728,7 @@ export interface FileRouteTypes {
     | '/configuracoes/locais'
     | '/configuracoes/permissoes'
     | '/configuracoes/usuarios'
+    | '/financeiro/conciliacao'
     | '/financeiro/despesas'
     | '/financeiro/fornecedores'
     | '/financeiro/orcamento'
@@ -782,6 +794,7 @@ export interface FileRouteTypes {
     | '/_authenticated/configuracoes/locais'
     | '/_authenticated/configuracoes/permissoes'
     | '/_authenticated/configuracoes/usuarios'
+    | '/_authenticated/financeiro/conciliacao'
     | '/_authenticated/financeiro/despesas'
     | '/_authenticated/financeiro/fornecedores'
     | '/_authenticated/financeiro/orcamento'
@@ -1178,6 +1191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceiroDespesasRouteImport
       parentRoute: typeof AuthenticatedFinanceiroRoute
     }
+    '/_authenticated/financeiro/conciliacao': {
+      id: '/_authenticated/financeiro/conciliacao'
+      path: '/conciliacao'
+      fullPath: '/financeiro/conciliacao'
+      preLoaderRoute: typeof AuthenticatedFinanceiroConciliacaoRouteImport
+      parentRoute: typeof AuthenticatedFinanceiroRoute
+    }
     '/_authenticated/configuracoes/usuarios': {
       id: '/_authenticated/configuracoes/usuarios'
       path: '/usuarios'
@@ -1332,6 +1352,7 @@ const AuthenticatedConfiguracoesRouteWithChildren =
   )
 
 interface AuthenticatedFinanceiroRouteChildren {
+  AuthenticatedFinanceiroConciliacaoRoute: typeof AuthenticatedFinanceiroConciliacaoRoute
   AuthenticatedFinanceiroDespesasRoute: typeof AuthenticatedFinanceiroDespesasRoute
   AuthenticatedFinanceiroFornecedoresRoute: typeof AuthenticatedFinanceiroFornecedoresRoute
   AuthenticatedFinanceiroOrcamentoRoute: typeof AuthenticatedFinanceiroOrcamentoRoute
@@ -1342,6 +1363,8 @@ interface AuthenticatedFinanceiroRouteChildren {
 
 const AuthenticatedFinanceiroRouteChildren: AuthenticatedFinanceiroRouteChildren =
   {
+    AuthenticatedFinanceiroConciliacaoRoute:
+      AuthenticatedFinanceiroConciliacaoRoute,
     AuthenticatedFinanceiroDespesasRoute: AuthenticatedFinanceiroDespesasRoute,
     AuthenticatedFinanceiroFornecedoresRoute:
       AuthenticatedFinanceiroFornecedoresRoute,
@@ -1534,3 +1557,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

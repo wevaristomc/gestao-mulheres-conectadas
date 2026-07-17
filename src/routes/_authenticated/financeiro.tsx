@@ -41,6 +41,7 @@ function FinanceiroLayout() {
   const tabs = [
     { to: "/financeiro/orcamento", label: "Orçamento" },
     { to: "/financeiro/despesas", label: "Despesas" },
+    { to: "/financeiro/conciliacao", label: "Conciliação bancária" },
     { to: "/financeiro/fornecedores", label: "Fornecedores" },
     { to: "/financeiro/rubricas", label: "Rubricas" },
     { to: "/financeiro/relacoes-horas", label: "Relações de Horas" },
