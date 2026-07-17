@@ -5,6 +5,7 @@ export type Rubrica = Record<string, unknown> & {
   id: string;
   codigo?: string | null;
   descricao?: string | null;
+  nome?: string | null;
   valor_previsto?: number | null;
 };
 
@@ -14,9 +15,9 @@ export function rubricasListOptions() {
     queryFn: async (): Promise<{ rows: Rubrica[]; error?: string }> => {
       const { data, error } = await supabase.from("rubricas").select("*");
       if (error) return { rows: [], error: error.message };
-      const rows = ((data ?? []) as Rubrica[]).slice().sort((a, b) =>
-        String(a.codigo ?? "").localeCompare(String(b.codigo ?? ""), "pt-BR"),
-      );
+      const rows = ((data ?? []) as Rubrica[])
+        .map((row) => ({ ...row, descricao: row.descricao ?? row.nome ?? null }))
+        .sort((a, b) => String(a.codigo ?? "").localeCompare(String(b.codigo ?? ""), "pt-BR"));
       return { rows };
     },
   });

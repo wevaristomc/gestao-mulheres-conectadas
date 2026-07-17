@@ -10,19 +10,41 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useActiveContext } from "@/hooks/use-active-context";
+import { rubricasListOptions } from "@/lib/rubricas-queries";
 import {
   deleteDespesa,
   despesasListOptions,
@@ -56,8 +78,9 @@ function DespesasTab() {
   const q = useQuery(despesasListOptions(projetoId));
   const fornQ = useQuery(fornecedoresListOptions(projetoId));
   const orcQ = useQuery(orcamentoItensOptions(projetoId));
+  const rubQ = useQuery(rubricasListOptions());
 
-  const rows = q.data?.rows ?? [];
+  const rows = useMemo(() => q.data?.rows ?? [], [q.data?.rows]);
   const erro = q.data?.error ?? (q.isError ? String(q.error) : null);
 
   const fornecedoresMap = useMemo(() => {
@@ -121,6 +144,7 @@ function DespesasTab() {
               despesa={null}
               fornecedores={fornQ.data?.rows ?? []}
               orcamentoItens={orcQ.data?.rows ?? []}
+              rubricas={rubQ.data?.rows ?? []}
               onClose={() => setNovaOpen(false)}
               onSaved={() => {
                 qc.invalidateQueries({ queryKey: ["financeiro", "despesas", projetoId] });
@@ -146,119 +170,165 @@ function DespesasTab() {
           <ul className="divide-y md:hidden">
             {q.isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <li key={i} className="p-3"><Skeleton className="h-4 w-40" /><Skeleton className="mt-2 h-3 w-56" /></li>
+                <li key={i} className="p-3">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="mt-2 h-3 w-56" />
+                </li>
               ))
             ) : ordenadas.length === 0 ? (
-              <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma despesa lançada.</li>
-            ) : ordenadas.map((r) => {
-              const fornecedorId = pickFirst(r, ["fornecedor_id"]);
-              const orcId = pickFirst(r, ["orcamento_item_id", "item_orcamento_id"]);
-              const status = pickFirst(r, ["status", "situacao"]);
-              return (
-                <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="break-words text-sm font-semibold">
-                      {(pickFirst(r, ["descricao", "titulo", "historico"]) as string) ?? "—"}
+              <li className="p-6 text-center text-sm text-muted-foreground">
+                Nenhuma despesa lançada.
+              </li>
+            ) : (
+              ordenadas.map((r) => {
+                const fornecedorId = pickFirst(r, ["fornecedor_id"]);
+                const orcId = pickFirst(r, ["orcamento_item_id", "item_orcamento_id"]);
+                const status = pickFirst(r, ["status", "situacao"]);
+                return (
+                  <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="break-words text-sm font-semibold">
+                        {(pickFirst(r, ["descricao", "titulo", "historico"]) as string) ?? "—"}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span className="tabular-nums">
+                          {formatarData(pickFirst(r, ["data", "data_pagamento", "created_at"]))}
+                        </span>
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {formatBRL(toNumber(r.valor))}
+                        </span>
+                        {status ? (
+                          <Badge variant={statusVariant(status)} className="capitalize">
+                            {status}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className="break-words text-xs text-muted-foreground">
+                        {orcId ? (orcamentoMap.get(orcId) ?? "—") : "—"}
+                        {fornecedorId ? ` • ${fornecedoresMap.get(fornecedorId) ?? ""}` : ""}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                      <span className="tabular-nums">{formatarData(pickFirst(r, ["data", "data_pagamento", "created_at"]))}</span>
-                      <span className="font-semibold text-foreground tabular-nums">{formatBRL(toNumber(r.valor))}</span>
-                      {status ? <Badge variant={statusVariant(status)} className="capitalize">{status}</Badge> : null}
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() => setEditando(r)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() => setConfirmarExcluir(r.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="break-words text-xs text-muted-foreground">
-                      {orcId ? (orcamentoMap.get(orcId) ?? "—") : "—"}
-                      {fornecedorId ? ` • ${fornecedoresMap.get(fornecedorId) ?? ""}` : ""}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setEditando(r)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setConfirmarExcluir(r.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
+                  </li>
+                );
+              })
+            )}
           </ul>
           <div className="hidden md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-28">Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Rubrica</TableHead>
-                <TableHead>Fornecedor</TableHead>
-                <TableHead className="w-28 text-right">Valor</TableHead>
-                <TableHead className="w-28">Status</TableHead>
-                <TableHead className="w-24 text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {q.isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-full" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                ))
-              ) : ordenadas.length === 0 ? (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
-                    Nenhuma despesa lançada. Use "Nova despesa" para iniciar.
-                  </TableCell>
+                  <TableHead className="w-28">Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Rubrica</TableHead>
+                  <TableHead>Fornecedor</TableHead>
+                  <TableHead className="w-28 text-right">Valor</TableHead>
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-24 text-right">Ações</TableHead>
                 </TableRow>
-              ) : (
-                ordenadas.map((r) => {
-                  const fornecedorId = pickFirst(r, ["fornecedor_id"]);
-                  const orcId = pickFirst(r, ["orcamento_item_id", "item_orcamento_id"]);
-                  const status = pickFirst(r, ["status", "situacao"]);
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell className="tabular-nums text-sm">
-                        {formatarData(pickFirst(r, ["data", "data_pagamento", "created_at"]))}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {pickFirst(r, ["descricao", "titulo", "historico"]) ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {orcId ? orcamentoMap.get(orcId) ?? "—" : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {fornecedorId ? fornecedoresMap.get(fornecedorId) ?? "—" : "—"}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatBRL(toNumber(r.valor))}
+              </TableHeader>
+              <TableBody>
+                {q.isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
                       </TableCell>
                       <TableCell>
-                        {status ? (
-                          <Badge variant={statusVariant(status)} className="capitalize">{status}</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <Skeleton className="h-4 w-full" />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => setEditando(r)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setConfirmarExcluir(r.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
                       </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+                  ))
+                ) : ordenadas.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhuma despesa lançada. Use "Nova despesa" para iniciar.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  ordenadas.map((r) => {
+                    const fornecedorId = pickFirst(r, ["fornecedor_id"]);
+                    const orcId = pickFirst(r, ["orcamento_item_id", "item_orcamento_id"]);
+                    const status = pickFirst(r, ["status", "situacao"]);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell className="tabular-nums text-sm">
+                          {formatarData(pickFirst(r, ["data", "data_pagamento", "created_at"]))}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {pickFirst(r, ["descricao", "titulo", "historico"]) ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {orcId ? (orcamentoMap.get(orcId) ?? "—") : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {fornecedorId ? (fornecedoresMap.get(fornecedorId) ?? "—") : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatBRL(toNumber(r.valor))}
+                        </TableCell>
+                        <TableCell>
+                          {status ? (
+                            <Badge variant={statusVariant(status)} className="capitalize">
+                              {status}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => setEditando(r)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setConfirmarExcluir(r.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -270,6 +340,7 @@ function DespesasTab() {
             despesa={editando}
             fornecedores={fornQ.data?.rows ?? []}
             orcamentoItens={orcQ.data?.rows ?? []}
+            rubricas={rubQ.data?.rows ?? []}
             onClose={() => setEditando(null)}
             onSaved={() => {
               qc.invalidateQueries({ queryKey: ["financeiro", "despesas", projetoId] });
@@ -306,6 +377,7 @@ function DespesaFormDialog({
   despesa,
   fornecedores,
   orcamentoItens,
+  rubricas,
   onClose,
   onSaved,
 }: {
@@ -313,6 +385,7 @@ function DespesaFormDialog({
   despesa: Row | null;
   fornecedores: Row[];
   orcamentoItens: Row[];
+  rubricas: Row[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -329,9 +402,10 @@ function DespesaFormDialog({
   const [orcamentoId, setOrcamentoId] = useState<string>(
     despesa ? String(despesa.orcamento_item_id ?? "") : "",
   );
-  const [status, setStatus] = useState<string>(
-    despesa ? String(despesa.status ?? "") : "prevista",
+  const [rubricaId, setRubricaId] = useState<string>(
+    despesa ? String(despesa.rubrica_id ?? "") : "",
   );
+  const [status, setStatus] = useState<string>(despesa ? String(despesa.status ?? "") : "prevista");
 
   const salvar = useMutation({
     mutationFn: () =>
@@ -343,6 +417,7 @@ function DespesaFormDialog({
         data: data || null,
         fornecedor_id: fornecedorId || null,
         orcamento_item_id: orcamentoId || null,
+        rubrica_id: rubricaId || null,
         status: status || null,
       }),
     onSuccess: () => {
@@ -385,23 +460,61 @@ function DespesaFormDialog({
         </div>
         <div className="space-y-1.5">
           <Label>Rubrica orçamentária</Label>
-          <Select value={orcamentoId || "__none__"} onValueChange={(v) => setOrcamentoId(v === "__none__" ? "" : v)}>
-            <SelectTrigger><SelectValue placeholder="Selecione…" /></SelectTrigger>
+          <Select
+            value={orcamentoId || "__none__"}
+            onValueChange={(v) => setOrcamentoId(v === "__none__" ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione…" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">Sem vínculo</SelectItem>
               {orcamentoItens.map((o) => {
                 const cat = pickFirst(o, ["categoria", "rubrica"]);
                 const desc = pickFirst(o, ["descricao", "nome"]);
                 const label = [cat, desc].filter(Boolean).join(" · ") || o.id;
-                return <SelectItem key={o.id} value={o.id}>{label}</SelectItem>;
+                return (
+                  <SelectItem key={o.id} value={o.id}>
+                    {label}
+                  </SelectItem>
+                );
               })}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
+          <Label>Rubrica do plano de trabalho</Label>
+          <Select
+            value={rubricaId || "__none__"}
+            onValueChange={(v) => setRubricaId(v === "__none__" ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Sem vínculo</SelectItem>
+              {rubricas.map((rubrica) => (
+                <SelectItem key={rubrica.id} value={rubrica.id}>
+                  {[pickFirst(rubrica, ["codigo"]), pickFirst(rubrica, ["nome", "descricao"])]
+                    .filter(Boolean)
+                    .join(" · ") || rubrica.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Este vínculo atualiza automaticamente o executado e o saldo da rubrica.
+          </p>
+        </div>
+        <div className="space-y-1.5">
           <Label>Fornecedor</Label>
-          <Select value={fornecedorId || "__none__"} onValueChange={(v) => setFornecedorId(v === "__none__" ? "" : v)}>
-            <SelectTrigger><SelectValue placeholder="Selecione…" /></SelectTrigger>
+          <Select
+            value={fornecedorId || "__none__"}
+            onValueChange={(v) => setFornecedorId(v === "__none__" ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione…" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">Sem fornecedor</SelectItem>
               {fornecedores.map((f) => (
@@ -415,17 +528,23 @@ function DespesaFormDialog({
         <div className="space-y-1.5">
           <Label>Status</Label>
           <Select value={status || "prevista"} onValueChange={setStatus}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                <SelectItem key={s} value={s} className="capitalize">
+                  {s}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <Button variant="outline" onClick={onClose}>
+          Cancelar
+        </Button>
         <Button onClick={() => salvar.mutate()} disabled={!podeSalvar || salvar.isPending}>
           {salvar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Salvar

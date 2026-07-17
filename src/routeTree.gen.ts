@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as InscricaoRouteImport } from './routes/inscricao'
+import { Route as ImprimirInscricaoRouteImport } from './routes/imprimir-inscricao'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
@@ -67,6 +69,7 @@ import { Route as AuthenticatedConfiguracoesInstrutorTurmasRouteImport } from '.
 import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_authenticated/configuracoes.ia'
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
 import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
+import { Route as AuthenticatedAdministrativoInscricoesRouteImport } from './routes/_authenticated/administrativo.inscricoes'
 import { Route as AuthenticatedAdministrativoBeneficiosRouteImport } from './routes/_authenticated/administrativo.beneficios'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
@@ -78,6 +81,16 @@ import { Route as AuthenticatedPedagogicoTurmasIdAulasRouteImport } from './rout
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InscricaoRoute = InscricaoRouteImport.update({
+  id: '/inscricao',
+  path: '/inscricao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImprimirInscricaoRoute = ImprimirInscricaoRouteImport.update({
+  id: '/imprimir-inscricao',
+  path: '/imprimir-inscricao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -404,6 +417,12 @@ const AuthenticatedAdministrativoMateriaisRoute =
     path: '/materiais',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
+const AuthenticatedAdministrativoInscricoesRoute =
+  AuthenticatedAdministrativoInscricoesRouteImport.update({
+    id: '/inscricoes',
+    path: '/inscricoes',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
 const AuthenticatedAdministrativoBeneficiosRoute =
   AuthenticatedAdministrativoBeneficiosRouteImport.update({
     id: '/beneficios',
@@ -450,6 +469,8 @@ const AuthenticatedPedagogicoTurmasIdAulasRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/imprimir-inscricao': typeof ImprimirInscricaoRoute
+  '/inscricao': typeof InscricaoRoute
   '/reset-password': typeof ResetPasswordRoute
   '/administrativo': typeof AuthenticatedAdministrativoRouteWithChildren
   '/ajuda': typeof AuthenticatedAjudaRoute
@@ -468,6 +489,7 @@ export interface FileRoutesByFullPath {
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
@@ -515,6 +537,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/imprimir-inscricao': typeof ImprimirInscricaoRoute
+  '/inscricao': typeof InscricaoRoute
   '/reset-password': typeof ResetPasswordRoute
   '/ajuda': typeof AuthenticatedAjudaRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
@@ -527,6 +551,7 @@ export interface FileRoutesByTo {
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
@@ -575,6 +600,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/imprimir-inscricao': typeof ImprimirInscricaoRoute
+  '/inscricao': typeof InscricaoRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRouteWithChildren
   '/_authenticated/ajuda': typeof AuthenticatedAjudaRoute
@@ -594,6 +621,7 @@ export interface FileRoutesById {
   '/_authenticated/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/_authenticated/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
@@ -644,6 +672,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/imprimir-inscricao'
+    | '/inscricao'
     | '/reset-password'
     | '/administrativo'
     | '/ajuda'
@@ -662,6 +692,7 @@ export interface FileRouteTypes {
     | '/trocar-senha'
     | '/whatsapp'
     | '/administrativo/beneficios'
+    | '/administrativo/inscricoes'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
@@ -709,6 +740,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/imprimir-inscricao'
+    | '/inscricao'
     | '/reset-password'
     | '/ajuda'
     | '/base-conhecimento'
@@ -721,6 +754,7 @@ export interface FileRouteTypes {
     | '/trocar-senha'
     | '/'
     | '/administrativo/beneficios'
+    | '/administrativo/inscricoes'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
@@ -768,6 +802,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/imprimir-inscricao'
+    | '/inscricao'
     | '/reset-password'
     | '/_authenticated/administrativo'
     | '/_authenticated/ajuda'
@@ -787,6 +823,7 @@ export interface FileRouteTypes {
     | '/_authenticated/whatsapp'
     | '/_authenticated/'
     | '/_authenticated/administrativo/beneficios'
+    | '/_authenticated/administrativo/inscricoes'
     | '/_authenticated/administrativo/materiais'
     | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/ia'
@@ -836,6 +873,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ImprimirInscricaoRoute: typeof ImprimirInscricaoRoute
+  InscricaoRoute: typeof InscricaoRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
@@ -846,6 +885,20 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inscricao': {
+      id: '/inscricao'
+      path: '/inscricao'
+      fullPath: '/inscricao'
+      preLoaderRoute: typeof InscricaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/imprimir-inscricao': {
+      id: '/imprimir-inscricao'
+      path: '/imprimir-inscricao'
+      fullPath: '/imprimir-inscricao'
+      preLoaderRoute: typeof ImprimirInscricaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -1247,6 +1300,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdministrativoMateriaisRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
     }
+    '/_authenticated/administrativo/inscricoes': {
+      id: '/_authenticated/administrativo/inscricoes'
+      path: '/inscricoes'
+      fullPath: '/administrativo/inscricoes'
+      preLoaderRoute: typeof AuthenticatedAdministrativoInscricoesRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
     '/_authenticated/administrativo/beneficios': {
       id: '/_authenticated/administrativo/beneficios'
       path: '/beneficios'
@@ -1301,6 +1361,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdministrativoRouteChildren {
   AuthenticatedAdministrativoBeneficiosRoute: typeof AuthenticatedAdministrativoBeneficiosRoute
+  AuthenticatedAdministrativoInscricoesRoute: typeof AuthenticatedAdministrativoInscricoesRoute
   AuthenticatedAdministrativoMateriaisRoute: typeof AuthenticatedAdministrativoMateriaisRoute
   AuthenticatedAdministrativoQualificacaoRoute: typeof AuthenticatedAdministrativoQualificacaoRoute
   AuthenticatedAdministrativoIndexRoute: typeof AuthenticatedAdministrativoIndexRoute
@@ -1310,6 +1371,8 @@ const AuthenticatedAdministrativoRouteChildren: AuthenticatedAdministrativoRoute
   {
     AuthenticatedAdministrativoBeneficiosRoute:
       AuthenticatedAdministrativoBeneficiosRoute,
+    AuthenticatedAdministrativoInscricoesRoute:
+      AuthenticatedAdministrativoInscricoesRoute,
     AuthenticatedAdministrativoMateriaisRoute:
       AuthenticatedAdministrativoMateriaisRoute,
     AuthenticatedAdministrativoQualificacaoRoute:
@@ -1552,8 +1615,20 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ImprimirInscricaoRoute: ImprimirInscricaoRoute,
+  InscricaoRoute: InscricaoRoute,
   ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

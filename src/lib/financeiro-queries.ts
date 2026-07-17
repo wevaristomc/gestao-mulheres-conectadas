@@ -1,15 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
+
 import { supabase } from "@/integrations/supabase/client";
 import { lerValorMonetario } from "@/lib/rubricas-import";
-import { operationalWriteError } from "@/lib/supabase-write-errors";
-
-// Segue o mesmo padrão de pedagogico-queries: cada query retorna
-// { rows, error? } e as colunas são descobertas em runtime (pickFirst),
-// permitindo que o schema evolua sem quebrar a UI.
+import { missingColumnFromError, operationalWriteError } from "@/lib/supabase-write-errors";
 
 export type Row = Record<string, unknown> & { id: string };
-
-// ---------- Orçamento ----------
 
 export function orcamentoItensOptions(projetoId: string | null) {
   return queryOptions({
@@ -42,21 +37,27 @@ export async function upsertOrcamentoItem(input: {
   if (input.descricao !== undefined) payload.descricao = input.descricao;
   if (input.categoria !== undefined) payload.categoria = input.categoria;
   if (input.valor_executado !== undefined) payload.valor_executado = input.valor_executado;
-  if (input.id) {
-    const { error } = await supabase.from("orcamento_itens").update(payload).eq("id", input.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabase.from("orcamento_itens").insert(payload);
-    if (error) throw new Error(error.message);
+  const run = (value: Record<string, unknown>) =>
+    input.id
+      ? supabase.from("orcamento_itens").update(value).eq("id", input.id)
+      : supabase.from("orcamento_itens").insert(value);
+  let result = await run(payload);
+  if (result.error && missingColumnFromError(result.error)) {
+    const legado: Record<string, unknown> = {
+      projeto_id: input.projeto_id,
+      rubrica: input.categoria?.trim() || input.descricao?.trim() || "Item orçamentário",
+      valor_previsto: input.valor_previsto,
+    };
+    if (input.valor_executado !== undefined) legado.valor_executado = input.valor_executado;
+    result = await run(legado);
   }
+  if (result.error) throw operationalWriteError(result.error, "o item orçamentário");
 }
 
 export async function deleteOrcamentoItem(id: string) {
   const { error } = await supabase.from("orcamento_itens").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw operationalWriteError(error, "o item orçamentário");
 }
-
-// ---------- Fornecedores ----------
 
 export function fornecedoresListOptions(projetoId: string | null) {
   return queryOptions({
@@ -64,13 +65,16 @@ export function fornecedoresListOptions(projetoId: string | null) {
     enabled: !!projetoId,
     queryFn: async (): Promise<{ rows: Row[]; error?: string }> => {
       if (!projetoId) return { rows: [] };
-      // Tenta filtrar por projeto; cai para lista global se a coluna não existir.
       let res = await supabase.from("fornecedores").select("*").eq("projeto_id", projetoId);
-      if (res.error && /projeto_id/i.test(res.error.message)) {
+      if (res.error && missingColumnFromError(res.error)) {
         res = await supabase.from("fornecedores").select("*");
       }
       if (res.error) return { rows: [], error: res.error.message };
-      return { rows: (res.data ?? []) as Row[] };
+      const rows = ((res.data ?? []) as Row[]).map((row) => ({
+        ...row,
+        cnpj: row.cnpj ?? row.cnpj_cpf ?? null,
+      }));
+      return { rows };
     },
   });
 }
@@ -87,24 +91,24 @@ export async function upsertFornecedor(input: {
   if (input.cnpj !== undefined) base.cnpj = input.cnpj;
   if (input.email !== undefined) base.email = input.email;
   if (input.telefone !== undefined) base.telefone = input.telefone;
-  const payloadComProj = input.id ? base : { ...base, projeto_id: input.projeto_id };
-  const run = (p: Record<string, unknown>) =>
+  const payload = input.id ? base : { ...base, projeto_id: input.projeto_id };
+  const run = (value: Record<string, unknown>) =>
     input.id
-      ? supabase.from("fornecedores").update(p).eq("id", input.id)
-      : supabase.from("fornecedores").insert(p);
-  let res = await run(payloadComProj);
-  if (res.error && /projeto_id/i.test(res.error.message)) {
-    res = await run(base);
+      ? supabase.from("fornecedores").update(value).eq("id", input.id)
+      : supabase.from("fornecedores").insert(value);
+  let result = await run(payload);
+  if (result.error && missingColumnFromError(result.error)) {
+    const legado: Record<string, unknown> = { nome: input.nome };
+    if (input.cnpj !== undefined) legado.cnpj_cpf = input.cnpj;
+    result = await run(legado);
   }
-  if (res.error) throw new Error(res.error.message);
+  if (result.error) throw operationalWriteError(result.error, "o fornecedor");
 }
 
 export async function deleteFornecedor(id: string) {
   const { error } = await supabase.from("fornecedores").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw operationalWriteError(error, "o fornecedor");
 }
-
-// ---------- Despesas ----------
 
 export function despesasListOptions(projetoId: string | null) {
   return queryOptions({
@@ -130,6 +134,7 @@ export async function upsertDespesa(input: {
   data: string | null;
   fornecedor_id?: string | null;
   orcamento_item_id?: string | null;
+  rubrica_id?: string | null;
   status?: string | null;
 }) {
   const payload: Record<string, unknown> = {
@@ -137,63 +142,64 @@ export async function upsertDespesa(input: {
     valor: input.valor,
   };
   if (input.descricao !== undefined) payload.descricao = input.descricao;
-  if (input.data !== undefined) payload.data = input.data;
+  if (input.data !== undefined) {
+    payload.data = input.data;
+    payload.data_despesa = input.data;
+  }
   if (input.fornecedor_id !== undefined) payload.fornecedor_id = input.fornecedor_id;
   if (input.orcamento_item_id !== undefined) payload.orcamento_item_id = input.orcamento_item_id;
+  if (input.rubrica_id !== undefined) payload.rubrica_id = input.rubrica_id;
   if (input.status !== undefined) payload.status = input.status;
-  if (input.id) {
-    const { error } = await supabase.from("despesas").update(payload).eq("id", input.id);
-    if (error) throw operationalWriteError(error, "a despesa");
-  } else {
-    const { error } = await supabase.from("despesas").insert(payload);
-    if (error) throw operationalWriteError(error, "a despesa");
+  const run = (value: Record<string, unknown>) =>
+    input.id
+      ? supabase.from("despesas").update(value).eq("id", input.id)
+      : supabase.from("despesas").insert(value);
+  let result = await run(payload);
+  if (result.error && missingColumnFromError(result.error)) {
+    const compat = { ...payload };
+    delete compat.data_despesa;
+    delete compat.rubrica_id;
+    result = await run(compat);
   }
+  if (result.error) throw operationalWriteError(result.error, "a despesa");
 }
 
 export async function deleteDespesa(id: string) {
   const { error } = await supabase.from("despesas").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw operationalWriteError(error, "a despesa");
 }
-
-// ---------- Helpers ----------
 
 export function pickFirst(row: Row | null | undefined, keys: string[]): string | null {
   if (!row) return null;
-  for (const k of keys) {
-    const v = row[k];
-    if (typeof v === "string" && v.trim()) return v;
-    if (typeof v === "number") return String(v);
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number") return String(value);
   }
   return null;
 }
 
-export function toNumber(v: unknown): number {
-  return lerValorMonetario(v) ?? 0;
+export function toNumber(value: unknown): number {
+  return lerValorMonetario(value) ?? 0;
 }
 
-export function formatBRL(v: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(v);
+export function formatBRL(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
 export function formatarData(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const s = String(iso).slice(0, 10);
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) {
-    const [, y, mo, d] = m;
-    return `${d}/${mo}/${y}`;
-  }
+  const value = String(iso).slice(0, 10);
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
   try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return String(iso);
     return new Intl.DateTimeFormat("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
-    }).format(d);
+    }).format(date);
   } catch {
     return String(iso);
   }
