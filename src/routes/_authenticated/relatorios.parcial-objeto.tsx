@@ -167,9 +167,31 @@ function CriarRascunhoDialog({
 }) {
   const [titulo, setTitulo] = useState("");
   const [ciclo, setCiclo] = useState<string>("");
+  const [competencia, setCompetencia] = useState<string>("");
   const [ini, setIni] = useState<string>("");
   const [fim, setFim] = useState<string>("");
   const [loading, setLoading] = useState(false);
+
+  function preencherCompetencia(value: string) {
+    setCompetencia(value);
+    const match = value.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    setIni(`${value}-01`);
+    setFim(`${value}-${String(lastDay).padStart(2, "0")}`);
+    const label = new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(year, month - 1, 1)));
+    setTitulo((current) =>
+      !current || current.startsWith("Relatório mensal —")
+        ? `Relatório mensal — ${label}`
+        : current,
+    );
+  }
 
   async function submit() {
     if (!projetoId) return;
@@ -203,6 +225,18 @@ function CriarRascunhoDialog({
           <Label htmlFor="titulo">Título (opcional)</Label>
           <Input id="titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex: 1º parcial 2026 — Ciclo 1" />
         </div>
+        <div>
+          <Label htmlFor="competencia">Competência mensal (atalho)</Label>
+          <Input
+            id="competencia"
+            type="month"
+            value={competencia}
+            onChange={(e) => preencherCompetencia(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Selecionar o mês preenche automaticamente o título e o período. Para o relatório consolidado, informe abaixo o início e o fim de todo o intervalo.
+          </p>
+        </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
             <Label htmlFor="ciclo">Ciclo</Label>
@@ -218,7 +252,7 @@ function CriarRascunhoDialog({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Ao criar, o sistema monta o contexto a partir das views MTE e da tabela de evidências, e pré-preenche as 8 seções do modelo oficial.
+          Ao criar, o sistema consolida os dados MTE e as evidências dentro do período e pré-preenche as 8 seções do modelo oficial.
         </p>
       </div>
       <DialogFooter>
@@ -408,7 +442,23 @@ function EditorRascunhoInner({
 }
 
 function ResumoContexto({ contexto }: { contexto: Record<string, unknown> }) {
-  const ctx = contexto as any;
+  const ctx = contexto as {
+    turmas?: { total?: number };
+    cursos_executados?: {
+      matriculadas?: number;
+      concluintes?: number;
+      evadidas?: number;
+    };
+    consolidacao?: {
+      certificados?: number;
+      freq_media?: number | null;
+    };
+    evidencias?: { total?: number };
+    checklist_pmq?: {
+      itens_ok?: number;
+      itens_pendentes?: number;
+    };
+  };
   if (!ctx || Object.keys(ctx).length === 0) return null;
   const turmas = ctx.turmas?.total ?? 0;
   const cursos = ctx.cursos_executados ?? {};

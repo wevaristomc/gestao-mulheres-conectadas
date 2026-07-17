@@ -1,5 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { lerValorMonetario } from "@/lib/rubricas-import";
+import { operationalWriteError } from "@/lib/supabase-write-errors";
 
 // Segue o mesmo padrão de pedagogico-queries: cada query retorna
 // { rows, error? } e as colunas são descobertas em runtime (pickFirst),
@@ -141,10 +143,10 @@ export async function upsertDespesa(input: {
   if (input.status !== undefined) payload.status = input.status;
   if (input.id) {
     const { error } = await supabase.from("despesas").update(payload).eq("id", input.id);
-    if (error) throw new Error(error.message);
+    if (error) throw operationalWriteError(error, "a despesa");
   } else {
     const { error } = await supabase.from("despesas").insert(payload);
-    if (error) throw new Error(error.message);
+    if (error) throw operationalWriteError(error, "a despesa");
   }
 }
 
@@ -166,10 +168,7 @@ export function pickFirst(row: Row | null | undefined, keys: string[]): string |
 }
 
 export function toNumber(v: unknown): number {
-  if (v == null) return 0;
-  if (typeof v === "number") return v;
-  const n = Number(String(v).replace(/[^0-9,.-]/g, "").replace(",", "."));
-  return Number.isNaN(n) ? 0 : n;
+  return lerValorMonetario(v) ?? 0;
 }
 
 export function formatBRL(v: number): string {

@@ -27,6 +27,23 @@ export async function atualizarRubricaPrevisto(id: string, valor_previsto: numbe
   if (error) throw new Error(error.message);
 }
 
+export async function atualizarRubricasPrevistas(
+  itens: Array<{ id: string; valor_previsto: number }>,
+) {
+  const resultados = await Promise.all(
+    itens.map(async (item) => {
+      const { error } = await supabase
+        .from("rubricas")
+        .update({ valor_previsto: item.valor_previsto })
+        .eq("id", item.id);
+      return error?.message ?? null;
+    }),
+  );
+  const erros = resultados.filter((erro): erro is string => !!erro);
+  if (erros.length) throw new Error(`Falha ao atualizar rubricas: ${erros[0]}`);
+  return { atualizadas: itens.length };
+}
+
 export function despesasPorRubricaOptions(projetoId: string | null) {
   return queryOptions({
     queryKey: ["financeiro", "despesas-rubrica", projetoId],

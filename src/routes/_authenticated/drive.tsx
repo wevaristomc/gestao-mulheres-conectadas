@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ChevronRight, Download, ExternalLink, File as FileIcon, Folder, FolderPlus,
-  Home, Loader2, RefreshCw, Search, Upload,
+  FolderTree, Home, Loader2, RefreshCw, Search, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { requireModuleAccess } from "@/lib/auth-guard";
 import { useHasRole } from "@/hooks/use-active-context";
 import {
-  createGdriveFolder, gdriveBreadcrumb, listGdrive, searchGdrive,
+  createGdriveFolder, ensureGdriveProjectStructure, gdriveBreadcrumb, listGdrive, searchGdrive,
   uploadToGdrive, verifyGdriveConnection,
 } from "@/lib/gdrive.functions";
 
@@ -46,6 +46,7 @@ function DrivePage() {
   const verify = useServerFn(verifyGdriveConnection);
   const mkdir = useServerFn(createGdriveFolder);
   const up = useServerFn(uploadToGdrive);
+  const ensureStructure = useServerFn(ensureGdriveProjectStructure);
 
   const [folderId, setFolderId] = useState<string | null>(null);
   const [rootId, setRootId] = useState<string | null>(null);
@@ -60,6 +61,7 @@ function DrivePage() {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [organizando, setOrganizando] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -128,6 +130,23 @@ function DrivePage() {
     }
   }
 
+  async function organizarPastas() {
+    setOrganizando(true);
+    try {
+      const result = await ensureStructure();
+      toast.success(
+        result.created > 0
+          ? `${result.created} pastas criadas; a estrutura documental está pronta.`
+          : "A estrutura documental já estava organizada.",
+      );
+      await load(rootId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao organizar as pastas");
+    } finally {
+      setOrganizando(false);
+    }
+  }
+
   async function subirArquivo(file: File) {
     setUploading(true);
     try {
@@ -162,12 +181,16 @@ function DrivePage() {
         title="Drive do Projeto"
         description="Google Drive institucional do Projeto Mulheres Conectadas. Consulte, importe e envie arquivos para a conta compartilhada."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => void load(folderId)} disabled={loading}>
               <RefreshCw className={"mr-1.5 h-4 w-4 " + (loading ? "animate-spin" : "")} /> Atualizar
             </Button>
             {canWrite ? (
               <>
+                <Button variant="outline" size="sm" onClick={() => void organizarPastas()} disabled={organizando}>
+                  {organizando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FolderTree className="mr-1.5 h-4 w-4" />}
+                  Organizar pastas
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setNewFolderOpen(true)}>
                   <FolderPlus className="mr-1.5 h-4 w-4" /> Nova pasta
                 </Button>

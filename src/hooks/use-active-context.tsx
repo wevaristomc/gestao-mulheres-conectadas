@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { resolveHighestRole, type AppRole } from "@/lib/role-access";
 import { supabase } from "@/integrations/supabase/client";
 import { setCachedRole } from "@/lib/auth-guard";
@@ -46,20 +47,27 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
   // Subscrever sessão
   useEffect(() => {
     let mounted = true;
+    const applySession = (session: Session | null) => {
+      const next = session?.user
+        ? { id: session.user.id, email: session.user.email ?? "" }
+        : null;
+      setUser((current) =>
+        current?.id === next?.id && current?.email === next?.email ? current : next,
+      );
+      setMustChangePassword(!!session?.user?.user_metadata?.must_change_password);
+    };
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      const s = data.session;
-      setUser(s?.user ? { id: s.user.id, email: s.user.email ?? "" } : null);
-      setMustChangePassword(!!s?.user?.user_metadata?.must_change_password);
+      applySession(data.session);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null);
-      setMustChangePassword(!!session?.user?.user_metadata?.must_change_password);
+      applySession(session);
       if (!session) {
         setRoleRows([]);
         setProjetos([]);
         setProjetoId(null);
         setCachedRole(null);
+        setIsLoadingRoles(false);
         try {
           window.localStorage.removeItem(PROJETO_STORAGE_KEY);
         } catch {
@@ -91,6 +99,12 @@ export function ActiveContextProvider({ children }: { children: ReactNode }) {
       if (projRes.error) {
         // eslint-disable-next-line no-console
         console.error("[use-active-context] Falha ao ler projetos:", projRes.error);
+      }
+      if (rolesRes.error || projRes.error) {
+        // Uma oscilação temporária não deve apagar o último contexto válido
+        // nem expulsar a pessoa da rota que já estava utilizando.
+        setIsLoadingRoles(false);
+        return;
       }
       const projList = (projRes.data ?? []) as Projeto[];
       const roles = (rolesRes.data ?? []) as RoleRow[];
