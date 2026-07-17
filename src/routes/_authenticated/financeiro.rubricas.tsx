@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useActiveContext } from "@/hooks/use-active-context";
+import { ImportarRubricasDialog } from "@/components/financeiro/importar-rubricas-dialog";
 import {
   atualizarRubricaPrevisto,
   despesasPorRubricaOptions,
@@ -39,7 +40,7 @@ function RubricasPage() {
     return m;
   }, [despQ.data]);
 
-  const rubricas = rubQ.data?.rows ?? [];
+  const rubricas = useMemo(() => rubQ.data?.rows ?? [], [rubQ.data?.rows]);
   const erro = rubQ.data?.error ?? (rubQ.isError ? String(rubQ.error) : null);
 
   const salvar = useMutation({
@@ -68,6 +69,16 @@ function RubricasPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Rubricas do plano de trabalho</h2>
+          <p className="text-sm text-muted-foreground">
+            Revise individualmente ou atualize os valores previstos a partir da planilha aprovada.
+          </p>
+        </div>
+        <ImportarRubricasDialog rubricas={rubricas} />
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Kpi label="Previsto (rubricas)" value={formatBRL(totais.previsto)} />
         <Kpi label="Executado" value={formatBRL(totais.executado)} />

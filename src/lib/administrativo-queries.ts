@@ -3,6 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { gerarCertificadoPDF, slugifyNome } from "@/lib/certificado-pdf";
 import { BUCKET as DOCUMENTOS_BUCKET } from "@/lib/base-conhecimento-queries";
 import { formatarDataBR } from "@/lib/date-utils";
+import {
+  missingColumnFromError,
+  operationalWriteError,
+} from "@/lib/supabase-write-errors";
 
 // Padrão: cada query retorna { rows, error? } com descoberta de colunas em runtime.
 // Tabelas esperadas (todas com RLS por projeto): turmas, matriculas, cursistas,
@@ -315,33 +319,31 @@ export async function upsertEntrega(tabela: EntregaTabela, input: EntregaInput) 
   if (input.valor != null) payload.valor = input.valor;
   if (input.observacoes) payload.observacoes = input.observacoes;
 
-  const stripOptional = (p: Record<string, unknown>) => {
-    for (const k of [
-      "projeto_id",
-      "matricula_id",
-      "quantidade",
-      "valor",
-      "observacoes",
-    ]) {
-      if (k in p) delete p[k];
-    }
-  };
+  const optionalLegacyColumns = new Set([
+    "turma_id",
+    "cursista_id",
+    "matricula_id",
+    "quantidade",
+    "valor",
+    "observacoes",
+  ]);
+  const id = input.id;
 
-  if (input.id) {
-    let res = await supabase.from(tabela).update(payload).eq("id", input.id);
-    if (res.error && /column .* does not exist/i.test(res.error.message)) {
-      stripOptional(payload);
-      res = await supabase.from(tabela).update(payload).eq("id", input.id);
+  for (let attempt = 0; attempt < optionalLegacyColumns.size + 1; attempt += 1) {
+    const res = id
+      ? await supabase.from(tabela).update(payload).eq("id", id)
+      : await supabase.from(tabela).insert(payload);
+    if (!res.error) return;
+
+    const missingColumn = missingColumnFromError(res.error);
+    if (missingColumn && optionalLegacyColumns.has(missingColumn) && missingColumn in payload) {
+      delete payload[missingColumn];
+      continue;
     }
-    if (res.error) throw new Error(res.error.message);
-  } else {
-    let res = await supabase.from(tabela).insert(payload);
-    if (res.error && /column .* does not exist/i.test(res.error.message)) {
-      stripOptional(payload);
-      res = await supabase.from(tabela).insert(payload);
-    }
-    if (res.error) throw new Error(res.error.message);
+    throw operationalWriteError(res.error, tabela === "entregas_materiais" ? "materiais" : "benefícios");
   }
+
+  throw new Error("Não foi possível adaptar a gravação ao banco de dados atual.");
 }
 
 export async function deleteEntrega(tabela: EntregaTabela, id: string) {

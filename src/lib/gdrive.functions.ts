@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -10,7 +11,7 @@ const WRITE_ROLES = new Set([
   "administrativo",
 ]);
 
-async function assertWriteRole(context: { userId: string; supabase: any }) {
+async function assertWriteRole(context: { userId: string; supabase: SupabaseClient }) {
   // Verifica no user_roles se o usuário tem role de escrita.
   const { data, error } = await context.supabase
     .from("user_roles")
@@ -123,7 +124,7 @@ export const importGdriveToBucket = createServerFn({ method: "POST" })
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = getSupabaseAdmin();
     const uid = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-    const safeName = meta.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.\-]+/g, "_");
+    const safeName = meta.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "_");
     const path = `${data.pathPrefix ?? "gdrive"}/${uid}-${safeName}`.replace(/\/+/g, "/");
     const bytes = Uint8Array.from(atob(dl.base64), (c) => c.charCodeAt(0));
 
@@ -207,6 +208,69 @@ export const createGdriveFolder = createServerFn({ method: "POST" })
       if (!ok) throw new Response("Forbidden", { status: 403 });
     }
     return h.createFolder(data.name, parentId);
+  });
+
+const STANDARD_PROJECT_PATHS = [
+  "Administrativo/Ofícios/Recebidos",
+  "Administrativo/Ofícios/Respondidos",
+  "Administrativo/Ofícios/Enviados",
+  "Administrativo/Matrículas/Fichas digitais",
+  "Administrativo/Matrículas/Fichas escaneadas",
+  "Pedagógico/Listas de presença",
+  "Pedagógico/Entrega de materiais",
+  "Relatórios/Mensais",
+  "Relatórios/Consolidados",
+  "Financeiro/Extratos bancários",
+  "Financeiro/Conciliação bancária",
+  "Financeiro/Rubricas",
+] as const;
+
+export const ensureGdriveProjectStructure = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .handler(async ({ context }) => {
+    await assertWriteRole(context);
+    const h = await import("@/lib/gdrive-helpers.server");
+    const root = h.getRootFolderId();
+    if (!root) throw new Error("GDRIVE_ROOT_FOLDER_ID não configurado.");
+
+    const normalize = (name: string) =>
+      name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLocaleLowerCase("pt-BR");
+    const childrenCache = new Map<string, Awaited<ReturnType<typeof h.listChildren>>["files"]>();
+    const created: string[] = [];
+    const existing = new Set<string>();
+
+    for (const path of STANDARD_PROJECT_PATHS) {
+      let parentId = root;
+      const parts: string[] = [];
+      for (const name of path.split("/")) {
+        parts.push(name);
+        let children = childrenCache.get(parentId);
+        if (!children) {
+          const page = await h.listChildren({ folderId: parentId, onlyFolders: true });
+          children = page.files ?? [];
+          childrenCache.set(parentId, children);
+        }
+        let folder = children.find((item) => normalize(item.name) === normalize(name));
+        if (!folder) {
+          folder = await h.createFolder(name, parentId);
+          children.push(folder);
+          created.push(parts.join("/"));
+        } else {
+          existing.add(parts.join("/"));
+        }
+        parentId = folder.id;
+      }
+    }
+
+    return {
+      created: created.length,
+      existing: existing.size,
+      paths: STANDARD_PROJECT_PATHS.length,
+    };
   });
 
 const UploadInput = z.object({

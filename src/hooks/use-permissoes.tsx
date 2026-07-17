@@ -15,8 +15,9 @@ export function usePermissoes() {
   const q = useQuery({
     queryKey: ["permissoes_papel", role],
     enabled: !!user && !!role,
-    retry: false,
-    staleTime: 60_000,
+    retry: 2,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<PermissionRow[]> => {
       if (!role) return [];
       return listarFn({ data: { role } }) as Promise<PermissionRow[]>;
