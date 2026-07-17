@@ -193,6 +193,67 @@ export type Database = {
         }
         Relationships: []
       }
+      despesas: {
+        Row: {
+          created_at: string
+          data: string | null
+          descricao: string | null
+          fornecedor_id: string | null
+          id: string
+          orcamento_item_id: string | null
+          projeto_id: string
+          status: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data?: string | null
+          descricao?: string | null
+          fornecedor_id?: string | null
+          id?: string
+          orcamento_item_id?: string | null
+          projeto_id: string
+          status?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          created_at?: string
+          data?: string | null
+          descricao?: string | null
+          fornecedor_id?: string | null
+          id?: string
+          orcamento_item_id?: string | null
+          projeto_id?: string
+          status?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_orcamento_item_id_fkey"
+            columns: ["orcamento_item_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_itens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evidencias: {
         Row: {
           arquivo_nome: string | null
@@ -243,6 +304,47 @@ export type Database = {
             columns: ["turma_id"]
             isOneToOne: false
             referencedRelation: "turmas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fornecedores: {
+        Row: {
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string
+          projeto_id: string
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome: string
+          projeto_id: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string
+          projeto_id?: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fornecedores_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
             referencedColumns: ["id"]
           },
         ]
@@ -544,6 +646,47 @@ export type Database = {
           },
         ]
       }
+      orcamento_itens: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          projeto_id: string
+          updated_at: string
+          valor_executado: number
+          valor_previsto: number
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          projeto_id: string
+          updated_at?: string
+          valor_executado?: number
+          valor_previsto?: number
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          projeto_id?: string
+          updated_at?: string
+          valor_executado?: number
+          valor_previsto?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_itens_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       permissoes_papel: {
         Row: {
           atualizado_em: string
@@ -663,6 +806,47 @@ export type Database = {
           vigencia_inicio?: string | null
         }
         Relationships: []
+      }
+      rubricas: {
+        Row: {
+          categoria: string | null
+          codigo: string | null
+          created_at: string
+          id: string
+          nome: string | null
+          projeto_id: string
+          updated_at: string
+          valor_previsto: number
+        }
+        Insert: {
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          id?: string
+          nome?: string | null
+          projeto_id: string
+          updated_at?: string
+          valor_previsto?: number
+        }
+        Update: {
+          categoria?: string | null
+          codigo?: string | null
+          created_at?: string
+          id?: string
+          nome?: string | null
+          projeto_id?: string
+          updated_at?: string
+          valor_previsto?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rubricas_projeto_id_fkey"
+            columns: ["projeto_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       turmas: {
         Row: {
