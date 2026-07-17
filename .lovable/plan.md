@@ -1,32 +1,45 @@
-## Diagnóstico
 
-Confirmado no banco real: as tabelas `orcamento_itens`, `despesas`, `fornecedores` (e `rubricas`) **não existem** no schema `public`. Por isso qualquer "Salvar" nas abas Orçamento, Despesas, Fornecedores e Rubricas retorna erro do PostgREST — o app até mostra o toast de erro, mas nada persiste porque a tabela não está lá.
+## Contexto (análise da reunião + do banco real)
 
-O código do frontend (`src/lib/financeiro-queries.ts`) já espera os nomes de coluna corretos (`projeto_id`, `descricao`, `categoria`, `valor_previsto`, `valor_executado`, `nome`, `cnpj`, `email`, `telefone`, `data`, `valor`, `status`, `fornecedor_id`, `orcamento_item_id`). Falta apenas a migração criando as tabelas com GRANTs + RLS.
+Na conversa com a Jaqueline, o eixo é conciliar o extrato bancário (idealmente CSV com nome/CPF do favorecido) com quem recebeu o benefício de R$ 260. Para isso funcionar, o cadastro da aluna precisa carregar **banco, agência e conta**, e essas informações precisam aparecer nas telas certas.
 
-## Plano — criar as tabelas do módulo Financeiro
+O que verifiquei no código/DB:
 
-Uma única migração `docs/migrations/financeiro-core.sql` com, para cada tabela: `CREATE TABLE` → `GRANT` (`authenticated` CRUD + `service_role` ALL, sem `anon`) → `ENABLE RLS` → políticas → trigger `updated_at`.
+- `beneficiarias` já tem colunas `banco`, `agencia`, `conta`.
+- O formulário `BeneficiariaFormDialog` já grava esses campos.
+- O importador de CSV de turma (`importador-turma-csv.ts` / `importar-turma-csv-card.tsx`) já extrai e grava banco/agência/conta nas beneficiárias.
+- Porém, **nenhuma tela exibe** esses campos: a lista de MTE › Beneficiárias mostra só nome/CPF/telefone/município; a aba Pedagógico › Turma › Cursistas mostra só nome/e-mail/status. Por isso o usuário "subiu e não viu refletido".
+- A tabela `cursistas` (usada no fluxo pedagógico) **não tem** colunas bancárias — hoje o dado bancário só existe em `beneficiarias`.
 
-### Tabelas
+## O que fazer
 
-1. **`fornecedores`** — `id`, `projeto_id → projetos(id) ON DELETE CASCADE`, `nome NOT NULL`, `cnpj`, `email`, `telefone`, `created_at`, `updated_at`. Índice em `projeto_id`.
-2. **`orcamento_itens`** — `id`, `projeto_id → projetos(id) ON DELETE CASCADE`, `categoria`, `descricao`, `valor_previsto numeric NOT NULL DEFAULT 0`, `valor_executado numeric NOT NULL DEFAULT 0`, timestamps. Índice em `projeto_id`.
-3. **`despesas`** — `id`, `projeto_id → projetos(id) ON DELETE CASCADE`, `descricao`, `valor numeric NOT NULL DEFAULT 0`, `data date`, `fornecedor_id → fornecedores(id) ON DELETE SET NULL`, `orcamento_item_id → orcamento_itens(id) ON DELETE SET NULL`, `status text`, timestamps. Índices em `projeto_id`, `fornecedor_id`, `orcamento_item_id`.
-4. **`rubricas`** — `id`, `projeto_id → projetos(id) ON DELETE CASCADE`, `codigo`, `nome`, `categoria`, `valor_previsto numeric DEFAULT 0`, timestamps (para desbloquear a aba Rubricas, que hoje quebra pelo mesmo motivo).
+### 1. Tornar os dados bancários visíveis onde a aluna aparece
+- **MTE › Beneficiárias**: adicionar coluna "Dados bancários" (Banco • Ag. • Conta) na tabela desktop e uma linha secundária no card mobile. Indicador visual quando faltar (badge "sem conta") para a coordenação priorizar a coleta.
+- **Pedagógico › Turma › Cursistas**: quando a matrícula estiver vinculada a uma `beneficiaria`, exibir a mesma coluna "Dados bancários" puxada de `beneficiarias` via join na query (`cursistasByTurmaOptions`). Para matrículas ligadas só a `cursistas` (sem beneficiaria), mostrar "—" com tooltip "cadastro somente pedagógico".
+- **Busca**: permitir buscar beneficiária por banco/conta na tela MTE (útil para achar a dona de um lançamento do extrato).
 
-### RLS — mesmo modelo já usado no projeto
+### 2. Edição rápida na própria linha
+- Botão "Editar dados bancários" na linha da cursista/beneficiária que abre um mini-dialog só com Banco / Agência / Conta, sem precisar entrar no formulário completo. Preenche em `beneficiarias`. Se a aluna estiver só como `cursista` sem `beneficiaria`, oferecer "Promover a beneficiária" (cria a beneficiária com CPF/nome já existentes e grava as contas).
 
-- `SELECT` para `authenticated` quando o usuário tem vínculo com o `projeto_id` via `user_roles` (papel de coordenação/administrativo/financeiro/pedagógico) **ou** é professor/auxiliar vinculado em `instrutor_turmas` de alguma turma do projeto (leitura).
-- `INSERT/UPDATE/DELETE` restrito aos papéis financeiros: `coordenador_geral`, `administrativo`, `gestor_financeiro`, `coordenador_pedagogico` — usando `public.is_project_admin(auth.uid(), projeto_id)` que já existe.
-- `service_role` sempre `ALL`.
+### 3. Exportação para a Jaqueline validar
+- Botão "Exportar contas (CSV)" na tela de Beneficiárias e no cabeçalho da aba Cursistas da turma: gera CSV com `nome, cpf, banco, agencia, conta, turma, status` (BOM UTF-8, já padronizado no projeto). É o insumo que ela pediu na reunião para bater com o extrato do Mauro.
 
-### Trigger
+### 4. Ligação com a Conciliação bancária (preparo)
+- Na tela `financeiro.conciliacao`, hoje o match usa valor/data. Adicionar como reforço opcional: quando o lançamento tiver "contraparte" (nome/CPF) ou "documento" (conta), casar com `beneficiarias.cpf` ou `beneficiarias.conta` para elevar o score da sugestão. Isso concretiza o "mamão com açúcar" do CSV que a Jaqueline quer.
+- Sem migração nova: a estrutura de `conciliacoes_bancarias` já suporta score/sugerido/confirmado.
 
-Reutilizar `public.update_updated_at_column()` (já existe) em `BEFORE UPDATE` de cada tabela.
+### 5. Documentação
+- Registrar em `docs/AUDITORIA-BUGS.md` como item concluído: "Dados bancários da aluna visíveis e editáveis nas listas + export CSV + reforço no matcher da conciliação".
 
-### Depois da migração
+## Detalhes técnicos
 
-Nenhuma mudança no frontend é necessária — o código atual já monta os payloads compatíveis. A migração precisa ser aprovada e aplicada; após isso, criar/editar itens em Orçamento, Despesas, Fornecedores e Rubricas volta a funcionar imediatamente.
+- `src/lib/mte-queries.ts`: `beneficiariasListOptions` já retorna `banco/agencia/conta` — só falta consumir no componente.
+- `src/lib/pedagogico-queries.ts` › `cursistasByTurmaOptions`: estender o `select` para incluir `beneficiarias(banco, agencia, conta)` no join (já existe o vínculo `matriculas.beneficiaria_id`). Manter compat com bases antigas via retry progressivo, como já é feito para outros campos.
+- Novos componentes: `BankFieldsInlineDialog` (edição rápida), `ExportContasButton` (CSV com `csv.ts`).
+- Sem mudanças de RLS: `beneficiarias` já tem policies de escrita para admin/coordenação/administrativo.
+- Sem migrações novas.
 
-Nada de mexer em `auth`, `storage` ou outras tabelas existentes.
+## Fora do escopo desta rodada
+- Integrar com "transfer gov" / API do banco.
+- OCR das fichas manuscritas para preencher conta automaticamente (é outro pedido da reunião — encaminho como próxima rodada).
+- Adicionar colunas bancárias na tabela `cursistas` (fica em `beneficiarias`, que é o modelo já vigente).
