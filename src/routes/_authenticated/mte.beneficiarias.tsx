@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, Landmark, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
@@ -18,8 +18,10 @@ import {
 } from "@/components/ui/table";
 import { BeneficiariaFormDialog } from "@/components/mte/beneficiaria-form-dialog";
 import { BeneficiariasCsvImport } from "@/components/mte/beneficiarias-csv-import";
+import { BankFieldsInlineDialog, type BankInlineTarget } from "@/components/mte/bank-fields-inline-dialog";
 import { useHasRole } from "@/hooks/use-active-context";
 import { formatCpf, formatPhone } from "@/lib/cpf";
+import { downloadCSV, toCSV } from "@/lib/csv";
 import {
   beneficiariasListOptions, deleteBeneficiaria, type Beneficiaria,
 } from "@/lib/mte-queries";
@@ -40,6 +42,7 @@ function BeneficiariasIndex() {
   const [csvOpen, setCsvOpen] = useState(false);
   const [editing, setEditing] = useState<Beneficiaria | null>(null);
   const [deleting, setDeleting] = useState<Beneficiaria | null>(null);
+  const [bankTarget, setBankTarget] = useState<BankInlineTarget | null>(null);
 
   const del = useMutation({
     mutationFn: (id: string) => deleteBeneficiaria(id),
@@ -51,6 +54,31 @@ function BeneficiariasIndex() {
     onError: (e: Error) => toast.error(e.message || "Falha ao excluir"),
   });
 
+  const exportarContas = () => {
+    const cols = ["nome", "cpf", "banco", "agencia", "conta", "telefone", "municipio"];
+    const data = rows.map((b) => ({
+      nome: b.nome,
+      cpf: formatCpf(b.cpf),
+      banco: b.banco ?? "",
+      agencia: b.agencia ?? "",
+      conta: b.conta ?? "",
+      telefone: b.telefone ? formatPhone(b.telefone) : "",
+      municipio: b.municipio ?? "",
+    }));
+    downloadCSV(`contas-beneficiarias-${new Date().toISOString().slice(0, 10)}.csv`, toCSV(data, cols));
+  };
+
+  const abrirBanco = (b: Beneficiaria) =>
+    setBankTarget({
+      kind: "beneficiaria",
+      beneficiariaId: b.id,
+      nome: b.nome,
+      cpf: b.cpf,
+      banco: b.banco,
+      agencia: b.agencia,
+      conta: b.conta,
+    });
+
   return (
     <div>
       <PageHeader
@@ -60,6 +88,9 @@ function BeneficiariasIndex() {
         actions={
           canWrite ? (
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={exportarContas} disabled={rows.length === 0}>
+                <Download className="mr-1 h-4 w-4" /> Exportar contas
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setCsvOpen(true)}>
                 <Upload className="mr-1 h-4 w-4" /> Importar CSV
               </Button>
@@ -76,7 +107,7 @@ function BeneficiariasIndex() {
         <Input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por nome ou CPF…"
+          placeholder="Buscar por nome, CPF, banco ou conta…"
           className="pl-7"
         />
       </div>
