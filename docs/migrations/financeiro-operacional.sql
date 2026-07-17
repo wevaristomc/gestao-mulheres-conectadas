@@ -30,6 +30,8 @@ create index if not exists fornecedores_projeto_idx
   on public.fornecedores (projeto_id);
 create index if not exists orcamento_itens_projeto_idx
   on public.orcamento_itens (projeto_id);
+create index if not exists orcamento_itens_rubrica_idx
+  on public.orcamento_itens (rubrica_id);
 
 create or replace function public.set_financeiro_updated_at()
 returns trigger

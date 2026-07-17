@@ -57,6 +57,8 @@ create index if not exists inscricoes_digitais_projeto_status_idx
   on public.inscricoes_digitais (projeto_id, status, criado_em desc);
 create index if not exists inscricoes_digitais_turma_idx
   on public.inscricoes_digitais (turma_id);
+create index if not exists inscricoes_digitais_cursista_idx
+  on public.inscricoes_digitais (cursista_id);
 create index if not exists inscricoes_digitais_cpf_idx
   on public.inscricoes_digitais ((dados ->> 'cpf'));
 
@@ -79,9 +81,37 @@ for each row execute function public.set_inscricoes_digitais_atualizado_em();
 alter table public.inscricoes_digitais enable row level security;
 
 drop policy if exists inscricoes_digitais_coordenacao on public.inscricoes_digitais;
-create policy inscricoes_digitais_coordenacao
+drop policy if exists inscricoes_digitais_professor_leitura on public.inscricoes_digitais;
+drop policy if exists inscricoes_digitais_leitura on public.inscricoes_digitais;
+drop policy if exists inscricoes_digitais_insercao on public.inscricoes_digitais;
+drop policy if exists inscricoes_digitais_atualizacao on public.inscricoes_digitais;
+drop policy if exists inscricoes_digitais_exclusao on public.inscricoes_digitais;
+
+create policy inscricoes_digitais_leitura
 on public.inscricoes_digitais
-for all
+for select
+to authenticated
+using (
+  public.has_role_any(
+    (select auth.uid()),
+    array['coordenador_geral', 'coordenador_pedagogico', 'administrativo', 'professor']
+  )
+);
+
+create policy inscricoes_digitais_insercao
+on public.inscricoes_digitais
+for insert
+to authenticated
+with check (
+  public.has_role_any(
+    (select auth.uid()),
+    array['coordenador_geral', 'coordenador_pedagogico', 'administrativo']
+  )
+);
+
+create policy inscricoes_digitais_atualizacao
+on public.inscricoes_digitais
+for update
 to authenticated
 using (
   public.has_role_any(
@@ -96,13 +126,15 @@ with check (
   )
 );
 
-drop policy if exists inscricoes_digitais_professor_leitura on public.inscricoes_digitais;
-create policy inscricoes_digitais_professor_leitura
+create policy inscricoes_digitais_exclusao
 on public.inscricoes_digitais
-for select
+for delete
 to authenticated
 using (
-  public.has_role_any((select auth.uid()), array['professor'])
+  public.has_role_any(
+    (select auth.uid()),
+    array['coordenador_geral', 'coordenador_pedagogico', 'administrativo']
+  )
 );
 
 grant select, insert, update, delete on public.inscricoes_digitais to authenticated;
