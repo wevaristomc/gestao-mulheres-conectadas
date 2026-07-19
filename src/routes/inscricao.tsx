@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, FileSignature, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileSignature, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { InscricaoDigitalFields } from "@/components/inscricoes/inscricao-digital-fields";
@@ -75,6 +75,12 @@ function InscricaoPublicaPage() {
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-8 md:py-12">
       <div className="mx-auto max-w-4xl space-y-6">
+        <Link
+          to="/mulheres-conectadas"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-primary transition hover:text-secondary"
+        >
+          <ArrowLeft className="size-4" /> Conhecer o projeto
+        </Link>
         <header className="flex flex-col gap-3 rounded-2xl bg-primary px-6 py-7 text-primary-foreground shadow-sm md:px-10">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-white/15 p-2">

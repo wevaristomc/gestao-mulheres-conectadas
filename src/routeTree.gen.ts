@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as MulheresConectadasRouteImport } from './routes/mulheres-conectadas'
 import { Route as InscricaoRouteImport } from './routes/inscricao'
 import { Route as ImprimirInscricaoRouteImport } from './routes/imprimir-inscricao'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -81,6 +82,11 @@ import { Route as AuthenticatedPedagogicoTurmasIdAulasRouteImport } from './rout
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MulheresConectadasRoute = MulheresConectadasRouteImport.update({
+  id: '/mulheres-conectadas',
+  path: '/mulheres-conectadas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InscricaoRoute = InscricaoRouteImport.update({
@@ -471,6 +477,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/imprimir-inscricao': typeof ImprimirInscricaoRoute
   '/inscricao': typeof InscricaoRoute
+  '/mulheres-conectadas': typeof MulheresConectadasRoute
   '/reset-password': typeof ResetPasswordRoute
   '/administrativo': typeof AuthenticatedAdministrativoRouteWithChildren
   '/ajuda': typeof AuthenticatedAjudaRoute
@@ -539,6 +546,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/imprimir-inscricao': typeof ImprimirInscricaoRoute
   '/inscricao': typeof InscricaoRoute
+  '/mulheres-conectadas': typeof MulheresConectadasRoute
   '/reset-password': typeof ResetPasswordRoute
   '/ajuda': typeof AuthenticatedAjudaRoute
   '/base-conhecimento': typeof AuthenticatedBaseConhecimentoRoute
@@ -602,6 +610,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/imprimir-inscricao': typeof ImprimirInscricaoRoute
   '/inscricao': typeof InscricaoRoute
+  '/mulheres-conectadas': typeof MulheresConectadasRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/administrativo': typeof AuthenticatedAdministrativoRouteWithChildren
   '/_authenticated/ajuda': typeof AuthenticatedAjudaRoute
@@ -674,6 +683,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/imprimir-inscricao'
     | '/inscricao'
+    | '/mulheres-conectadas'
     | '/reset-password'
     | '/administrativo'
     | '/ajuda'
@@ -742,6 +752,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/imprimir-inscricao'
     | '/inscricao'
+    | '/mulheres-conectadas'
     | '/reset-password'
     | '/ajuda'
     | '/base-conhecimento'
@@ -804,6 +815,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/imprimir-inscricao'
     | '/inscricao'
+    | '/mulheres-conectadas'
     | '/reset-password'
     | '/_authenticated/administrativo'
     | '/_authenticated/ajuda'
@@ -875,6 +887,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ImprimirInscricaoRoute: typeof ImprimirInscricaoRoute
   InscricaoRoute: typeof InscricaoRoute
+  MulheresConectadasRoute: typeof MulheresConectadasRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
@@ -885,6 +898,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mulheres-conectadas': {
+      id: '/mulheres-conectadas'
+      path: '/mulheres-conectadas'
+      fullPath: '/mulheres-conectadas'
+      preLoaderRoute: typeof MulheresConectadasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inscricao': {
@@ -1617,6 +1637,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ImprimirInscricaoRoute: ImprimirInscricaoRoute,
   InscricaoRoute: InscricaoRoute,
+  MulheresConectadasRoute: MulheresConectadasRoute,
   ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
