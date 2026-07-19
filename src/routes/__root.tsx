@@ -16,6 +16,7 @@ import {
   recoverStaleRouteAsset,
   reloadCurrentRoute,
 } from "../lib/navigation-recovery";
+import { ORIGEM_PUBLICA } from "../lib/site";
 
 function NotFoundComponent() {
   return (
@@ -90,26 +91,44 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Painel Mulheres Conectadas" },
+      { title: "Mulheres Conectadas | Programa Manuel Querino" },
       {
         name: "description",
         content:
-          "Painel administrativo do projeto Mulheres Conectadas — gestão pedagógica, administrativa e financeira do Termo de Fomento.",
+          "Gestão integrada do Mulheres Conectadas, projeto de qualificação social e profissional vinculado ao Programa Manuel Querino.",
       },
-      { property: "og:title", content: "Painel Mulheres Conectadas" },
+      { property: "og:title", content: "Mulheres Conectadas | Programa Manuel Querino" },
       {
         property: "og:description",
         content:
-          "Gestão integrada do projeto social de qualificação profissional Mulheres Conectadas.",
+          "Projeto de qualificação social e profissional para ampliar oportunidades por meio da formação em tecnologia.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Painel Mulheres Conectadas" },
-      { name: "description", content: "Painel administrativo web para gestão de projetos sociais de qualificação profissional." },
-      { property: "og:description", content: "Painel administrativo web para gestão de projetos sociais de qualificação profissional." },
-      { name: "twitter:description", content: "Painel administrativo web para gestão de projetos sociais de qualificação profissional." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de2d90d8-54db-41a7-ac6a-e6fcfa07b608/id-preview-04e55bce--4e838ce8-347a-4ffe-aa26-a7a179fec44f.lovable.app-1782689532352.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de2d90d8-54db-41a7-ac6a-e6fcfa07b608/id-preview-04e55bce--4e838ce8-347a-4ffe-aa26-a7a179fec44f.lovable.app-1782689532352.png" },
+      {
+        property: "og:image",
+        content: `${ORIGEM_PUBLICA}/og-image-manuel-querino.png`,
+      },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      {
+        property: "og:image:alt",
+        content: "Programa Manuel Querino de Qualificação Social e Profissional",
+      },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Mulheres Conectadas | Programa Manuel Querino" },
+      {
+        name: "twitter:description",
+        content:
+          "Projeto de qualificação social e profissional para ampliar oportunidades por meio da formação em tecnologia.",
+      },
+      {
+        name: "twitter:image",
+        content: `${ORIGEM_PUBLICA}/og-image-manuel-querino.png`,
+      },
+      {
+        name: "twitter:image:alt",
+        content: "Programa Manuel Querino de Qualificação Social e Profissional",
+      },
     ],
     links: [
       {
