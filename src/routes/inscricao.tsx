@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, FileSignature, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,23 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
 import {
   DADOS_INSCRICAO_VAZIOS,
   dadosInscricaoDigitalSchema,
   type DadosInscricaoDigital,
 } from "@/lib/inscricao-digital";
-import {
-  criarInscricaoFormulario,
-  listarTurmasInscricaoPublica,
-} from "@/lib/inscricoes-digitais.functions";
+import { criarInscricaoFormulario } from "@/lib/inscricoes-digitais.functions";
 
 export const Route = createFileRoute("/inscricao")({
   head: () => ({ meta: [{ title: "Inscrição · Mulheres Conectadas" }] }),
@@ -33,25 +23,18 @@ export const Route = createFileRoute("/inscricao")({
 });
 
 function InscricaoPublicaPage() {
-  const turmasQ = useQuery({
-    queryKey: ["inscricao-publica", "turmas"],
-    queryFn: () => listarTurmasInscricaoPublica(),
-  });
   const [dados, setDados] = useState<DadosInscricaoDigital>({ ...DADOS_INSCRICAO_VAZIOS });
-  const [turmaId, setTurmaId] = useState("");
   const [aceiteFisico, setAceiteFisico] = useState(false);
   const [website, setWebsite] = useState("");
   const [protocolo, setProtocolo] = useState<string | null>(null);
-  const turma = turmasQ.data?.find((item) => item.id === turmaId);
 
   const enviar = useMutation({
     mutationFn: async () => {
-      if (!turmaId) throw new Error("Selecione a turma desejada.");
       if (!aceiteFisico) throw new Error("Confirme que a ficha física será impressa e assinada.");
       const validacao = dadosInscricaoDigitalSchema.safeParse(dados);
       if (!validacao.success) throw new Error(validacao.error.issues[0]?.message);
       return criarInscricaoFormulario({
-        data: { turmaId, dados: validacao.data, aceiteFisico: true, website },
+        data: { dados: validacao.data, aceiteFisico: true, website },
       });
     },
     onSuccess: (resultado) => {
@@ -62,15 +45,13 @@ function InscricaoPublicaPage() {
     onError: (error: Error) => toast.error(error.message || "Não foi possível enviar a inscrição."),
   });
 
-  const imprimir = () => {
-    if (!turma) return;
+  const imprimir = () =>
     abrirFichaInscricaoParaImpressao({
       protocolo: protocolo ?? undefined,
-      projetoNome: turma.projetoNome,
-      turmaNome: turma.nome,
+      projetoNome: "Mulheres Conectadas",
+      turmaNome: "A definir pela coordenação",
       dados,
     });
-  };
 
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-8 md:py-12">
@@ -92,8 +73,9 @@ function InscricaoPublicaPage() {
             </div>
           </div>
           <p className="max-w-2xl text-sm opacity-90">
-            Preencha seus dados para entrar na fila de revisão. Depois do envio, imprima a ficha
-            preenchida: a via física assinada continua obrigatória.
+            Preencha seus dados e suas preferências de localização e turno. A coordenação fará a
+            alocação na turma mais adequada. Depois do envio, imprima a ficha preenchida: a via
+            física assinada continua obrigatória.
           </p>
         </header>
 
@@ -122,31 +104,13 @@ function InscricaoPublicaPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Dados da aluna</CardTitle>
-              <CardDescription>Os campos marcados com * são obrigatórios.</CardDescription>
+              <CardTitle>Dados da candidata</CardTitle>
+              <CardDescription>
+                Os campos marcados com * são obrigatórios. A turma será escolhida pela coordenação
+                com base no município, referência e turno informados.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-7">
-              <div className="space-y-1.5">
-                <Label>Turma desejada *</Label>
-                <Select value={turmaId || undefined} onValueChange={setTurmaId}>
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={turmasQ.isLoading ? "Carregando..." : "Selecione a turma"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(turmasQ.data ?? []).map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.nome}
-                        {item.municipio ? ` · ${item.municipio}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {turmasQ.isError ? (
-                  <p className="text-sm text-destructive">Não foi possível carregar as turmas.</p>
-                ) : null}
-              </div>
               <InscricaoDigitalFields value={dados} onChange={setDados} />
               <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
                 <Checkbox
@@ -166,19 +130,16 @@ function InscricaoPublicaPage() {
                   tabIndex={-1}
                   autoComplete="off"
                   value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
+                  onChange={(event) => setWebsite(event.target.value)}
                 />
               </div>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
                 <Button variant="ghost" asChild>
                   <Link to="/auth">Acesso da equipe</Link>
                 </Button>
-                <Button
-                  onClick={() => enviar.mutate()}
-                  disabled={enviar.isPending || turmasQ.isLoading}
-                >
-                  {enviar.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Enviar
-                  inscrição
+                <Button onClick={() => enviar.mutate()} disabled={enviar.isPending}>
+                  {enviar.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Enviar inscrição
                 </Button>
               </div>
             </CardContent>

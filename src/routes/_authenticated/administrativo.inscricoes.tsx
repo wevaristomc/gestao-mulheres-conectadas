@@ -54,10 +54,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useActiveContext, useHasRole } from "@/hooks/use-active-context";
 import { formatCpf } from "@/lib/cpf";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
-import type {
+import {
   DadosInscricaoDigital,
   InscricaoDigitalRow,
   StatusInscricaoDigital,
+  TURNO_PREFERIDO_LABEL,
+  type TurmaInscricaoPublica,
+  type TurnoPreferido,
 } from "@/lib/inscricao-digital";
 import {
   aprovarInscricao,
@@ -97,12 +100,37 @@ function badgeStatus(status: StatusInscricaoDigital) {
   );
 }
 
-function turmaNome(turma: {
-  nome?: string | null;
-  nome_curso?: string | null;
-  codigo_turma?: string | null;
-}) {
-  return turma.nome || turma.nome_curso || turma.codigo_turma || "Turma sem nome";
+function normalizarComparacao(valor: string | null | undefined): string {
+  return (valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function turnoLabel(valor: string | null | undefined): string {
+  if (!valor) return "Não informado";
+  return TURNO_PREFERIDO_LABEL[valor as TurnoPreferido] ?? valor;
+}
+
+function sugerirTurma(
+  dados: DadosInscricaoDigital,
+  turmas: TurmaInscricaoPublica[],
+): TurmaInscricaoPublica | null {
+  const municipio = normalizarComparacao(dados.municipio);
+  const turno = normalizarComparacao(dados.turno_preferido);
+  if (!municipio || !turno) return null;
+  return (
+    turmas.find((turma) => {
+      const municipioTurma = normalizarComparacao(turma.municipio);
+      const municipioCoincide =
+        municipioTurma === municipio ||
+        municipioTurma.includes(municipio) ||
+        municipio.includes(municipioTurma);
+      const turnoCoincide = turno === "qualquer" || normalizarComparacao(turma.turno) === turno;
+      return !!municipioTurma && municipioCoincide && turnoCoincide;
+    }) ?? null
+  );
 }
 
 function arquivoParaBase64(file: File): Promise<string> {
@@ -129,7 +157,10 @@ function InscricoesDigitaisTab() {
     queryKey: ["inscricao-publica", "turmas"],
     queryFn: () => listarTurmasInscricaoPublica(),
   });
-  const turmas = (turmasQ.data ?? []).filter((turma) => turma.projetoId === projetoId);
+  const turmas = useMemo(
+    () => (turmasQ.data ?? []).filter((turma) => turma.projetoId === projetoId),
+    [projetoId, turmasQ.data],
+  );
   const rows = useMemo(() => inscricoesQ.data ?? [], [inscricoesQ.data]);
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState("todos");
@@ -144,8 +175,13 @@ function InscricoesDigitaisTab() {
   useEffect(() => {
     if (!revisao) return;
     setDadosEdicao({ ...revisao.dados });
-    setTurmaEdicao(revisao.turmaId);
-  }, [revisao]);
+    setTurmaEdicao(revisao.turmaId ?? sugerirTurma(revisao.dados, turmas)?.id ?? null);
+  }, [revisao, turmas]);
+
+  const turmaSugerida = useMemo(
+    () => (dadosEdicao ? sugerirTurma(dadosEdicao, turmas) : null),
+    [dadosEdicao, turmas],
+  );
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -154,7 +190,7 @@ function InscricoesDigitaisTab() {
       if (origem !== "todas" && row.origem !== origem) return false;
       if (
         termo &&
-        !`${row.dados.nome} ${row.dados.cpf} ${row.turmaNome}`
+        !`${row.dados.nome} ${row.dados.cpf} ${row.turmaNome} ${row.dados.municipio} ${row.dados.bairro_referencia} ${row.dados.turno_preferido}`
           .toLocaleLowerCase("pt-BR")
           .includes(termo)
       )
@@ -340,6 +376,7 @@ function InscricoesDigitaisTab() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cursista</TableHead>
+                    <TableHead>Preferências</TableHead>
                     <TableHead>Turma</TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Status</TableHead>
@@ -367,6 +404,13 @@ function InscricoesDigitaisTab() {
                               CPF já cadastrado
                             </Badge>
                           ) : null}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{turnoLabel(row.dados.turno_preferido)}</div>
+                          <div className="max-w-56 text-xs text-muted-foreground">
+                            {row.dados.municipio || "Município não informado"}
+                            {row.dados.bairro_referencia ? ` · ${row.dados.bairro_referencia}` : ""}
+                          </div>
                         </TableCell>
                         <TableCell>{row.turmaNome}</TableCell>
                         <TableCell>
@@ -405,7 +449,7 @@ function InscricoesDigitaisTab() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
                         Nenhuma inscrição encontrada.
                       </TableCell>
                     </TableRow>
@@ -461,8 +505,30 @@ function InscricoesDigitaisTab() {
                       esta inscrição como duplicada.
                     </div>
                   ) : null}
+                  <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                      Preferências para alocação
+                    </p>
+                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+                      <div>
+                        <strong>Turno:</strong> {turnoLabel(dadosEdicao.turno_preferido)}
+                      </div>
+                      <div>
+                        <strong>Município:</strong> {dadosEdicao.municipio || "Não informado"}
+                      </div>
+                      <div>
+                        <strong>Referência:</strong>{" "}
+                        {dadosEdicao.bairro_referencia || "Não informada"}
+                      </div>
+                    </div>
+                  </div>
                   <div className="space-y-1.5">
-                    <Label>Turma</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Label>Turma para matrícula</Label>
+                      {!revisao.turmaId && turmaSugerida?.id === turmaEdicao ? (
+                        <Badge variant="secondary">Sugestão automática</Badge>
+                      ) : null}
+                    </div>
                     <Select
                       value={turmaEdicao ?? "sem-turma"}
                       onValueChange={(v) => setTurmaEdicao(v === "sem-turma" ? null : v)}
@@ -475,7 +541,8 @@ function InscricoesDigitaisTab() {
                         <SelectItem value="sem-turma">Selecionar turma</SelectItem>
                         {turmas.map((turma) => (
                           <SelectItem key={turma.id} value={turma.id}>
-                            {turma.nome}
+                            {turma.nome} · {turnoLabel(turma.turno)} ·{" "}
+                            {turma.localAula || turma.municipio || "Local não informado"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -521,7 +588,10 @@ function InscricoesDigitaisTab() {
                     {salvar.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Salvar revisão
                   </Button>
-                  <Button onClick={() => aprovar.mutate()} disabled={aprovar.isPending}>
+                  <Button
+                    onClick={() => aprovar.mutate()}
+                    disabled={aprovar.isPending || !turmaEdicao}
+                  >
                     {aprovar.isPending ? (
                       <Loader2 className="mr-2 size-4 animate-spin" />
                     ) : (

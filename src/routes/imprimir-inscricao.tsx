@@ -9,6 +9,12 @@ import {
   type FichaInscricaoPrint,
 } from "@/lib/ficha-inscricao-print";
 import { formatCpf } from "@/lib/cpf";
+import { TURNO_PREFERIDO_LABEL, type TurnoPreferido } from "@/lib/inscricao-digital";
+
+function turnoLabel(valor: string | undefined): string {
+  if (!valor) return "";
+  return TURNO_PREFERIDO_LABEL[valor as TurnoPreferido] ?? valor;
+}
 
 export const Route = createFileRoute("/imprimir-inscricao")({
   validateSearch: (search) => z.object({ chave: z.string().optional().default("") }).parse(search),
@@ -66,6 +72,8 @@ function FichaImpressaoPage() {
           {linha("Endereço completo", d.endereco)}
           <div className="grid grid-cols-2 gap-5">
             {linha("Município", d.municipio)}
+            {linha("Bairro ou ponto de referência", d.bairro_referencia)}
+            {linha("Turno de preferência", turnoLabel(d.turno_preferido))}
             {linha("NIS", d.nis)}
           </div>
         </section>

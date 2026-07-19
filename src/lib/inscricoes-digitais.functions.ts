@@ -17,6 +17,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const PAPEIS_LEITURA = [...PAPEIS_COORDENACAO, "professor"] as const;
 const UUID = z.string().uuid();
+const PROJETO_PADRAO_ID = "d91d2e5a-3d0b-4539-915c-5db6c95dd302";
 
 function texto(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -25,6 +26,15 @@ function texto(value: unknown): string {
 function booleano(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   return /^(true|sim|s|1)$/i.test(texto(value));
+}
+
+function turnoPreferido(value: unknown): string {
+  const normalizado = texto(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (["manha", "tarde", "noite", "qualquer"].includes(normalizado)) return normalizado;
+  return "";
 }
 
 function numeroConfianca(value: unknown): number | null {
@@ -77,6 +87,8 @@ function normalizarDadosOcr(
     email: texto(fonte.email),
     endereco: texto(fonte.endereco),
     municipio: texto(fonte.municipio),
+    bairro_referencia: texto(fonte.bairro_referencia),
+    turno_preferido: turnoPreferido(fonte.turno_preferido),
     nis: texto(fonte.nis),
     beneficiaria_programa_social: booleano(fonte.beneficiaria_programa_social),
     qual_programa_social: texto(fonte.qual_programa_social),
@@ -155,7 +167,7 @@ export const listarTurmasInscricaoPublica = createServerFn({ method: "GET" }).ha
     const { data, error } = await admin
       .from("turmas")
       .select(
-        "id, projeto_id, nome, titulo, nome_curso, codigo_turma, municipio, data_inicio, projetos(nome)",
+        "id, projeto_id, codigo, curso, nome_curso, codigo_turma, municipio, turno, local_aula, local_endereco, data_inicio, status, vagas, projetos(nome)",
       )
       .order("data_inicio", { ascending: false })
       .limit(100);
@@ -165,8 +177,15 @@ export const listarTurmasInscricaoPublica = createServerFn({ method: "GET" }).ha
       projetoId: turma.projeto_id,
       projetoNome: turma.projetos?.nome ?? "Mulheres Conectadas",
       nome:
-        turma.nome ?? turma.titulo ?? turma.nome_curso ?? turma.codigo_turma ?? "Turma sem nome",
+        turma.nome_curso ?? turma.curso ?? turma.codigo_turma ?? turma.codigo ?? "Turma sem nome",
+      codigo: turma.codigo ?? turma.codigo_turma ?? null,
+      curso: turma.nome_curso ?? turma.curso ?? null,
       municipio: turma.municipio ?? null,
+      turno: turma.turno ?? null,
+      localAula: turma.local_aula ?? null,
+      localEndereco: turma.local_endereco ?? null,
+      status: turma.status ?? null,
+      vagas: turma.vagas == null ? null : Number(turma.vagas),
       dataInicio: turma.data_inicio ?? null,
     }));
   },
@@ -176,7 +195,6 @@ export const criarInscricaoFormulario = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
       .object({
-        turmaId: UUID,
         dados: dadosInscricaoDigitalSchema,
         aceiteFisico: z.literal(true),
         website: z.string().max(0).optional().default(""),
@@ -186,17 +204,25 @@ export const criarInscricaoFormulario = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
-    const { data: turma, error: turmaError } = await admin
-      .from("turmas")
-      .select("id, projeto_id")
-      .eq("id", data.turmaId)
+    let { data: projeto, error: projetoError } = await admin
+      .from("projetos")
+      .select("id")
+      .eq("id", PROJETO_PADRAO_ID)
       .maybeSingle();
-    if (turmaError || !turma) throw new Error("A turma selecionada não está disponível.");
+    if (projetoError) {
+      throw new Error(`Não foi possível localizar o projeto padrão: ${projetoError.message}`);
+    }
+    if (!projeto) {
+      const resultado = await admin.from("projetos").select("id").limit(1).maybeSingle();
+      projeto = resultado.data;
+      projetoError = resultado.error;
+    }
+    if (projetoError || !projeto) throw new Error("O projeto padrão não está disponível.");
     const { data: inscricao, error } = await admin
       .from("inscricoes_digitais")
       .insert({
-        projeto_id: turma.projeto_id,
-        turma_id: turma.id,
+        projeto_id: projeto.id,
+        turma_id: null,
         origem: "formulario",
         status: "pendente",
         dados: data.dados,
@@ -222,7 +248,9 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
     const admin: any = getSupabaseAdmin();
     const { data: rows, error } = await admin
       .from("inscricoes_digitais")
-      .select("*, turmas(nome, titulo, nome_curso, codigo_turma)")
+      .select(
+        "*, turmas(codigo, curso, nome_curso, codigo_turma, turno, municipio, local_aula, local_endereco)",
+      )
       .eq("projeto_id", data.projetoId)
       .order("criado_em", { ascending: false });
     if (error) throw new Error(error.message);
@@ -256,10 +284,10 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
           projetoId: row.projeto_id,
           turmaId: row.turma_id,
           turmaNome:
-            row.turmas?.nome ??
-            row.turmas?.titulo ??
             row.turmas?.nome_curso ??
+            row.turmas?.curso ??
             row.turmas?.codigo_turma ??
+            row.turmas?.codigo ??
             "Turma não definida",
           origem: row.origem as OrigemInscricaoDigital,
           status: row.status as StatusInscricaoDigital,
@@ -376,6 +404,7 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
     "nome": "", "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio",
     "genero": "", "raca": "", "pcd": false, "tipo_deficiencia": "",
     "telefone": "", "email": "", "endereco": "", "municipio": "",
+    "bairro_referencia": "", "turno_preferido": "",
     "nis": "", "beneficiaria_programa_social": false,
     "qual_programa_social": "", "banco": "", "agencia": "", "conta": "",
     "observacoes": ""
@@ -383,7 +412,8 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
   "confiancas": { "nome": 0.0, "cpf": 0.0 },
   "confianca_geral": 0.0
 }
-Inclua em "confiancas" todos os campos retornados, usando valores entre 0 e 1.
+Em "turno_preferido", use somente "manha", "tarde", "noite", "qualquer" ou vazio.
+Inclua em "confiancas" todos os campos retornados, inclusive turno_preferido e bairro_referencia, usando valores entre 0 e 1.
 Campos ausentes ou ilegíveis devem ser string vazia e confiança 0.`;
       const visao = await executarVisaoRouter({
         admin,

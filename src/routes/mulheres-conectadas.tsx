@@ -11,7 +11,6 @@ import {
   HeartHandshake,
   Laptop,
   MapPin,
-  Menu,
   MonitorCog,
   PlayCircle,
   ShieldCheck,
@@ -20,17 +19,18 @@ import {
 } from "lucide-react";
 
 import { listarTurmasInscricaoPublica } from "@/lib/inscricoes-digitais.functions";
+import { listarLandingDepoimentos } from "@/lib/landing-depoimentos.functions";
 
-const DEPOIMENTOS = [
+const DEPOIMENTOS_FALLBACK = [
   {
     nome: "Andressa",
     contexto: "Aluna · Juatuba · Tarde",
-    src: "/depoimentos/andressa-juatuba-tarde.mp4",
+    videoUrl: "/depoimentos/andressa-juatuba-tarde.mp4",
   },
-  { nome: "Camila", contexto: "Aluna do projeto", src: "/depoimentos/camila.mp4" },
-  { nome: "Deisiane", contexto: "Aluna do projeto", src: "/depoimentos/deisiane.mp4" },
-  { nome: "Elisangela", contexto: "Aluna do projeto", src: "/depoimentos/elisangela.mp4" },
-  { nome: "Ivete", contexto: "Aluna do projeto", src: "/depoimentos/ivete.mp4" },
+  { nome: "Camila", contexto: "Aluna do projeto", videoUrl: "/depoimentos/camila.mp4" },
+  { nome: "Deisiane", contexto: "Aluna do projeto", videoUrl: "/depoimentos/deisiane.mp4" },
+  { nome: "Elisangela", contexto: "Aluna do projeto", videoUrl: "/depoimentos/elisangela.mp4" },
+  { nome: "Ivete", contexto: "Aluna do projeto", videoUrl: "/depoimentos/ivete.mp4" },
 ] as const;
 
 const TRILHAS = [
@@ -84,6 +84,12 @@ function MulheresConectadasLanding() {
     queryFn: () => listarTurmasInscricaoPublica(),
     staleTime: 5 * 60 * 1000,
   });
+  const depoimentosQ = useQuery({
+    queryKey: ["landing-publica", "depoimentos"],
+    queryFn: () => listarLandingDepoimentos(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const depoimentos = depoimentosQ.data?.length ? depoimentosQ.data : DEPOIMENTOS_FALLBACK;
 
   const municipios = useMemo(() => {
     const encontrados = new Set(
@@ -142,7 +148,6 @@ function MulheresConectadasLanding() {
             >
               Inscreva-se <ArrowRight className="size-4" />
             </Link>
-            <Menu className="size-5 lg:hidden" aria-hidden="true" />
           </div>
         </div>
       </header>
@@ -326,9 +331,9 @@ function MulheresConectadasLanding() {
             </div>
 
             <div className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-6 [scrollbar-color:#d15c2e_#fff5de]">
-              {DEPOIMENTOS.map((depoimento) => (
+              {depoimentos.map((depoimento) => (
                 <article
-                  key={depoimento.src}
+                  key={depoimento.videoUrl}
                   className="min-w-[82vw] snap-start overflow-hidden rounded-[2rem] border border-[#05244d]/10 bg-[#05244d] text-white shadow-xl sm:min-w-[24rem] lg:min-w-[27rem]"
                 >
                   <video
@@ -338,7 +343,7 @@ function MulheresConectadasLanding() {
                     className="aspect-video w-full bg-black object-cover"
                     aria-label={`Depoimento de ${depoimento.nome}`}
                   >
-                    <source src={depoimento.src} type="video/mp4" />
+                    <source src={depoimento.videoUrl} type="video/mp4" />
                     Seu navegador não consegue reproduzir este vídeo.
                   </video>
                   <div className="p-6">
