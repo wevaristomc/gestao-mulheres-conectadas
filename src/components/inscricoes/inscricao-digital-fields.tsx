@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,7 +14,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCpf, formatPhone, onlyDigits } from "@/lib/cpf";
 import {
+  AUTORIZACAO_DADOS_TEXTO,
   campoBaixaConfianca,
+  RENDAS_FAMILIARES,
+  SITUACOES_TRABALHO,
+  TAMANHOS_CAMISA,
   TURNOS_PREFERIDOS,
   TURNO_PREFERIDO_LABEL,
   type DadosInscricaoDigital,
@@ -38,9 +43,14 @@ export function InscricaoDigitalFields({
 }: Props) {
   const set = <K extends keyof DadosInscricaoDigital>(campo: K, valor: DadosInscricaoDigital[K]) =>
     onChange({ ...value, [campo]: valor });
-
   const baixa = (campo: string) =>
     mostrarConfianca && campoBaixaConfianca({ confiancas: value.confiancas ?? {} }, campo);
+  const setContato = (indice: number, campo: "nome" | "telefone" | "parentesco", valor: string) => {
+    const contatos = value.contatos_emergencia.map((contato, posicao) =>
+      posicao === indice ? { ...contato, [campo]: valor } : contato,
+    );
+    set("contatos_emergencia", contatos);
+  };
 
   const Field = ({
     campo,
@@ -70,16 +80,36 @@ export function InscricaoDigitalFields({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <section className="space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Dados pessoais
+          Elegibilidade e dados pessoais
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            campo="identifica_se_mulher"
+            label="Você se identifica como mulher?"
+            required
+            className="md:col-span-2"
+          >
+            <Select
+              value={value.identifica_se_mulher || undefined}
+              onValueChange={(valor) => set("identifica_se_mulher", valor)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sim">Sim</SelectItem>
+                <SelectItem value="nao">Não</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <Field campo="nome" label="Nome completo" required className="md:col-span-2">
             <Input
               value={value.nome}
-              onChange={(event) => set("nome", event.target.value)}
+              onChange={(e) => set("nome", e.target.value)}
               disabled={disabled}
               autoComplete="name"
             />
@@ -87,7 +117,7 @@ export function InscricaoDigitalFields({
           <Field campo="cpf" label="CPF" required>
             <Input
               value={value.cpf}
-              onChange={(event) => set("cpf", formatCpf(onlyDigits(event.target.value)))}
+              onChange={(e) => set("cpf", formatCpf(onlyDigits(e.target.value)))}
               disabled={disabled}
               inputMode="numeric"
               autoComplete="off"
@@ -97,14 +127,14 @@ export function InscricaoDigitalFields({
             <Input
               type="date"
               value={value.data_nascimento ?? ""}
-              onChange={(event) => set("data_nascimento", event.target.value)}
+              onChange={(e) => set("data_nascimento", e.target.value)}
               disabled={disabled}
             />
           </Field>
           <Field campo="genero" label="Gênero">
             <Select
               value={value.genero || undefined}
-              onValueChange={(valor) => set("genero", valor)}
+              onValueChange={(v) => set("genero", v)}
               disabled={disabled}
             >
               <SelectTrigger>
@@ -122,7 +152,7 @@ export function InscricaoDigitalFields({
           <Field campo="raca" label="Raça/cor">
             <Select
               value={value.raca || undefined}
-              onValueChange={(valor) => set("raca", valor)}
+              onValueChange={(v) => set("raca", v)}
               disabled={disabled}
             >
               <SelectTrigger>
@@ -148,7 +178,7 @@ export function InscricaoDigitalFields({
           <Field campo="telefone" label="Telefone/WhatsApp" required>
             <Input
               value={value.telefone}
-              onChange={(event) => set("telefone", formatPhone(event.target.value))}
+              onChange={(e) => set("telefone", formatPhone(e.target.value))}
               disabled={disabled}
               inputMode="tel"
               autoComplete="tel"
@@ -158,7 +188,7 @@ export function InscricaoDigitalFields({
             <Input
               type="email"
               value={value.email ?? ""}
-              onChange={(event) => set("email", event.target.value)}
+              onChange={(e) => set("email", e.target.value)}
               disabled={disabled}
               autoComplete="email"
             />
@@ -166,7 +196,7 @@ export function InscricaoDigitalFields({
           <Field campo="endereco" label="Endereço completo" required className="md:col-span-2">
             <Input
               value={value.endereco}
-              onChange={(event) => set("endereco", event.target.value)}
+              onChange={(e) => set("endereco", e.target.value)}
               disabled={disabled}
               autoComplete="street-address"
             />
@@ -174,7 +204,7 @@ export function InscricaoDigitalFields({
           <Field campo="municipio" label="Município" required>
             <Input
               value={value.municipio}
-              onChange={(event) => set("municipio", event.target.value)}
+              onChange={(e) => set("municipio", e.target.value)}
               disabled={disabled}
               autoComplete="address-level2"
             />
@@ -182,16 +212,15 @@ export function InscricaoDigitalFields({
           <Field campo="bairro_referencia" label="Bairro ou ponto de referência" required>
             <Input
               value={value.bairro_referencia ?? ""}
-              onChange={(event) => set("bairro_referencia", event.target.value)}
+              onChange={(e) => set("bairro_referencia", e.target.value)}
               disabled={disabled}
-              autoComplete="address-level3"
               placeholder="Ex.: Bairro Novo, próximo à praça"
             />
           </Field>
           <Field campo="turno_preferido" label="Turno de preferência" required>
             <Select
               value={value.turno_preferido || undefined}
-              onValueChange={(valor) => set("turno_preferido", valor)}
+              onValueChange={(v) => set("turno_preferido", v)}
               disabled={disabled}
             >
               <SelectTrigger>
@@ -206,10 +235,21 @@ export function InscricaoDigitalFields({
               </SelectContent>
             </Select>
           </Field>
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <Label htmlFor="inscricao-outros-turnos">
+              Possui disponibilidade em mais de um turno?
+            </Label>
+            <Switch
+              id="inscricao-outros-turnos"
+              checked={value.disponibilidade_outros_turnos}
+              onCheckedChange={(v) => set("disponibilidade_outros_turnos", v)}
+              disabled={disabled}
+            />
+          </div>
           <Field campo="nis" label="NIS">
             <Input
               value={value.nis ?? ""}
-              onChange={(event) => set("nis", onlyDigits(event.target.value))}
+              onChange={(e) => set("nis", onlyDigits(e.target.value))}
               disabled={disabled}
               inputMode="numeric"
             />
@@ -227,7 +267,7 @@ export function InscricaoDigitalFields({
             <Switch
               id="inscricao-pcd"
               checked={value.pcd}
-              onCheckedChange={(checked) => set("pcd", checked)}
+              onCheckedChange={(v) => set("pcd", v)}
               disabled={disabled}
             />
           </div>
@@ -236,7 +276,7 @@ export function InscricaoDigitalFields({
             <Switch
               id="inscricao-programa"
               checked={value.beneficiaria_programa_social}
-              onCheckedChange={(checked) => set("beneficiaria_programa_social", checked)}
+              onCheckedChange={(v) => set("beneficiaria_programa_social", v)}
               disabled={disabled}
             />
           </div>
@@ -244,7 +284,7 @@ export function InscricaoDigitalFields({
             <Field campo="tipo_deficiencia" label="Tipo de deficiência">
               <Input
                 value={value.tipo_deficiencia ?? ""}
-                onChange={(event) => set("tipo_deficiencia", event.target.value)}
+                onChange={(e) => set("tipo_deficiencia", e.target.value)}
                 disabled={disabled}
               />
             </Field>
@@ -253,12 +293,155 @@ export function InscricaoDigitalFields({
             <Field campo="qual_programa_social" label="Qual programa social?">
               <Input
                 value={value.qual_programa_social ?? ""}
-                onChange={(event) => set("qual_programa_social", event.target.value)}
+                onChange={(e) => set("qual_programa_social", e.target.value)}
                 disabled={disabled}
               />
             </Field>
           ) : null}
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Perfil socioeconômico
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field campo="tamanho_camisa" label="Tamanho da camisa" required>
+            <Select
+              value={value.tamanho_camisa || undefined}
+              onValueChange={(v) => set("tamanho_camisa", v)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {TAMANHOS_CAMISA.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field campo="situacao_trabalho" label="Situação de trabalho" required>
+            <Select
+              value={value.situacao_trabalho || undefined}
+              onValueChange={(v) => set("situacao_trabalho", v)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {SITUACOES_TRABALHO.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field campo="renda_familiar" label="Renda familiar" required>
+            <Select
+              value={value.renda_familiar || undefined}
+              onValueChange={(v) => set("renda_familiar", v)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {RENDAS_FAMILIARES.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            campo="motivo_participacao"
+            label="Por que você deseja participar do curso?"
+            required
+            className="md:col-span-2"
+          >
+            <Textarea
+              value={value.motivo_participacao}
+              onChange={(e) => set("motivo_participacao", e.target.value)}
+              disabled={disabled}
+              rows={4}
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Saúde e emergência
+        </h3>
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+          <Label htmlFor="inscricao-restricao">Possui restrição alimentar?</Label>
+          <Switch
+            id="inscricao-restricao"
+            checked={value.restricao_alimentar}
+            onCheckedChange={(v) => set("restricao_alimentar", v)}
+            disabled={disabled}
+          />
+        </div>
+        {value.restricao_alimentar ? (
+          <Field campo="qual_restricao_alimentar" label="Qual restrição alimentar?" required>
+            <Input
+              value={value.qual_restricao_alimentar ?? ""}
+              onChange={(e) => set("qual_restricao_alimentar", e.target.value)}
+              disabled={disabled}
+            />
+          </Field>
+        ) : null}
+        {value.contatos_emergencia.map((contato, indice) => (
+          <div key={indice} className="space-y-3 rounded-lg border p-4">
+            <p className="text-sm font-medium">
+              Contato de emergência {indice + 1}
+              {indice === 0 ? " *" : " (opcional)"}
+            </p>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Field
+                campo={`contatos_emergencia.${indice}.nome`}
+                label="Nome"
+                required={indice === 0}
+              >
+                <Input
+                  value={contato.nome}
+                  onChange={(e) => setContato(indice, "nome", e.target.value)}
+                  disabled={disabled}
+                />
+              </Field>
+              <Field
+                campo={`contatos_emergencia.${indice}.telefone`}
+                label="Telefone"
+                required={indice === 0}
+              >
+                <Input
+                  value={contato.telefone}
+                  onChange={(e) => setContato(indice, "telefone", formatPhone(e.target.value))}
+                  disabled={disabled}
+                  inputMode="tel"
+                />
+              </Field>
+              <Field
+                campo={`contatos_emergencia.${indice}.parentesco`}
+                label="Parentesco/relação"
+                required={indice === 0}
+              >
+                <Input
+                  value={contato.parentesco}
+                  onChange={(e) => setContato(indice, "parentesco", e.target.value)}
+                  disabled={disabled}
+                />
+              </Field>
+            </div>
+          </div>
+        ))}
       </section>
 
       <section className="space-y-3">
@@ -290,11 +473,33 @@ export function InscricaoDigitalFields({
           <Field campo="observacoes" label="Observações" className="md:col-span-3">
             <Textarea
               value={value.observacoes ?? ""}
-              onChange={(event) => set("observacoes", event.target.value)}
+              onChange={(e) => set("observacoes", e.target.value)}
               disabled={disabled}
               rows={3}
             />
           </Field>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Autorização
+        </h3>
+        <div
+          className={cn(
+            "flex items-start gap-3 rounded-lg border p-4",
+            baixa("autorizacao_dados") && "border-amber-400 bg-amber-50",
+          )}
+        >
+          <Checkbox
+            id="autorizacao-dados"
+            checked={value.autorizacao_dados}
+            onCheckedChange={(v) => set("autorizacao_dados", v === true)}
+            disabled={disabled}
+          />
+          <Label htmlFor="autorizacao-dados" className="font-normal leading-relaxed">
+            <strong>Sim, autorizo. *</strong> {AUTORIZACAO_DADOS_TEXTO}
+          </Label>
         </div>
       </section>
     </div>

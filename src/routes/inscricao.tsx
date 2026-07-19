@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, FileSignature, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileSignature, Loader2, Paperclip, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { InscricaoDigitalFields } from "@/components/inscricoes/inscricao-digital-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
 import {
@@ -22,23 +23,77 @@ export const Route = createFileRoute("/inscricao")({
   component: InscricaoPublicaPage,
 });
 
+const TAMANHO_MAXIMO = 10 * 1024 * 1024;
+const MIMES_ACEITOS = ["application/pdf", "image/png", "image/jpeg"];
+
+function arquivoParaBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error(`Não foi possível ler ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
+}
+
+function validarArquivo(file: File, rotulo: string): void {
+  if (!MIMES_ACEITOS.includes(file.type)) {
+    throw new Error(`${rotulo}: envie um arquivo PDF, JPG ou PNG.`);
+  }
+  if (file.size > TAMANHO_MAXIMO) {
+    throw new Error(`${rotulo}: o arquivo deve ter no máximo 10 MB.`);
+  }
+}
+
 function InscricaoPublicaPage() {
-  const [dados, setDados] = useState<DadosInscricaoDigital>({ ...DADOS_INSCRICAO_VAZIOS });
+  const [dados, setDados] = useState<DadosInscricaoDigital>({
+    ...DADOS_INSCRICAO_VAZIOS,
+    contatos_emergencia: DADOS_INSCRICAO_VAZIOS.contatos_emergencia.map((contato) => ({
+      ...contato,
+    })),
+  });
+  const [documento, setDocumento] = useState<File | null>(null);
+  const [comprovante, setComprovante] = useState<File | null>(null);
   const [aceiteFisico, setAceiteFisico] = useState(false);
   const [website, setWebsite] = useState("");
   const [protocolo, setProtocolo] = useState<string | null>(null);
 
   const enviar = useMutation({
     mutationFn: async () => {
+      if (dados.identifica_se_mulher === "nao") {
+        throw new Error(
+          "Agradecemos muito o seu interesse. Conforme o edital, esta edição do Mulheres Conectadas é destinada exclusivamente a mulheres e, por isso, não conseguimos concluir esta inscrição.",
+        );
+      }
+      if (!documento) throw new Error("Anexe um documento com foto (RG ou CNH).");
+      validarArquivo(documento, "Documento com foto");
+      if (comprovante) validarArquivo(comprovante, "Comprovante de endereço");
       if (!aceiteFisico) throw new Error("Confirme que a ficha física será impressa e assinada.");
       const validacao = dadosInscricaoDigitalSchema.safeParse(dados);
       if (!validacao.success) throw new Error(validacao.error.issues[0]?.message);
+      const [documentoBase64, comprovanteBase64] = await Promise.all([
+        arquivoParaBase64(documento),
+        comprovante ? arquivoParaBase64(comprovante) : Promise.resolve(null),
+      ]);
       return criarInscricaoFormulario({
-        data: { dados: validacao.data, aceiteFisico: true, website },
+        data: {
+          dados: validacao.data,
+          aceiteFisico: true,
+          website,
+          documento: {
+            nome: documento.name,
+            mime: documento.type,
+            base64: documentoBase64,
+          },
+          comprovante:
+            comprovanteBase64 && comprovante
+              ? { nome: comprovante.name, mime: comprovante.type, base64: comprovanteBase64 }
+              : undefined,
+        },
       });
     },
     onSuccess: (resultado) => {
       setProtocolo(resultado.id);
+      setDados((atual) => ({ ...atual, autorizacao_dados_em: resultado.autorizacaoDadosEm }));
       window.scrollTo({ top: 0, behavior: "smooth" });
       toast.success("Inscrição enviada para revisão.");
     },
@@ -73,7 +128,7 @@ function InscricaoPublicaPage() {
             </div>
           </div>
           <p className="max-w-2xl text-sm opacity-90">
-            Preencha seus dados e suas preferências de localização e turno. A coordenação fará a
+            Preencha seus dados, preferências e contatos de emergência. A coordenação fará a
             alocação na turma mais adequada. Depois do envio, imprima a ficha preenchida: a via
             física assinada continua obrigatória.
           </p>
@@ -87,7 +142,8 @@ function InscricaoPublicaPage() {
                 <div>
                   <CardTitle className="text-emerald-950">Inscrição recebida</CardTitle>
                   <CardDescription className="mt-1 text-emerald-800">
-                    Protocolo {protocolo}. Agora imprima a ficha, confira os dados e assine.
+                    Protocolo {protocolo}. Seus documentos foram arquivados com segurança. Agora
+                    imprima a ficha, confira os dados e assine.
                   </CardDescription>
                 </div>
               </div>
@@ -112,6 +168,46 @@ function InscricaoPublicaPage() {
             </CardHeader>
             <CardContent className="space-y-7">
               <InscricaoDigitalFields value={dados} onChange={setDados} />
+
+              <section className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Documentos
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    PDF, JPG ou PNG, com até 10 MB por arquivo. Fotos serão arquivadas em PDF.
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 rounded-lg border p-4">
+                    <Label htmlFor="documento-foto">Documento com foto (RG/CNH) *</Label>
+                    <Input
+                      id="documento-foto"
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg"
+                      onChange={(e) => setDocumento(e.target.files?.[0] ?? null)}
+                    />
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Paperclip className="size-3" />
+                      {documento?.name ?? "Arquivo obrigatório"}
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-lg border p-4">
+                    <Label htmlFor="comprovante-endereco">Comprovante de endereço (opcional)</Label>
+                    <Input
+                      id="comprovante-endereco"
+                      type="file"
+                      accept="application/pdf,image/png,image/jpeg"
+                      onChange={(e) => setComprovante(e.target.files?.[0] ?? null)}
+                    />
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Paperclip className="size-3" />
+                      {comprovante?.name ?? "Pode ser entregue depois à coordenação"}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
               <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
                 <Checkbox
                   id="aceite-fisico"
@@ -130,7 +226,7 @@ function InscricaoPublicaPage() {
                   tabIndex={-1}
                   autoComplete="off"
                   value={website}
-                  onChange={(event) => setWebsite(event.target.value)}
+                  onChange={(e) => setWebsite(e.target.value)}
                 />
               </div>
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">

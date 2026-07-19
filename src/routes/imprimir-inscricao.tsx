@@ -9,7 +9,11 @@ import {
   type FichaInscricaoPrint,
 } from "@/lib/ficha-inscricao-print";
 import { formatCpf } from "@/lib/cpf";
-import { TURNO_PREFERIDO_LABEL, type TurnoPreferido } from "@/lib/inscricao-digital";
+import {
+  AUTORIZACAO_DADOS_TEXTO,
+  TURNO_PREFERIDO_LABEL,
+  type TurnoPreferido,
+} from "@/lib/inscricao-digital";
 
 function turnoLabel(valor: string | undefined): string {
   if (!valor) return "";
@@ -44,7 +48,7 @@ function FichaImpressaoPage() {
           <Printer className="mr-2 size-4" /> Imprimir / Salvar PDF
         </Button>
       </div>
-      <article className="min-h-[277mm] border-2 border-black p-7 font-sans">
+      <article className="border-2 border-black p-7 font-sans print:border-0 print:p-4">
         <header className="mb-6 border-b-2 border-black pb-4 text-center">
           <p className="text-sm font-semibold uppercase">
             {ficha.projetoNome || "Mulheres Conectadas"}
@@ -53,8 +57,10 @@ function FichaImpressaoPage() {
           <p className="mt-2 text-sm">Turma: {ficha.turmaNome}</p>
           {ficha.protocolo ? <p className="text-xs">Protocolo digital: {ficha.protocolo}</p> : null}
         </header>
-        <section className="space-y-2">
-          <h2 className="font-bold uppercase">1. Dados pessoais</h2>
+
+        <section className="space-y-2 break-inside-avoid">
+          <h2 className="font-bold uppercase">1. Elegibilidade e dados pessoais</h2>
+          {linha("Identifica-se como mulher", d.identifica_se_mulher === "sim" ? "Sim" : "Não")}
           {linha("Nome completo", d.nome)}
           <div className="grid grid-cols-2 gap-5">
             {linha("CPF", formatCpf(d.cpf))}
@@ -63,8 +69,9 @@ function FichaImpressaoPage() {
             {linha("Raça/cor", d.raca)}
           </div>
         </section>
-        <section className="mt-5 space-y-2">
-          <h2 className="font-bold uppercase">2. Contato e endereço</h2>
+
+        <section className="mt-5 space-y-2 break-inside-avoid">
+          <h2 className="font-bold uppercase">2. Contato, endereço e preferência</h2>
           <div className="grid grid-cols-2 gap-5">
             {linha("Telefone/WhatsApp", d.telefone)}
             {linha("E-mail", d.email)}
@@ -74,12 +81,17 @@ function FichaImpressaoPage() {
             {linha("Município", d.municipio)}
             {linha("Bairro ou ponto de referência", d.bairro_referencia)}
             {linha("Turno de preferência", turnoLabel(d.turno_preferido))}
+            {linha("Disponível em outros turnos", d.disponibilidade_outros_turnos ? "Sim" : "Não")}
             {linha("NIS", d.nis)}
+            {linha("Tamanho da camisa", d.tamanho_camisa)}
           </div>
         </section>
-        <section className="mt-5 space-y-2">
-          <h2 className="font-bold uppercase">3. Dados sociais</h2>
+
+        <section className="mt-5 space-y-2 break-inside-avoid">
+          <h2 className="font-bold uppercase">3. Perfil socioeconômico</h2>
           <div className="grid grid-cols-2 gap-5">
+            {linha("Situação de trabalho", d.situacao_trabalho)}
+            {linha("Renda familiar", d.renda_familiar)}
             {linha("Pessoa com deficiência (PCD)", d.pcd ? "Sim" : "Não")}
             {linha("Tipo de deficiência", d.tipo_deficiencia)}
             {linha(
@@ -88,9 +100,24 @@ function FichaImpressaoPage() {
             )}
             {linha("Programa social", d.qual_programa_social)}
           </div>
+          {linha("Motivo para participar do curso", d.motivo_participacao)}
         </section>
-        <section className="mt-5 space-y-2">
-          <h2 className="font-bold uppercase">4. Dados bancários</h2>
+
+        <section className="mt-5 space-y-2 break-inside-avoid">
+          <h2 className="font-bold uppercase">4. Saúde e contatos de emergência</h2>
+          {linha("Restrição alimentar", d.restricao_alimentar ? "Sim" : "Não")}
+          {linha("Qual restrição", d.qual_restricao_alimentar)}
+          {d.contatos_emergencia.map((contato, indice) => (
+            <div key={indice} className="grid grid-cols-3 gap-5">
+              {linha(`Contato ${indice + 1} — nome`, contato.nome)}
+              {linha("Telefone", contato.telefone)}
+              {linha("Parentesco/relação", contato.parentesco)}
+            </div>
+          ))}
+        </section>
+
+        <section className="mt-5 space-y-2 break-inside-avoid">
+          <h2 className="font-bold uppercase">5. Dados bancários</h2>
           <div className="grid grid-cols-3 gap-5">
             {linha("Banco", d.banco)}
             {linha("Agência", d.agencia)}
@@ -98,17 +125,28 @@ function FichaImpressaoPage() {
           </div>
           {linha("Observações", d.observacoes)}
         </section>
-        <section className="mt-10 text-sm leading-relaxed">
+
+        <section className="mt-7 break-inside-avoid text-xs leading-relaxed">
+          <h2 className="mb-2 font-bold uppercase">6. Autorização de dados</h2>
           <p>
-            Declaro que as informações acima são verdadeiras e autorizo seu uso para fins de
-            matrícula, acompanhamento e prestação de contas do projeto, conforme a legislação
-            aplicável.
+            <strong>{d.autorizacao_dados ? "(X) Sim, autorizo." : "( ) Sim, autorizo."}</strong>{" "}
+            {AUTORIZACAO_DADOS_TEXTO}
           </p>
-          <div className="mt-16 grid grid-cols-2 gap-16 text-center">
+          {d.autorizacao_dados_em ? (
+            <p className="mt-1">
+              Consentimento digital registrado em:{" "}
+              {new Date(d.autorizacao_dados_em).toLocaleString("pt-BR")}
+            </p>
+          ) : null}
+          <p className="mt-5">
+            Declaro que as informações acima são verdadeiras e estou ciente das regras de
+            participação e da obrigatoriedade desta ficha física assinada.
+          </p>
+          <div className="mt-16 grid grid-cols-2 gap-16 text-center text-sm">
             <div className="border-t border-black pt-2">Assinatura da aluna</div>
             <div className="border-t border-black pt-2">Responsável pela matrícula</div>
           </div>
-          <div className="mt-12 border-t border-black pt-2 text-center">Local e data</div>
+          <div className="mt-12 border-t border-black pt-2 text-center text-sm">Local e data</div>
         </section>
       </article>
     </main>
