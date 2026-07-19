@@ -19,7 +19,43 @@ import {
 import { criarInscricaoFormulario } from "@/lib/inscricoes-digitais.functions";
 
 export const Route = createFileRoute("/inscricao")({
-  head: () => ({ meta: [{ title: "Inscrição · Mulheres Conectadas" }] }),
+  head: () => ({
+    meta: [
+      { title: "Inscrição · Mulheres Conectadas" },
+      {
+        name: "description",
+        content:
+          "Preencha sua inscrição gratuita no Mulheres Conectadas e informe suas preferências de turno e localização.",
+      },
+      { property: "og:title", content: "Inscrição · Mulheres Conectadas" },
+      {
+        property: "og:description",
+        content:
+          "Inscreva-se para a formação gratuita em tecnologia do Mulheres Conectadas. A coordenação fará a alocação na turma mais adequada.",
+      },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "/marca/og-mulheres-conectadas.png" },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      {
+        property: "og:image:alt",
+        content: "Mulher desenvolvendo habilidades digitais no projeto Mulheres Conectadas",
+      },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Inscrição · Mulheres Conectadas" },
+      {
+        name: "twitter:description",
+        content:
+          "Preencha sua inscrição gratuita e informe suas preferências de turno e localização.",
+      },
+      { name: "twitter:image", content: "/marca/og-mulheres-conectadas.png" },
+      {
+        name: "twitter:image:alt",
+        content: "Mulher desenvolvendo habilidades digitais no projeto Mulheres Conectadas",
+      },
+    ],
+  }),
   component: InscricaoPublicaPage,
 });
 

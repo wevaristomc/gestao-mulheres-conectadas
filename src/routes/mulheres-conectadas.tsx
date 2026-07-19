@@ -73,6 +73,29 @@ export const Route = createFileRoute("/mulheres-conectadas")({
           "Tecnologia para ampliar caminhos: formação digital, suporte de TI e programação web para mulheres.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/marca/og-mulheres-conectadas.png" },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      {
+        property: "og:image:alt",
+        content: "Mulher desenvolvendo habilidades digitais no projeto Mulheres Conectadas",
+      },
+      { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "twitter:title",
+        content: "Mulheres Conectadas · Formação gratuita em tecnologia",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Tecnologia para ampliar caminhos: formação digital, suporte de TI e programação web para mulheres.",
+      },
+      { name: "twitter:image", content: "/marca/og-mulheres-conectadas.png" },
+      {
+        name: "twitter:image:alt",
+        content: "Mulher desenvolvendo habilidades digitais no projeto Mulheres Conectadas",
+      },
     ],
   }),
   component: MulheresConectadasLanding,
@@ -368,19 +391,19 @@ function MulheresConectadasLanding() {
                     Sua inscrição começa agora.
                   </h2>
                   <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
-                    Preencha seus dados, escolha uma turma e envie o formulário para a fila de
-                    revisão da coordenação.
+                    Preencha seus dados e informe suas preferências de turno e localização. A
+                    coordenação analisa a inscrição e faz a alocação na turma mais adequada.
                   </p>
                   <div className="mt-8 grid gap-4 sm:grid-cols-3">
                     <Step
                       number="1"
                       title="Preencha"
-                      text="Informe seus dados e a turma desejada."
+                      text="Informe seus dados e suas preferências de turno e localização."
                     />
                     <Step
                       number="2"
-                      title="Envie"
-                      text="A coordenação fará a análise da inscrição."
+                      title="Aguarde"
+                      text="A coordenação analisa a inscrição e faz a alocação na turma."
                     />
                     <Step
                       number="3"
