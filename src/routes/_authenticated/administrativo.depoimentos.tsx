@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
+import { DepoimentoCard } from "@/components/landing/depoimento-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -156,16 +157,12 @@ function DepoimentosLandingPage() {
               {depoimentos.map((depoimento, indice) => (
                 <Card key={depoimento.id} className={depoimento.ativo ? "" : "opacity-65"}>
                   <CardContent className="space-y-4 p-4">
-                    <video
-                      className="aspect-video w-full rounded-lg bg-black object-contain"
-                      src={depoimento.videoUrl}
-                      controls
-                      preload="metadata"
+                    <DepoimentoCard
+                      nome={depoimento.nome}
+                      contexto={depoimento.contexto}
+                      videoUrl={depoimento.videoUrl}
+                      variante="admin"
                     />
-                    <div>
-                      <div className="font-semibold">{depoimento.nome}</div>
-                      <div className="text-sm text-muted-foreground">{depoimento.contexto}</div>
-                    </div>
                     <div className="flex items-center justify-between rounded-md border p-2">
                       <Label htmlFor={`ativo-${depoimento.id}`}>Visível na landing</Label>
                       <Switch
