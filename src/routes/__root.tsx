@@ -16,6 +16,7 @@ import {
   recoverStaleRouteAsset,
   reloadCurrentRoute,
 } from "../lib/navigation-recovery";
+import { ORIGEM_PUBLICA } from "../lib/site";
 
 function NotFoundComponent() {
   return (
@@ -103,7 +104,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Projeto de qualificação social e profissional para ampliar oportunidades por meio da formação em tecnologia.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/og-image-manuel-querino.png" },
+      {
+        property: "og:image",
+        content: `${ORIGEM_PUBLICA}/og-image-manuel-querino.png`,
+      },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       {
@@ -117,7 +121,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Projeto de qualificação social e profissional para ampliar oportunidades por meio da formação em tecnologia.",
       },
-      { name: "twitter:image", content: "/og-image-manuel-querino.png" },
+      {
+        name: "twitter:image",
+        content: `${ORIGEM_PUBLICA}/og-image-manuel-querino.png`,
+      },
       {
         name: "twitter:image:alt",
         content: "Programa Manuel Querino de Qualificação Social e Profissional",
