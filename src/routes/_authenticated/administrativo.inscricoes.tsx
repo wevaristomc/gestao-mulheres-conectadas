@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock3,
   Eye,
+  ExternalLink,
   FileScan,
   FileText,
   Loader2,
@@ -111,6 +112,54 @@ function normalizarComparacao(valor: string | null | undefined): string {
 function turnoLabel(valor: string | null | undefined): string {
   if (!valor) return "Não informado";
   return TURNO_PREFERIDO_LABEL[valor as TurnoPreferido] ?? valor;
+}
+function calcularIdade(dataNascimento: string | null | undefined): number | null {
+  if (!dataNascimento) return null;
+  const nascimento = new Date(`${dataNascimento}T12:00:00`);
+  if (Number.isNaN(nascimento.getTime()) || nascimento > new Date()) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const aniversarioPassou =
+    hoje.getMonth() > nascimento.getMonth() ||
+    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() >= nascimento.getDate());
+  if (!aniversarioPassou) idade -= 1;
+  return idade;
+}
+
+function AnexoPreview({
+  titulo,
+  url,
+  ausente,
+}: {
+  titulo: string;
+  url: string | null;
+  ausente: string;
+}) {
+  return (
+    <section className="space-y-2 rounded-lg border bg-background p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{titulo}</h3>
+        {url ? (
+          <Button variant="ghost" size="sm" asChild>
+            <a href={url} target="_blank" rel="noreferrer">
+              <ExternalLink className="mr-1 size-3" /> Abrir
+            </a>
+          </Button>
+        ) : null}
+      </div>
+      {url ? (
+        <iframe
+          title={titulo}
+          src={url}
+          className="h-[42vh] min-h-72 w-full rounded-md border bg-white"
+        />
+      ) : (
+        <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          {ausente}
+        </p>
+      )}
+    </section>
+  );
 }
 
 function sugerirTurma(
@@ -395,6 +444,11 @@ function InscricoesDigitaisTab() {
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {formatCpf(row.dados.cpf) || "CPF não identificado"}
+                            {calcularIdade(row.dados.data_nascimento) != null ? (
+                              <div className="text-xs text-muted-foreground">
+                                {calcularIdade(row.dados.data_nascimento)} anos
+                              </div>
+                            ) : null}
                           </div>
                           {row.duplicidade.encontrada && row.status !== "aprovada" ? (
                             <Badge
@@ -474,28 +528,40 @@ function InscricoesDigitaisTab() {
           </DialogHeader>
           {revisao && dadosEdicao ? (
             <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-2">
-              <div className="min-h-[320px] border-b bg-muted/30 p-4 lg:border-b-0 lg:border-r">
-                {revisao.arquivoUrl ? (
-                  <iframe
-                    title="Ficha escaneada"
-                    src={revisao.arquivoUrl}
-                    className="h-full min-h-[70vh] w-full rounded-md border bg-white"
+              <ScrollArea className="h-[calc(94vh-150px)] border-b bg-muted/30 lg:border-b-0 lg:border-r">
+                <div className="space-y-4 p-4">
+                  {revisao.arquivoUrl ? (
+                    <AnexoPreview
+                      titulo="Ficha escaneada"
+                      url={revisao.arquivoUrl}
+                      ausente="Ficha escaneada não disponível."
+                    />
+                  ) : (
+                    <div className="flex min-h-48 flex-col items-center justify-center rounded-md border border-dashed bg-background text-center text-muted-foreground">
+                      <FileText className="mb-3 size-10" />
+                      <p>Inscrição recebida pelo formulário digital.</p>
+                      <Button
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => imprimir(revisao, dadosEdicao)}
+                      >
+                        <Printer className="mr-2 size-4" />
+                        Visualizar ficha preenchida
+                      </Button>
+                    </div>
+                  )}
+                  <AnexoPreview
+                    titulo="Documento com foto (RG/CNH)"
+                    url={revisao.documentoUrl}
+                    ausente="Documento com foto não anexado."
                   />
-                ) : (
-                  <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-md border border-dashed text-center text-muted-foreground">
-                    <FileText className="mb-3 size-10" />
-                    <p>Inscrição recebida pelo formulário digital.</p>
-                    <Button
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => imprimir(revisao, dadosEdicao)}
-                    >
-                      <Printer className="mr-2 size-4" />
-                      Visualizar ficha preenchida
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  <AnexoPreview
+                    titulo="Comprovante de endereço"
+                    url={revisao.comprovanteUrl}
+                    ausente="Comprovante pendente; poderá ser cobrado pela coordenação."
+                  />
+                </div>
+              </ScrollArea>
               <ScrollArea className="h-[calc(94vh-150px)]">
                 <div className="space-y-5 p-6">
                   {revisao.duplicidade.encontrada ? (
@@ -509,7 +575,7 @@ function InscricoesDigitaisTab() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                       Preferências para alocação
                     </p>
-                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
                       <div>
                         <strong>Turno:</strong> {turnoLabel(dadosEdicao.turno_preferido)}
                       </div>
@@ -519,6 +585,11 @@ function InscricoesDigitaisTab() {
                       <div>
                         <strong>Referência:</strong>{" "}
                         {dadosEdicao.bairro_referencia || "Não informada"}
+                      </div>
+                      <div>
+                        <strong>Idade:</strong>{" "}
+                        {calcularIdade(dadosEdicao.data_nascimento) ?? "Não calculada"}
+                        {calcularIdade(dadosEdicao.data_nascimento) != null ? " anos" : ""}
                       </div>
                     </div>
                   </div>

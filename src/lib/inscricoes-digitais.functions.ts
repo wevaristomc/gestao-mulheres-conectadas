@@ -37,6 +37,30 @@ function turnoPreferido(value: unknown): string {
   return "";
 }
 
+function escolhaPermitida(value: unknown, permitidos: readonly string[]): string {
+  const candidato = texto(value);
+  return permitidos.includes(candidato) ? candidato : "";
+}
+
+function contatosEmergencia(value: unknown): Array<{
+  nome: string;
+  telefone: string;
+  parentesco: string;
+}> {
+  const contatos = Array.isArray(value) ? value : [];
+  return [0, 1].map((indice) => {
+    const contato =
+      contatos[indice] && typeof contatos[indice] === "object"
+        ? (contatos[indice] as Record<string, unknown>)
+        : {};
+    return {
+      nome: texto(contato.nome),
+      telefone: texto(contato.telefone),
+      parentesco: texto(contato.parentesco),
+    };
+  });
+}
+
 function numeroConfianca(value: unknown): number | null {
   const numero = Number(value);
   if (!Number.isFinite(numero)) return null;
@@ -89,6 +113,25 @@ function normalizarDadosOcr(
     municipio: texto(fonte.municipio),
     bairro_referencia: texto(fonte.bairro_referencia),
     turno_preferido: turnoPreferido(fonte.turno_preferido),
+    identifica_se_mulher: escolhaPermitida(fonte.identifica_se_mulher, ["sim", "nao"]),
+    disponibilidade_outros_turnos: booleano(fonte.disponibilidade_outros_turnos),
+    tamanho_camisa: escolhaPermitida(fonte.tamanho_camisa, ["P", "M", "G", "GG", "XG"]),
+    restricao_alimentar: booleano(fonte.restricao_alimentar),
+    qual_restricao_alimentar: texto(fonte.qual_restricao_alimentar),
+    situacao_trabalho: escolhaPermitida(fonte.situacao_trabalho, [
+      "Sim, com carteira assinada",
+      "Sim, informal/autônoma",
+      "Não estou trabalhando",
+    ]),
+    renda_familiar: escolhaPermitida(fonte.renda_familiar, [
+      "Até 1 salário mínimo",
+      "De 1 a 2 salários mínimos",
+      "Acima de 2 salários mínimos",
+    ]),
+    motivo_participacao: texto(fonte.motivo_participacao),
+    contatos_emergencia: contatosEmergencia(fonte.contatos_emergencia),
+    autorizacao_dados: booleano(fonte.autorizacao_dados),
+    autorizacao_dados_em: texto(fonte.autorizacao_dados_em),
     nis: texto(fonte.nis),
     beneficiaria_programa_social: booleano(fonte.beneficiaria_programa_social),
     qual_programa_social: texto(fonte.qual_programa_social),
@@ -147,6 +190,38 @@ async function imagemParaPdf(base64: string, mime: string): Promise<string> {
   return base64DeBytes(new Uint8Array(doc.output("arraybuffer")));
 }
 
+const TAMANHO_MAXIMO_ANEXO = 10 * 1024 * 1024;
+
+async function anexoEmPdf(base64: string, mime: string): Promise<Uint8Array> {
+  let bytes: Uint8Array;
+  try {
+    bytes = bytesDeBase64(base64);
+  } catch {
+    throw new Error("O anexo enviado está corrompido ou não pôde ser lido.");
+  }
+  if (bytes.byteLength > TAMANHO_MAXIMO_ANEXO) {
+    throw new Error("Cada anexo deve ter no máximo 10 MB.");
+  }
+  const mimeNormalizado = mime.toLowerCase();
+  const assinaturaValida =
+    (mimeNormalizado === "application/pdf" &&
+      bytes[0] === 0x25 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x44 &&
+      bytes[3] === 0x46) ||
+    (mimeNormalizado === "image/png" &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47) ||
+    (mimeNormalizado === "image/jpeg" && bytes[0] === 0xff && bytes[1] === 0xd8);
+  if (!assinaturaValida) {
+    throw new Error("O conteúdo do anexo não corresponde ao formato PDF, JPG ou PNG informado.");
+  }
+  if (mime.toLowerCase() === "application/pdf") return bytes;
+  return bytesDeBase64(await imagemParaPdf(base64, mime));
+}
+
 async function urlArquivo(admin: any, path: string | null): Promise<string | null> {
   if (!path) return null;
   if (path.startsWith("evidencias:")) {
@@ -191,6 +266,12 @@ export const listarTurmasInscricaoPublica = createServerFn({ method: "GET" }).ha
   },
 );
 
+const AnexoPublicoSchema = z.object({
+  nome: z.string().trim().min(1).max(240),
+  mime: z.string().regex(/^(application\/pdf|image\/(png|jpe?g))$/i),
+  base64: z.string().min(20).max(15_000_000),
+});
+
 export const criarInscricaoFormulario = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
@@ -198,10 +279,21 @@ export const criarInscricaoFormulario = createServerFn({ method: "POST" })
         dados: dadosInscricaoDigitalSchema,
         aceiteFisico: z.literal(true),
         website: z.string().max(0).optional().default(""),
+        documento: AnexoPublicoSchema,
+        comprovante: AnexoPublicoSchema.optional(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
+    if (data.dados.identifica_se_mulher !== "sim") {
+      throw new Error(
+        "Agradecemos muito o seu interesse. Conforme o edital, esta edição do Mulheres Conectadas é destinada exclusivamente a mulheres e, por isso, não conseguimos concluir esta inscrição.",
+      );
+    }
+    if (!data.dados.autorizacao_dados) {
+      throw new Error("Autorize o uso dos dados para enviar a inscrição.");
+    }
+
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
     let { data: projeto, error: projetoError } = await admin
@@ -218,24 +310,76 @@ export const criarInscricaoFormulario = createServerFn({ method: "POST" })
       projetoError = resultado.error;
     }
     if (projetoError || !projeto) throw new Error("O projeto padrão não está disponível.");
-    const { data: inscricao, error } = await admin
-      .from("inscricoes_digitais")
-      .insert({
-        projeto_id: projeto.id,
-        turma_id: null,
-        origem: "formulario",
-        status: "pendente",
-        dados: data.dados,
-      })
-      .select("id, criado_em")
-      .single();
-    if (error) {
-      if (/inscricoes_digitais|schema cache|does not exist/i.test(error.message)) {
-        throw new Error("A migração de matrícula digital ainda não foi aplicada no Supabase.");
+
+    const inscricaoId = crypto.randomUUID();
+    const documentoStoragePath = `inscricoes/${inscricaoId}/documento.pdf`;
+    const comprovanteStoragePath = data.comprovante
+      ? `inscricoes/${inscricaoId}/comprovante.pdf`
+      : null;
+    const enviados: string[] = [];
+
+    try {
+      const documentoBytes = await anexoEmPdf(data.documento.base64, data.documento.mime);
+      const { error: documentoError } = await admin.storage
+        .from("evidencias")
+        .upload(documentoStoragePath, documentoBytes, {
+          contentType: "application/pdf",
+          upsert: false,
+        });
+      if (documentoError)
+        throw new Error(`Falha ao arquivar o documento: ${documentoError.message}`);
+      enviados.push(documentoStoragePath);
+
+      if (data.comprovante && comprovanteStoragePath) {
+        const comprovanteBytes = await anexoEmPdf(data.comprovante.base64, data.comprovante.mime);
+        const { error: comprovanteError } = await admin.storage
+          .from("evidencias")
+          .upload(comprovanteStoragePath, comprovanteBytes, {
+            contentType: "application/pdf",
+            upsert: false,
+          });
+        if (comprovanteError) {
+          throw new Error(`Falha ao arquivar o comprovante: ${comprovanteError.message}`);
+        }
+        enviados.push(comprovanteStoragePath);
       }
-      throw new Error(error.message);
+
+      const criadoEm = new Date().toISOString();
+      const { data: inscricao, error } = await admin
+        .from("inscricoes_digitais")
+        .insert({
+          id: inscricaoId,
+          projeto_id: projeto.id,
+          turma_id: null,
+          origem: "formulario",
+          status: "pendente",
+          dados: { ...data.dados, autorizacao_dados_em: criadoEm },
+          documento_path: `evidencias:${documentoStoragePath}`,
+          comprovante_path: comprovanteStoragePath ? `evidencias:${comprovanteStoragePath}` : null,
+        })
+        .select("id, criado_em")
+        .single();
+      if (error) {
+        if (
+          /inscricoes_digitais|documento_path|comprovante_path|schema cache|does not exist/i.test(
+            error.message,
+          )
+        ) {
+          throw new Error(
+            "A migração do perfil completo da inscrição ainda não foi aplicada no Supabase.",
+          );
+        }
+        throw new Error(error.message);
+      }
+      return {
+        id: inscricao.id as string,
+        criadoEm: inscricao.criado_em as string,
+        autorizacaoDadosEm: criadoEm,
+      };
+    } catch (error) {
+      if (enviados.length) await admin.storage.from("evidencias").remove(enviados);
+      throw error;
     }
-    return { id: inscricao.id as string, criadoEm: inscricao.criado_em as string };
   });
 
 const ProjetoInput = z.object({ projetoId: UUID });
@@ -294,6 +438,10 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
           dados: normalizarDadosOcr(row.dados, row.dados?.confiancas),
           arquivoOrigemPath: row.arquivo_origem_path,
           arquivoUrl: await urlArquivo(admin, row.arquivo_origem_path),
+          documentoPath: row.documento_path ?? null,
+          documentoUrl: await urlArquivo(admin, row.documento_path),
+          comprovantePath: row.comprovante_path ?? null,
+          comprovanteUrl: await urlArquivo(admin, row.comprovante_path),
           confiancaOcr: row.confianca_ocr == null ? null : Number(row.confianca_ocr),
           cursistaId: row.cursista_id,
           revisadoPor: row.revisado_por,
@@ -405,16 +553,28 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
     "genero": "", "raca": "", "pcd": false, "tipo_deficiencia": "",
     "telefone": "", "email": "", "endereco": "", "municipio": "",
     "bairro_referencia": "", "turno_preferido": "",
+    "identifica_se_mulher": "", "disponibilidade_outros_turnos": false,
+    "tamanho_camisa": "", "restricao_alimentar": false,
+    "qual_restricao_alimentar": "", "situacao_trabalho": "",
+    "renda_familiar": "", "motivo_participacao": "",
+    "contatos_emergencia": [
+      { "nome": "", "telefone": "", "parentesco": "" },
+      { "nome": "", "telefone": "", "parentesco": "" }
+    ],
+    "autorizacao_dados": false, "autorizacao_dados_em": "",
     "nis": "", "beneficiaria_programa_social": false,
     "qual_programa_social": "", "banco": "", "agencia": "", "conta": "",
     "observacoes": ""
   },
-  "confiancas": { "nome": 0.0, "cpf": 0.0 },
+  "confiancas": { "nome": 0.0, "cpf": 0.0, "contatos_emergencia.0.nome": 0.0 },
   "confianca_geral": 0.0
 }
-Em "turno_preferido", use somente "manha", "tarde", "noite", "qualquer" ou vazio.
-Inclua em "confiancas" todos os campos retornados, inclusive turno_preferido e bairro_referencia, usando valores entre 0 e 1.
-Campos ausentes ou ilegíveis devem ser string vazia e confiança 0.`;
+Use "sim" ou "nao" em identifica_se_mulher; P, M, G, GG ou XG em tamanho_camisa;
+"manha", "tarde", "noite" ou "qualquer" em turno_preferido; e os textos exatos das opções
+de situação de trabalho e renda familiar apresentados na ficha.
+Inclua em "confiancas" todos os campos retornados, inclusive os campos dos dois contatos,
+turno_preferido e bairro_referencia, usando valores entre 0 e 1.
+Campos ausentes ou ilegíveis devem ser string vazia (ou false) e confiança 0.`;
       const visao = await executarVisaoRouter({
         admin,
         processo: "matricula_ocr",
@@ -586,6 +746,16 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
       banco: dados.banco || null,
       agencia: dados.agencia || null,
       conta: dados.conta || null,
+      tamanho_camisa: dados.tamanho_camisa,
+      restricao_alimentar: dados.restricao_alimentar
+        ? dados.qual_restricao_alimentar || "Sim"
+        : "Não",
+      situacao_trabalho: dados.situacao_trabalho,
+      renda_familiar: dados.renda_familiar,
+      motivo_participacao: dados.motivo_participacao,
+      contatos_emergencia: dados.contatos_emergencia,
+      autorizacao_dados: dados.autorizacao_dados,
+      autorizacao_dados_em: dados.autorizacao_dados_em || row.criado_em,
     };
     let beneficiariaCriada = false;
     let cursistaCriada = false;
@@ -610,7 +780,11 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
         status: "inscrita",
         data_inscricao: new Date().toISOString().slice(0, 10),
         ficha_inscricao_url: await urlArquivo(admin, row.arquivo_origem_path),
-        observacao_importacao: `Inscrição digital ${row.id} (${row.origem}).`,
+        observacao_importacao: [
+          `Inscrição digital ${row.id} (${row.origem}).`,
+          row.documento_path ? `Documento: ${row.documento_path}.` : "Documento não anexado.",
+          row.comprovante_path ? `Comprovante: ${row.comprovante_path}.` : "Comprovante pendente.",
+        ].join(" "),
       });
       if (matriculaError) throw new Error(matriculaError.message);
       const { error: updateError } = await admin
