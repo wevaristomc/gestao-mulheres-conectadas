@@ -4,7 +4,10 @@ import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, FileSignature, Loader2, Paperclip, Printer } from "lucide-react";
 import { toast } from "sonner";
 
-import { InscricaoDigitalFields } from "@/components/inscricoes/inscricao-digital-fields";
+import {
+  InscricaoDigitalFields,
+  MENSAGEM_INELEGIBILIDADE,
+} from "@/components/inscricoes/inscricao-digital-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,9 +107,7 @@ function InscricaoPublicaPage() {
   const enviar = useMutation({
     mutationFn: async () => {
       if (dados.identifica_se_mulher === "nao") {
-        throw new Error(
-          "Agradecemos muito o seu interesse. Conforme o edital, esta edição do Mulheres Conectadas é destinada exclusivamente a mulheres e, por isso, não conseguimos concluir esta inscrição.",
-        );
+        throw new Error(MENSAGEM_INELEGIBILIDADE);
       }
       if (!documento) throw new Error("Anexe um documento com foto (RG ou CNH).");
       validarArquivo(documento, "Documento com foto");
@@ -151,6 +152,8 @@ function InscricaoPublicaPage() {
       turmaNome: "A definir pela coordenação",
       dados,
     });
+
+  const inelegivel = dados.identifica_se_mulher === "nao";
 
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-8 md:py-12">
@@ -211,9 +214,9 @@ function InscricaoPublicaPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-7">
-              <InscricaoDigitalFields value={dados} onChange={setDados} />
+              <InscricaoDigitalFields value={dados} onChange={setDados} encerrarSeInelegivel />
 
-              <section className="space-y-4">
+              <section hidden={inelegivel} className="space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                     Documentos
@@ -252,7 +255,10 @@ function InscricaoPublicaPage() {
                 </div>
               </section>
 
-              <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
+              <div
+                hidden={inelegivel}
+                className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4"
+              >
                 <Checkbox
                   id="aceite-fisico"
                   checked={aceiteFisico}
@@ -273,7 +279,10 @@ function InscricaoPublicaPage() {
                   onChange={(e) => setWebsite(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+              <div
+                hidden={inelegivel}
+                className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between"
+              >
                 <Button variant="ghost" asChild>
                   <Link to="/auth">Acesso da equipe</Link>
                 </Button>

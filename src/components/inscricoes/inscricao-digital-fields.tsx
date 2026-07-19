@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,11 +29,41 @@ import { cn } from "@/lib/utils";
 const GENEROS = ["Feminino", "Masculino", "Não-binário", "Prefere não informar"];
 const RACAS = ["Branca", "Preta", "Parda", "Amarela", "Indígena", "Prefere não informar"];
 
+export const MENSAGEM_INELEGIBILIDADE =
+  "Agradecemos muito o seu interesse. Conforme o edital, esta edição do Mulheres Conectadas é destinada exclusivamente a mulheres e, por isso, não conseguimos concluir esta inscrição.";
+
+type FieldProps = {
+  campo: string;
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+  className?: string;
+  destacar: boolean;
+};
+
+function Field({ campo, label, required, children, className, destacar }: FieldProps) {
+  return (
+    <div className={cn("space-y-1.5", className)} data-field={campo}>
+      <Label className={cn(destacar && "text-amber-700")}>
+        {label}
+        {required ? " *" : ""}
+        {destacar ? (
+          <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal">
+            <AlertTriangle className="size-3" /> baixa confiança
+          </span>
+        ) : null}
+      </Label>
+      <div className={cn(destacar && "rounded-md ring-2 ring-amber-300")}>{children}</div>
+    </div>
+  );
+}
+
 type Props = {
   value: DadosInscricaoDigital;
   onChange: (value: DadosInscricaoDigital) => void;
   mostrarConfianca?: boolean;
   disabled?: boolean;
+  encerrarSeInelegivel?: boolean;
 };
 
 export function InscricaoDigitalFields({
@@ -40,11 +71,16 @@ export function InscricaoDigitalFields({
   onChange,
   mostrarConfianca = false,
   disabled = false,
+  encerrarSeInelegivel = false,
 }: Props) {
   const set = <K extends keyof DadosInscricaoDigital>(campo: K, valor: DadosInscricaoDigital[K]) =>
     onChange({ ...value, [campo]: valor });
   const baixa = (campo: string) =>
     mostrarConfianca && campoBaixaConfianca({ confiancas: value.confiancas ?? {} }, campo);
+  const propsCampo = (campo: string) => ({
+    campo,
+    destacar: baixa(campo),
+  });
   const setContato = (indice: number, campo: "nome" | "telefone" | "parentesco", valor: string) => {
     const contatos = value.contatos_emergencia.map((contato, posicao) =>
       posicao === indice ? { ...contato, [campo]: valor } : contato,
@@ -52,32 +88,7 @@ export function InscricaoDigitalFields({
     set("contatos_emergencia", contatos);
   };
 
-  const Field = ({
-    campo,
-    label,
-    required,
-    children,
-    className,
-  }: {
-    campo: string;
-    label: string;
-    required?: boolean;
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <div className={cn("space-y-1.5", className)}>
-      <Label className={cn(baixa(campo) && "text-amber-700")}>
-        {label}
-        {required ? " *" : ""}
-        {baixa(campo) ? (
-          <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal">
-            <AlertTriangle className="size-3" /> baixa confiança
-          </span>
-        ) : null}
-      </Label>
-      <div className={cn(baixa(campo) && "rounded-md ring-2 ring-amber-300")}>{children}</div>
-    </div>
-  );
+  const inelegivel = encerrarSeInelegivel && value.identifica_se_mulher === "nao";
 
   return (
     <div className="space-y-7">
@@ -87,7 +98,7 @@ export function InscricaoDigitalFields({
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
           <Field
-            campo="identifica_se_mulher"
+            {...propsCampo("identifica_se_mulher")}
             label="Você se identifica como mulher?"
             required
             className="md:col-span-2"
@@ -106,76 +117,87 @@ export function InscricaoDigitalFields({
               </SelectContent>
             </Select>
           </Field>
-          <Field campo="nome" label="Nome completo" required className="md:col-span-2">
-            <Input
-              value={value.nome}
-              onChange={(e) => set("nome", e.target.value)}
-              disabled={disabled}
-              autoComplete="name"
-            />
-          </Field>
-          <Field campo="cpf" label="CPF" required>
-            <Input
-              value={value.cpf}
-              onChange={(e) => set("cpf", formatCpf(onlyDigits(e.target.value)))}
-              disabled={disabled}
-              inputMode="numeric"
-              autoComplete="off"
-            />
-          </Field>
-          <Field campo="data_nascimento" label="Data de nascimento">
-            <Input
-              type="date"
-              value={value.data_nascimento ?? ""}
-              onChange={(e) => set("data_nascimento", e.target.value)}
-              disabled={disabled}
-            />
-          </Field>
-          <Field campo="genero" label="Gênero">
-            <Select
-              value={value.genero || undefined}
-              onValueChange={(v) => set("genero", v)}
-              disabled={disabled}
+          {inelegivel ? (
+            <div
+              role="alert"
+              className="flex gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-950 md:col-span-2"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {GENEROS.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field campo="raca" label="Raça/cor">
-            <Select
-              value={value.raca || undefined}
-              onValueChange={(v) => set("raca", v)}
-              disabled={disabled}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {RACAS.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700" />
+              <p>{MENSAGEM_INELEGIBILIDADE}</p>
+            </div>
+          ) : null}
+          <div className="contents" hidden={inelegivel}>
+            <Field {...propsCampo("nome")} label="Nome completo" required className="md:col-span-2">
+              <Input
+                value={value.nome}
+                onChange={(e) => set("nome", e.target.value)}
+                disabled={disabled}
+                autoComplete="name"
+              />
+            </Field>
+            <Field {...propsCampo("cpf")} label="CPF" required>
+              <Input
+                value={value.cpf}
+                onChange={(e) => set("cpf", formatCpf(onlyDigits(e.target.value)))}
+                disabled={disabled}
+                inputMode="numeric"
+                autoComplete="off"
+              />
+            </Field>
+            <Field {...propsCampo("data_nascimento")} label="Data de nascimento">
+              <Input
+                type="date"
+                value={value.data_nascimento ?? ""}
+                onChange={(e) => set("data_nascimento", e.target.value)}
+                disabled={disabled}
+              />
+            </Field>
+            <Field {...propsCampo("genero")} label="Gênero">
+              <Select
+                value={value.genero || undefined}
+                onValueChange={(v) => set("genero", v)}
+                disabled={disabled}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GENEROS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field {...propsCampo("raca")} label="Raça/cor">
+              <Select
+                value={value.raca || undefined}
+                onValueChange={(v) => set("raca", v)}
+                disabled={disabled}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RACAS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section hidden={inelegivel} className="space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Contato e endereço
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field campo="telefone" label="Telefone/WhatsApp" required>
+          <Field {...propsCampo("telefone")} label="Telefone/WhatsApp" required>
             <Input
               value={value.telefone}
               onChange={(e) => set("telefone", formatPhone(e.target.value))}
@@ -184,7 +206,7 @@ export function InscricaoDigitalFields({
               autoComplete="tel"
             />
           </Field>
-          <Field campo="email" label="E-mail">
+          <Field {...propsCampo("email")} label="E-mail">
             <Input
               type="email"
               value={value.email ?? ""}
@@ -193,7 +215,12 @@ export function InscricaoDigitalFields({
               autoComplete="email"
             />
           </Field>
-          <Field campo="endereco" label="Endereço completo" required className="md:col-span-2">
+          <Field
+            {...propsCampo("endereco")}
+            label="Endereço completo"
+            required
+            className="md:col-span-2"
+          >
             <Input
               value={value.endereco}
               onChange={(e) => set("endereco", e.target.value)}
@@ -201,7 +228,7 @@ export function InscricaoDigitalFields({
               autoComplete="street-address"
             />
           </Field>
-          <Field campo="municipio" label="Município" required>
+          <Field {...propsCampo("municipio")} label="Município" required>
             <Input
               value={value.municipio}
               onChange={(e) => set("municipio", e.target.value)}
@@ -209,7 +236,11 @@ export function InscricaoDigitalFields({
               autoComplete="address-level2"
             />
           </Field>
-          <Field campo="bairro_referencia" label="Bairro ou ponto de referência" required>
+          <Field
+            {...propsCampo("bairro_referencia")}
+            label="Bairro ou ponto de referência"
+            required
+          >
             <Input
               value={value.bairro_referencia ?? ""}
               onChange={(e) => set("bairro_referencia", e.target.value)}
@@ -217,7 +248,7 @@ export function InscricaoDigitalFields({
               placeholder="Ex.: Bairro Novo, próximo à praça"
             />
           </Field>
-          <Field campo="turno_preferido" label="Turno de preferência" required>
+          <Field {...propsCampo("turno_preferido")} label="Turno de preferência" required>
             <Select
               value={value.turno_preferido || undefined}
               onValueChange={(v) => set("turno_preferido", v)}
@@ -246,7 +277,7 @@ export function InscricaoDigitalFields({
               disabled={disabled}
             />
           </div>
-          <Field campo="nis" label="NIS">
+          <Field {...propsCampo("nis")} label="NIS">
             <Input
               value={value.nis ?? ""}
               onChange={(e) => set("nis", onlyDigits(e.target.value))}
@@ -257,7 +288,7 @@ export function InscricaoDigitalFields({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section hidden={inelegivel} className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Dados sociais e PCD
         </h3>
@@ -281,7 +312,7 @@ export function InscricaoDigitalFields({
             />
           </div>
           {value.pcd ? (
-            <Field campo="tipo_deficiencia" label="Tipo de deficiência">
+            <Field {...propsCampo("tipo_deficiencia")} label="Tipo de deficiência">
               <Input
                 value={value.tipo_deficiencia ?? ""}
                 onChange={(e) => set("tipo_deficiencia", e.target.value)}
@@ -290,7 +321,7 @@ export function InscricaoDigitalFields({
             </Field>
           ) : null}
           {value.beneficiaria_programa_social ? (
-            <Field campo="qual_programa_social" label="Qual programa social?">
+            <Field {...propsCampo("qual_programa_social")} label="Qual programa social?">
               <Input
                 value={value.qual_programa_social ?? ""}
                 onChange={(e) => set("qual_programa_social", e.target.value)}
@@ -301,12 +332,12 @@ export function InscricaoDigitalFields({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section hidden={inelegivel} className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Perfil socioeconômico
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field campo="tamanho_camisa" label="Tamanho da camisa" required>
+          <Field {...propsCampo("tamanho_camisa")} label="Tamanho da camisa" required>
             <Select
               value={value.tamanho_camisa || undefined}
               onValueChange={(v) => set("tamanho_camisa", v)}
@@ -324,7 +355,7 @@ export function InscricaoDigitalFields({
               </SelectContent>
             </Select>
           </Field>
-          <Field campo="situacao_trabalho" label="Situação de trabalho" required>
+          <Field {...propsCampo("situacao_trabalho")} label="Situação de trabalho" required>
             <Select
               value={value.situacao_trabalho || undefined}
               onValueChange={(v) => set("situacao_trabalho", v)}
@@ -342,7 +373,7 @@ export function InscricaoDigitalFields({
               </SelectContent>
             </Select>
           </Field>
-          <Field campo="renda_familiar" label="Renda familiar" required>
+          <Field {...propsCampo("renda_familiar")} label="Renda familiar" required>
             <Select
               value={value.renda_familiar || undefined}
               onValueChange={(v) => set("renda_familiar", v)}
@@ -361,7 +392,7 @@ export function InscricaoDigitalFields({
             </Select>
           </Field>
           <Field
-            campo="motivo_participacao"
+            {...propsCampo("motivo_participacao")}
             label="Por que você deseja participar do curso?"
             required
             className="md:col-span-2"
@@ -376,7 +407,7 @@ export function InscricaoDigitalFields({
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section hidden={inelegivel} className="space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Saúde e emergência
         </h3>
@@ -390,7 +421,11 @@ export function InscricaoDigitalFields({
           />
         </div>
         {value.restricao_alimentar ? (
-          <Field campo="qual_restricao_alimentar" label="Qual restrição alimentar?" required>
+          <Field
+            {...propsCampo("qual_restricao_alimentar")}
+            label="Qual restrição alimentar?"
+            required
+          >
             <Input
               value={value.qual_restricao_alimentar ?? ""}
               onChange={(e) => set("qual_restricao_alimentar", e.target.value)}
@@ -406,7 +441,7 @@ export function InscricaoDigitalFields({
             </p>
             <div className="grid gap-4 md:grid-cols-3">
               <Field
-                campo={`contatos_emergencia.${indice}.nome`}
+                {...propsCampo(`contatos_emergencia.${indice}.nome`)}
                 label="Nome"
                 required={indice === 0}
               >
@@ -417,7 +452,7 @@ export function InscricaoDigitalFields({
                 />
               </Field>
               <Field
-                campo={`contatos_emergencia.${indice}.telefone`}
+                {...propsCampo(`contatos_emergencia.${indice}.telefone`)}
                 label="Telefone"
                 required={indice === 0}
               >
@@ -429,7 +464,7 @@ export function InscricaoDigitalFields({
                 />
               </Field>
               <Field
-                campo={`contatos_emergencia.${indice}.parentesco`}
+                {...propsCampo(`contatos_emergencia.${indice}.parentesco`)}
                 label="Parentesco/relação"
                 required={indice === 0}
               >
@@ -444,33 +479,33 @@ export function InscricaoDigitalFields({
         ))}
       </section>
 
-      <section className="space-y-3">
+      <section hidden={inelegivel} className="space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Dados bancários e observações
         </h3>
         <div className="grid gap-4 md:grid-cols-3">
-          <Field campo="banco" label="Banco">
+          <Field {...propsCampo("banco")} label="Banco">
             <Input
               value={value.banco ?? ""}
               onChange={(e) => set("banco", e.target.value)}
               disabled={disabled}
             />
           </Field>
-          <Field campo="agencia" label="Agência">
+          <Field {...propsCampo("agencia")} label="Agência">
             <Input
               value={value.agencia ?? ""}
               onChange={(e) => set("agencia", e.target.value)}
               disabled={disabled}
             />
           </Field>
-          <Field campo="conta" label="Conta">
+          <Field {...propsCampo("conta")} label="Conta">
             <Input
               value={value.conta ?? ""}
               onChange={(e) => set("conta", e.target.value)}
               disabled={disabled}
             />
           </Field>
-          <Field campo="observacoes" label="Observações" className="md:col-span-3">
+          <Field {...propsCampo("observacoes")} label="Observações" className="md:col-span-3">
             <Textarea
               value={value.observacoes ?? ""}
               onChange={(e) => set("observacoes", e.target.value)}
@@ -481,7 +516,7 @@ export function InscricaoDigitalFields({
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section hidden={inelegivel} className="space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Autorização
         </h3>
