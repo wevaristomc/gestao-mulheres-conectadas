@@ -20,6 +20,7 @@ import {
 
 import { listarTurmasInscricaoPublica } from "@/lib/inscricoes-digitais.functions";
 import { listarLandingDepoimentos } from "@/lib/landing-depoimentos.functions";
+import { ORIGEM_PUBLICA } from "@/lib/site";
 
 const DEPOIMENTOS_FALLBACK = [
   {
@@ -73,7 +74,11 @@ export const Route = createFileRoute("/mulheres-conectadas")({
           "Tecnologia para ampliar caminhos: formação digital, suporte de TI e programação web para mulheres.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/marca/og-mulheres-conectadas.png" },
+      { property: "og:url", content: `${ORIGEM_PUBLICA}/mulheres-conectadas` },
+      {
+        property: "og:image",
+        content: `${ORIGEM_PUBLICA}/marca/og-mulheres-conectadas.png`,
+      },
       { property: "og:image:type", content: "image/png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
@@ -91,7 +96,10 @@ export const Route = createFileRoute("/mulheres-conectadas")({
         content:
           "Tecnologia para ampliar caminhos: formação digital, suporte de TI e programação web para mulheres.",
       },
-      { name: "twitter:image", content: "/marca/og-mulheres-conectadas.png" },
+      {
+        name: "twitter:image",
+        content: `${ORIGEM_PUBLICA}/marca/og-mulheres-conectadas.png`,
+      },
       {
         name: "twitter:image:alt",
         content: "Mulher desenvolvendo habilidades digitais no projeto Mulheres Conectadas",
