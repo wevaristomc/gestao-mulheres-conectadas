@@ -12,7 +12,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCpf, formatPhone, onlyDigits } from "@/lib/cpf";
-import { campoBaixaConfianca, type DadosInscricaoDigital } from "@/lib/inscricao-digital";
+import {
+  campoBaixaConfianca,
+  TURNOS_PREFERIDOS,
+  TURNO_PREFERIDO_LABEL,
+  type DadosInscricaoDigital,
+} from "@/lib/inscricao-digital";
 import { cn } from "@/lib/utils";
 
 const GENEROS = ["Feminino", "Masculino", "Não-binário", "Prefere não informar"];
@@ -173,6 +178,33 @@ export function InscricaoDigitalFields({
               disabled={disabled}
               autoComplete="address-level2"
             />
+          </Field>
+          <Field campo="bairro_referencia" label="Bairro ou ponto de referência" required>
+            <Input
+              value={value.bairro_referencia ?? ""}
+              onChange={(event) => set("bairro_referencia", event.target.value)}
+              disabled={disabled}
+              autoComplete="address-level3"
+              placeholder="Ex.: Bairro Novo, próximo à praça"
+            />
+          </Field>
+          <Field campo="turno_preferido" label="Turno de preferência" required>
+            <Select
+              value={value.turno_preferido || undefined}
+              onValueChange={(valor) => set("turno_preferido", valor)}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o turno" />
+              </SelectTrigger>
+              <SelectContent>
+                {TURNOS_PREFERIDOS.map((turno) => (
+                  <SelectItem key={turno} value={turno}>
+                    {TURNO_PREFERIDO_LABEL[turno]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field campo="nis" label="NIS">
             <Input

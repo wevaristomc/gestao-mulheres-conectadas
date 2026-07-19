@@ -71,6 +71,7 @@ import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
 import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
 import { Route as AuthenticatedAdministrativoInscricoesRouteImport } from './routes/_authenticated/administrativo.inscricoes'
+import { Route as AuthenticatedAdministrativoDepoimentosRouteImport } from './routes/_authenticated/administrativo.depoimentos'
 import { Route as AuthenticatedAdministrativoBeneficiosRouteImport } from './routes/_authenticated/administrativo.beneficios'
 import { Route as AuthenticatedPedagogicoTurmasIdRouteImport } from './routes/_authenticated/pedagogico.turmas.$id'
 import { Route as AuthenticatedPedagogicoTurmasIdIndexRouteImport } from './routes/_authenticated/pedagogico.turmas.$id.index'
@@ -429,6 +430,12 @@ const AuthenticatedAdministrativoInscricoesRoute =
     path: '/inscricoes',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
+const AuthenticatedAdministrativoDepoimentosRoute =
+  AuthenticatedAdministrativoDepoimentosRouteImport.update({
+    id: '/depoimentos',
+    path: '/depoimentos',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
 const AuthenticatedAdministrativoBeneficiosRoute =
   AuthenticatedAdministrativoBeneficiosRouteImport.update({
     id: '/beneficios',
@@ -496,6 +503,7 @@ export interface FileRoutesByFullPath {
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/administrativo/depoimentos': typeof AuthenticatedAdministrativoDepoimentosRoute
   '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
@@ -559,6 +567,7 @@ export interface FileRoutesByTo {
   '/trocar-senha': typeof AuthenticatedTrocarSenhaRoute
   '/': typeof AuthenticatedIndexRoute
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/administrativo/depoimentos': typeof AuthenticatedAdministrativoDepoimentosRoute
   '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
@@ -630,6 +639,7 @@ export interface FileRoutesById {
   '/_authenticated/whatsapp': typeof AuthenticatedWhatsappRouteWithChildren
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
+  '/_authenticated/administrativo/depoimentos': typeof AuthenticatedAdministrativoDepoimentosRoute
   '/_authenticated/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
@@ -702,6 +712,7 @@ export interface FileRouteTypes {
     | '/trocar-senha'
     | '/whatsapp'
     | '/administrativo/beneficios'
+    | '/administrativo/depoimentos'
     | '/administrativo/inscricoes'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
@@ -765,6 +776,7 @@ export interface FileRouteTypes {
     | '/trocar-senha'
     | '/'
     | '/administrativo/beneficios'
+    | '/administrativo/depoimentos'
     | '/administrativo/inscricoes'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
@@ -835,6 +847,7 @@ export interface FileRouteTypes {
     | '/_authenticated/whatsapp'
     | '/_authenticated/'
     | '/_authenticated/administrativo/beneficios'
+    | '/_authenticated/administrativo/depoimentos'
     | '/_authenticated/administrativo/inscricoes'
     | '/_authenticated/administrativo/materiais'
     | '/_authenticated/administrativo/qualificacao'
@@ -1327,6 +1340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdministrativoInscricoesRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
     }
+    '/_authenticated/administrativo/depoimentos': {
+      id: '/_authenticated/administrativo/depoimentos'
+      path: '/depoimentos'
+      fullPath: '/administrativo/depoimentos'
+      preLoaderRoute: typeof AuthenticatedAdministrativoDepoimentosRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
     '/_authenticated/administrativo/beneficios': {
       id: '/_authenticated/administrativo/beneficios'
       path: '/beneficios'
@@ -1381,6 +1401,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdministrativoRouteChildren {
   AuthenticatedAdministrativoBeneficiosRoute: typeof AuthenticatedAdministrativoBeneficiosRoute
+  AuthenticatedAdministrativoDepoimentosRoute: typeof AuthenticatedAdministrativoDepoimentosRoute
   AuthenticatedAdministrativoInscricoesRoute: typeof AuthenticatedAdministrativoInscricoesRoute
   AuthenticatedAdministrativoMateriaisRoute: typeof AuthenticatedAdministrativoMateriaisRoute
   AuthenticatedAdministrativoQualificacaoRoute: typeof AuthenticatedAdministrativoQualificacaoRoute
@@ -1391,6 +1412,8 @@ const AuthenticatedAdministrativoRouteChildren: AuthenticatedAdministrativoRoute
   {
     AuthenticatedAdministrativoBeneficiosRoute:
       AuthenticatedAdministrativoBeneficiosRoute,
+    AuthenticatedAdministrativoDepoimentosRoute:
+      AuthenticatedAdministrativoDepoimentosRoute,
     AuthenticatedAdministrativoInscricoesRoute:
       AuthenticatedAdministrativoInscricoesRoute,
     AuthenticatedAdministrativoMateriaisRoute:

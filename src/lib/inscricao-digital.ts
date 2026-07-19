@@ -14,6 +14,16 @@ export const STATUS_INSCRICAO = [
 export type OrigemInscricaoDigital = (typeof ORIGENS_INSCRICAO)[number];
 export type StatusInscricaoDigital = (typeof STATUS_INSCRICAO)[number];
 
+export const TURNOS_PREFERIDOS = ["manha", "tarde", "noite", "qualquer"] as const;
+export type TurnoPreferido = (typeof TURNOS_PREFERIDOS)[number];
+
+export const TURNO_PREFERIDO_LABEL: Record<TurnoPreferido, string> = {
+  manha: "Manhã",
+  tarde: "Tarde",
+  noite: "Noite",
+  qualquer: "Qualquer turno",
+};
+
 const textoOpcional = z.string().trim().max(300).optional().default("");
 
 export const dadosInscricaoDigitalSchema = z
@@ -29,6 +39,17 @@ export const dadosInscricaoDigitalSchema = z
     email: z.union([z.literal(""), z.string().trim().email("E-mail inválido.")]).default(""),
     endereco: z.string().trim().min(3, "Informe o endereço.").max(300),
     municipio: z.string().trim().min(2, "Informe o município.").max(120),
+    bairro_referencia: z
+      .string()
+      .trim()
+      .min(2, "Informe o bairro ou um ponto de referência.")
+      .max(180),
+    turno_preferido: z
+      .string()
+      .refine(
+        (valor) => TURNOS_PREFERIDOS.includes(valor as TurnoPreferido),
+        "Informe o turno de preferência.",
+      ),
     nis: textoOpcional,
     beneficiaria_programa_social: z.boolean().default(false),
     qual_programa_social: textoOpcional,
@@ -63,6 +84,8 @@ export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   email: "",
   endereco: "",
   municipio: "",
+  bairro_referencia: "",
+  turno_preferido: "",
   nis: "",
   beneficiaria_programa_social: false,
   qual_programa_social: "",
@@ -81,7 +104,14 @@ export type TurmaInscricaoPublica = {
   projetoId: string;
   projetoNome: string;
   nome: string;
+  codigo: string | null;
+  curso: string | null;
   municipio: string | null;
+  turno: string | null;
+  localAula: string | null;
+  localEndereco: string | null;
+  status: string | null;
+  vagas: number | null;
   dataInicio: string | null;
 };
 
