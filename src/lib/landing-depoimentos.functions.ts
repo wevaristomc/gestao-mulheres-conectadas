@@ -28,9 +28,14 @@ function tabelaNaoExiste(error: { code?: string; message?: string } | null): boo
   );
 }
 
-function urlPublica(admin: any, path: string): string {
+async function urlPublica(admin: any, path: string): Promise<string> {
   if (/^https?:\/\//i.test(path) || path.startsWith("/")) return path;
-  return admin.storage.from("landing").getPublicUrl(path).data.publicUrl;
+  // Bucket 'landing' é privado neste workspace: geramos uma URL assinada de longa duração.
+  const { data, error } = await admin.storage
+    .from("landing")
+    .createSignedUrl(path, 60 * 60 * 24 * 7);
+  if (error || !data?.signedUrl) return "";
+  return data.signedUrl;
 }
 
 async function buscar(admin: any, somenteAtivos: boolean): Promise<LandingDepoimento[]> {
@@ -42,15 +47,17 @@ async function buscar(admin: any, somenteAtivos: boolean): Promise<LandingDepoim
   if (somenteAtivos) query = query.eq("ativo", true);
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    nome: row.nome,
-    contexto: row.contexto,
-    videoPath: row.video_path,
-    videoUrl: urlPublica(admin, row.video_path),
-    ordem: Number(row.ordem ?? 0),
-    ativo: !!row.ativo,
-  }));
+  return Promise.all(
+    (data ?? []).map(async (row: any) => ({
+      id: row.id,
+      nome: row.nome,
+      contexto: row.contexto,
+      videoPath: row.video_path,
+      videoUrl: await urlPublica(admin, row.video_path),
+      ordem: Number(row.ordem ?? 0),
+      ativo: !!row.ativo,
+    })),
+  );
 }
 
 export const listarLandingDepoimentos = createServerFn({ method: "GET" }).handler(
