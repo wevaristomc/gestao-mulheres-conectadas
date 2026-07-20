@@ -463,6 +463,39 @@ export type Database = {
           },
         ]
       }
+      landing_depoimentos: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          contexto: string
+          criado_em: string
+          id: string
+          nome: string
+          ordem: number
+          video_path: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          contexto: string
+          criado_em?: string
+          id?: string
+          nome: string
+          ordem?: number
+          video_path: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          contexto?: string
+          criado_em?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          video_path?: string
+        }
+        Relationships: []
+      }
       matriculas: {
         Row: {
           assinou_lista: boolean | null
