@@ -1,45 +1,28 @@
+## Diagnóstico
 
-## Contexto (análise da reunião + do banco real)
+Verifiquei direto no banco: a tabela `landing_depoimentos` **não existe** e o bucket de storage `landing` **também não existe**. Ou seja, a migração `docs/migrations/landing-depoimentos.sql` (que cria tabela, políticas RLS, bucket e políticas de storage) nunca foi executada neste projeto.
 
-Na conversa com a Jaqueline, o eixo é conciliar o extrato bancário (idealmente CSV com nome/CPF do favorecido) com quem recebeu o benefício de R$ 260. Para isso funcionar, o cadastro da aluna precisa carregar **banco, agência e conta**, e essas informações precisam aparecer nas telas certas.
-
-O que verifiquei no código/DB:
-
-- `beneficiarias` já tem colunas `banco`, `agencia`, `conta`.
-- O formulário `BeneficiariaFormDialog` já grava esses campos.
-- O importador de CSV de turma (`importador-turma-csv.ts` / `importar-turma-csv-card.tsx`) já extrai e grava banco/agência/conta nas beneficiárias.
-- Porém, **nenhuma tela exibe** esses campos: a lista de MTE › Beneficiárias mostra só nome/CPF/telefone/município; a aba Pedagógico › Turma › Cursistas mostra só nome/e-mail/status. Por isso o usuário "subiu e não viu refletido".
-- A tabela `cursistas` (usada no fluxo pedagógico) **não tem** colunas bancárias — hoje o dado bancário só existe em `beneficiarias`.
+Por isso, na aba Administrativo → Depoimentos:
+- **Adicionar depoimento** falha: o upload do MP4 vai para um bucket inexistente e a inserção também.
+- **Editar / alternar visibilidade / reordenar / excluir** falham: todas as chamadas caem em erro de tabela inexistente ("A migração de depoimentos da landing ainda não foi aplicada.").
+- Os cards que aparecem na tela são apenas o fallback estático da landing renderizado por outro caminho — mas nenhuma ação persiste.
 
 ## O que fazer
 
-### 1. Tornar os dados bancários visíveis onde a aluna aparece
-- **MTE › Beneficiárias**: adicionar coluna "Dados bancários" (Banco • Ag. • Conta) na tabela desktop e uma linha secundária no card mobile. Indicador visual quando faltar (badge "sem conta") para a coordenação priorizar a coleta.
-- **Pedagógico › Turma › Cursistas**: quando a matrícula estiver vinculada a uma `beneficiaria`, exibir a mesma coluna "Dados bancários" puxada de `beneficiarias` via join na query (`cursistasByTurmaOptions`). Para matrículas ligadas só a `cursistas` (sem beneficiaria), mostrar "—" com tooltip "cadastro somente pedagógico".
-- **Busca**: permitir buscar beneficiária por banco/conta na tela MTE (útil para achar a dona de um lançamento do extrato).
+Aplicar a migração já pronta em `docs/migrations/landing-depoimentos.sql`, sem alterações de código. Ela é idempotente e cria:
 
-### 2. Edição rápida na própria linha
-- Botão "Editar dados bancários" na linha da cursista/beneficiária que abre um mini-dialog só com Banco / Agência / Conta, sem precisar entrar no formulário completo. Preenche em `beneficiarias`. Se a aluna estiver só como `cursista` sem `beneficiaria`, oferecer "Promover a beneficiária" (cria a beneficiária com CPF/nome já existentes e grava as contas).
+- Tabela `public.landing_depoimentos` (nome, contexto, video_path, ordem, ativo) + trigger de `atualizado_em`.
+- Políticas RLS de SELECT/INSERT/UPDATE/DELETE restritas a `coordenador_geral`, `coordenador_pedagogico` e `administrativo`.
+- GRANTs corretos para `authenticated` (e REVOKE em `anon`).
+- Bucket público `landing` (MP4, até 50 MB) com políticas de storage: leitura pública, escrita/atualização/exclusão só para os mesmos papéis.
+- Seed dos 5 depoimentos iniciais (Andressa, Camila, Deisiane, Elisangela, Ivete) apontando para os arquivos estáticos, para não perder o que aparece hoje.
 
-### 3. Exportação para a Jaqueline validar
-- Botão "Exportar contas (CSV)" na tela de Beneficiárias e no cabeçalho da aba Cursistas da turma: gera CSV com `nome, cpf, banco, agencia, conta, turma, status` (BOM UTF-8, já padronizado no projeto). É o insumo que ela pediu na reunião para bater com o extrato do Mauro.
+## Passos
 
-### 4. Ligação com a Conciliação bancária (preparo)
-- Na tela `financeiro.conciliacao`, hoje o match usa valor/data. Adicionar como reforço opcional: quando o lançamento tiver "contraparte" (nome/CPF) ou "documento" (conta), casar com `beneficiarias.cpf` ou `beneficiarias.conta` para elevar o score da sugestão. Isso concretiza o "mamão com açúcar" do CSV que a Jaqueline quer.
-- Sem migração nova: a estrutura de `conciliacoes_bancarias` já suporta score/sugerido/confirmado.
+1. Rodar `docs/migrations/landing-depoimentos.sql` pela ferramenta de migração (aprovação do usuário).
+2. Recarregar a página Administrativo → Depoimentos e confirmar que:
+   - O switch "Visível na landing" persiste após reload.
+   - "Adicionar depoimento" faz upload do MP4 no bucket `landing` e cria o registro.
+   - Editar / reordenar / excluir funcionam sem erro.
 
-### 5. Documentação
-- Registrar em `docs/AUDITORIA-BUGS.md` como item concluído: "Dados bancários da aluna visíveis e editáveis nas listas + export CSV + reforço no matcher da conciliação".
-
-## Detalhes técnicos
-
-- `src/lib/mte-queries.ts`: `beneficiariasListOptions` já retorna `banco/agencia/conta` — só falta consumir no componente.
-- `src/lib/pedagogico-queries.ts` › `cursistasByTurmaOptions`: estender o `select` para incluir `beneficiarias(banco, agencia, conta)` no join (já existe o vínculo `matriculas.beneficiaria_id`). Manter compat com bases antigas via retry progressivo, como já é feito para outros campos.
-- Novos componentes: `BankFieldsInlineDialog` (edição rápida), `ExportContasButton` (CSV com `csv.ts`).
-- Sem mudanças de RLS: `beneficiarias` já tem policies de escrita para admin/coordenação/administrativo.
-- Sem migrações novas.
-
-## Fora do escopo desta rodada
-- Integrar com "transfer gov" / API do banco.
-- OCR das fichas manuscritas para preencher conta automaticamente (é outro pedido da reunião — encaminho como próxima rodada).
-- Adicionar colunas bancárias na tabela `cursistas` (fica em `beneficiarias`, que é o modelo já vigente).
+Nenhuma alteração em arquivos de código é necessária — o front e as server functions já estão prontos e passam a operar assim que a migração roda.
