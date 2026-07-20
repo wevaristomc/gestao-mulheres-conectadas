@@ -38,6 +38,22 @@ export const TURNO_PREFERIDO_LABEL: Record<TurnoPreferido, string> = {
   qualquer: "Qualquer turno",
 };
 
+export const MUNICIPIOS_INSCRICAO = ["Belo Horizonte", "Betim", "Juatuba"] as const;
+
+export const POLOS_INSCRICAO = [
+  { nome: "BH - Conjunto Santa Maria", municipio: "Belo Horizonte" },
+  { nome: "BH - Polo Barreiro", municipio: "Belo Horizonte" },
+  { nome: "Juatuba - Cidade Satelite", municipio: "Juatuba" },
+  { nome: "Juatuba - SINE", municipio: "Juatuba" },
+  { nome: "Betim - SETER", municipio: "Betim" },
+] as const;
+
+export type PoloInscricao = (typeof POLOS_INSCRICAO)[number]["nome"];
+
+export function municipioDoPoloInscricao(polo: string | null | undefined): string {
+  return POLOS_INSCRICAO.find((item) => item.nome === polo)?.municipio ?? "";
+}
+
 const textoOpcional = z.string().trim().max(300).optional().default("");
 const contatoEmergenciaSchema = z.object({
   nome: z.string().trim().max(180).default(""),
@@ -58,6 +74,7 @@ export const dadosInscricaoDigitalSchema = z
     email: z.union([z.literal(""), z.string().trim().email("E-mail inválido.")]).default(""),
     endereco: z.string().trim().min(3, "Informe o endereço.").max(300),
     municipio: z.string().trim().min(2, "Informe o município.").max(120),
+    polo_preferido: z.string().trim().min(2, "Informe o polo de preferência.").max(180),
     bairro_referencia: z
       .string()
       .trim()
@@ -168,6 +185,7 @@ export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   email: "",
   endereco: "",
   municipio: "",
+  polo_preferido: "",
   bairro_referencia: "",
   turno_preferido: "",
   identifica_se_mulher: "",

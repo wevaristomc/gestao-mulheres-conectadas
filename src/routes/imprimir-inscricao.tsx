@@ -79,6 +79,7 @@ function FichaImpressaoPage() {
           {linha("Endereço completo", d.endereco)}
           <div className="grid grid-cols-2 gap-5">
             {linha("Município", d.municipio)}
+            {linha("Polo de preferência", d.polo_preferido)}
             {linha("Bairro ou ponto de referência", d.bairro_referencia)}
             {linha("Turno de preferência", turnoLabel(d.turno_preferido))}
             {linha("Disponível em outros turnos", d.disponibilidade_outros_turnos ? "Sim" : "Não")}
