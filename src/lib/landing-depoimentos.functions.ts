@@ -8,6 +8,11 @@ import { PAPEIS_COORDENACAO, requirePapel } from "@/lib/rbac-guard";
 const UUID = z.string().uuid();
 const NOME = z.string().trim().min(2, "Informe o nome.").max(120);
 const CONTEXTO = z.string().trim().min(2, "Informe o contexto.").max(240);
+const VIDEO_PATH = z
+  .string()
+  .trim()
+  .regex(/^depoimentos\/[a-z0-9-]+\.mp4$/i, "Caminho de vídeo inválido.")
+  .max(500);
 
 export type LandingDepoimento = {
   id: string;
@@ -17,6 +22,11 @@ export type LandingDepoimento = {
   videoUrl: string;
   ordem: number;
   ativo: boolean;
+};
+
+export type LandingUploadAssinado = {
+  path: string;
+  token: string;
 };
 
 function tabelaNaoExiste(error: { code?: string; message?: string } | null): boolean {
@@ -31,6 +41,18 @@ function tabelaNaoExiste(error: { code?: string; message?: string } | null): boo
 function urlPublica(admin: any, path: string): string {
   if (/^https?:\/\//i.test(path) || path.startsWith("/")) return path;
   return admin.storage.from("landing").getPublicUrl(path).data.publicUrl;
+}
+
+function pathGerenciado(path: string | null | undefined): path is string {
+  return !!path && !path.startsWith("/") && !/^https?:\/\//i.test(path);
+}
+
+async function criarUrlAssinada(admin: any, path: string): Promise<LandingUploadAssinado> {
+  const { data, error } = await admin.storage.from("landing").createSignedUploadUrl(path);
+  if (error || !data?.token) {
+    throw new Error(error?.message ?? "Não foi possível preparar o upload do vídeo.");
+  }
+  return { path, token: data.token };
 }
 
 async function buscar(admin: any, somenteAtivos: boolean): Promise<LandingDepoimento[]> {
@@ -81,12 +103,28 @@ export const listarLandingDepoimentosAdmin = createServerFn({ method: "GET" })
     }
   });
 
+export const prepararUploadLandingDepoimento = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .handler(async (): Promise<LandingUploadAssinado> => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    return criarUrlAssinada(admin, `depoimentos/${crypto.randomUUID()}.mp4`);
+  });
+
+export const removerLandingDepoimentoUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => z.object({ path: VIDEO_PATH }).parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    await admin.storage.from("landing").remove([data.path]);
+    return { ok: true };
+  });
+
 export const criarLandingDepoimento = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>
-    z
-      .object({ nome: NOME, contexto: CONTEXTO, videoPath: z.string().trim().min(1).max(500) })
-      .parse(input),
+    z.object({ nome: NOME, contexto: CONTEXTO, videoPath: VIDEO_PATH }).parse(input),
   )
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -115,16 +153,33 @@ export const criarLandingDepoimento = createServerFn({ method: "POST" })
 export const atualizarLandingDepoimento = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>
-    z.object({ id: UUID, nome: NOME, contexto: CONTEXTO }).parse(input),
+    z
+      .object({ id: UUID, nome: NOME, contexto: CONTEXTO, videoPath: VIDEO_PATH.optional() })
+      .parse(input),
   )
   .handler(async ({ data }) => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
+    const { data: anterior, error: readError } = await admin
+      .from("landing_depoimentos")
+      .select("video_path")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (readError || !anterior) throw new Error("Depoimento não encontrado.");
+
     const { error } = await admin
       .from("landing_depoimentos")
-      .update({ nome: data.nome, contexto: data.contexto, atualizado_em: new Date().toISOString() })
+      .update({
+        nome: data.nome,
+        contexto: data.contexto,
+        ...(data.videoPath ? { video_path: data.videoPath } : {}),
+        atualizado_em: new Date().toISOString(),
+      })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
+    if (data.videoPath && pathGerenciado(anterior.video_path)) {
+      await admin.storage.from("landing").remove([anterior.video_path]);
+    }
     return { ok: true };
   });
 
@@ -175,11 +230,7 @@ export const excluirLandingDepoimento = createServerFn({ method: "POST" })
     if (readError || !row) throw new Error("Depoimento não encontrado.");
     const { error } = await admin.from("landing_depoimentos").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
-    if (
-      row.video_path &&
-      !row.video_path.startsWith("/") &&
-      !/^https?:\/\//i.test(row.video_path)
-    ) {
+    if (pathGerenciado(row.video_path)) {
       await admin.storage.from("landing").remove([row.video_path]);
     }
     return { ok: true };

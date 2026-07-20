@@ -29,6 +29,8 @@ import {
   criarLandingDepoimento,
   excluirLandingDepoimento,
   listarLandingDepoimentosAdmin,
+  prepararUploadLandingDepoimento,
+  removerLandingDepoimentoUpload,
   reordenarLandingDepoimentos,
   type LandingDepoimento,
 } from "@/lib/landing-depoimentos.functions";
@@ -39,6 +41,11 @@ export const Route = createFileRoute("/_authenticated/administrativo/depoimentos
 
 const PAPEIS_GESTAO = ["coordenador_geral", "coordenador_pedagogico", "administrativo"] as const;
 const LIMITE_VIDEO = 50 * 1024 * 1024;
+
+function validarVideo(arquivo: File): void {
+  if (arquivo.type !== "video/mp4") throw new Error("O arquivo deve ser um vídeo MP4.");
+  if (arquivo.size > LIMITE_VIDEO) throw new Error("O vídeo deve ter no máximo 50 MB.");
+}
 
 function DepoimentosLandingPage() {
   const { hasAnyRole } = useHasRole();
@@ -59,7 +66,12 @@ function DepoimentosLandingPage() {
 
   const operacao = useMutation({
     mutationFn: (acao: () => Promise<void>) => acao(),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ["landing-publica", "depoimentos"] }),
+      ]);
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -79,32 +91,42 @@ function DepoimentosLandingPage() {
     setDialogAberto(true);
   };
 
+  const enviarVideo = async (file: File): Promise<string> => {
+    validarVideo(file);
+    const upload = await prepararUploadLandingDepoimento();
+    const { error } = await supabase.storage
+      .from("landing")
+      .uploadToSignedUrl(upload.path, upload.token, file, { contentType: "video/mp4" });
+    if (error) {
+      await removerLandingDepoimentoUpload({ data: { path: upload.path } });
+      throw new Error(`Falha no upload: ${error.message}`);
+    }
+    return upload.path;
+  };
+
   const salvar = () =>
     operacao.mutate(async () => {
-      if (edicao) {
-        await atualizarLandingDepoimento({ data: { id: edicao.id, nome, contexto } });
-        toast.success("Depoimento atualizado.");
-      } else {
-        if (!arquivo) throw new Error("Selecione um vídeo MP4.");
-        if (arquivo.type !== "video/mp4") throw new Error("O arquivo deve ser um vídeo MP4.");
-        if (arquivo.size > LIMITE_VIDEO) throw new Error("O vídeo deve ter no máximo 50 MB.");
-        const videoPath = `depoimentos/${crypto.randomUUID()}.mp4`;
-        const { error: uploadError } = await supabase.storage
-          .from("landing")
-          .upload(videoPath, arquivo, {
-            contentType: "video/mp4",
-            upsert: false,
+      let novoVideoPath: string | null = null;
+      try {
+        if (arquivo) novoVideoPath = await enviarVideo(arquivo);
+        if (edicao) {
+          await atualizarLandingDepoimento({
+            data: { id: edicao.id, nome, contexto, videoPath: novoVideoPath ?? undefined },
           });
-        if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
-        try {
-          await criarLandingDepoimento({ data: { nome, contexto, videoPath } });
-        } catch (error) {
-          await supabase.storage.from("landing").remove([videoPath]);
-          throw error;
+          toast.success(
+            novoVideoPath ? "Depoimento e vídeo atualizados." : "Depoimento atualizado.",
+          );
+        } else {
+          if (!novoVideoPath) throw new Error("Selecione um vídeo MP4.");
+          await criarLandingDepoimento({ data: { nome, contexto, videoPath: novoVideoPath } });
+          toast.success("Depoimento adicionado à landing.");
         }
-        toast.success("Depoimento adicionado à landing.");
+        setArquivo(null);
+        setDialogAberto(false);
+      } catch (error) {
+        if (novoVideoPath) await removerLandingDepoimentoUpload({ data: { path: novoVideoPath } });
+        throw error;
       }
-      setDialogAberto(false);
     });
 
   const mover = (indice: number, direcao: -1 | 1) => {
@@ -254,18 +276,22 @@ function DepoimentosLandingPage() {
                 placeholder="Ex.: Aluna · Juatuba · Tarde"
               />
             </div>
-            {!edicao ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="depoimento-video">Vídeo MP4</Label>
-                <Input
-                  id="depoimento-video"
-                  type="file"
-                  accept="video/mp4,.mp4"
-                  onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
-                />
-                <p className="text-xs text-muted-foreground">Limite: 50 MB.</p>
-              </div>
-            ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor="depoimento-video">
+                {edicao ? "Trocar vídeo MP4 (opcional)" : "Vídeo MP4"}
+              </Label>
+              <Input
+                id="depoimento-video"
+                type="file"
+                accept="video/mp4,.mp4"
+                onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {edicao
+                  ? "Envie um novo arquivo apenas se quiser substituir o vídeo atual."
+                  : "Limite: 50 MB."}
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogAberto(false)}>
@@ -273,7 +299,9 @@ function DepoimentosLandingPage() {
             </Button>
             <Button
               onClick={salvar}
-              disabled={operacao.isPending || !nome.trim() || !contexto.trim()}
+              disabled={
+                operacao.isPending || !nome.trim() || !contexto.trim() || (!edicao && !arquivo)
+              }
             >
               {operacao.isPending ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />

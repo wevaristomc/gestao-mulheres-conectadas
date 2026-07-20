@@ -12,6 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listarLandingHeroConfigAdmin,
+  prepararUploadLandingHero,
+  removerLandingHeroUpload,
   salvarLandingHeroConfig,
 } from "@/lib/landing-config.functions";
 
@@ -61,6 +63,18 @@ export function HeroVideoAdminCard() {
     setInputVersion((atual) => atual + 1);
   };
 
+  const enviarArquivo = async (file: File, tipo: "video" | "poster"): Promise<string> => {
+    const upload = await prepararUploadLandingHero({ data: { tipo, mime: file.type } });
+    const { error } = await supabase.storage
+      .from("landing")
+      .uploadToSignedUrl(upload.path, upload.token, file, { contentType: file.type });
+    if (error) {
+      await removerLandingHeroUpload({ data: { path: upload.path } });
+      throw new Error(`Falha no upload: ${error.message}`);
+    }
+    return upload.path;
+  };
+
   const salvar = () =>
     operacao.mutate(async () => {
       if (video) validarVideo(video);
@@ -69,29 +83,15 @@ export function HeroVideoAdminCard() {
 
       const enviados: string[] = [];
       try {
-        let videoPath = config?.heroVideoPath ?? null;
-        let posterPath = config?.heroPosterPath ?? null;
+        const videoPath = video
+          ? await enviarArquivo(video, "video")
+          : (config?.heroVideoPath ?? null);
+        if (video && videoPath) enviados.push(videoPath);
 
-        if (video) {
-          videoPath = `hero/${crypto.randomUUID()}.mp4`;
-          const { error } = await supabase.storage.from("landing").upload(videoPath, video, {
-            contentType: "video/mp4",
-            upsert: false,
-          });
-          if (error) throw new Error(`Falha no upload do vídeo: ${error.message}`);
-          enviados.push(videoPath);
-        }
-
-        if (poster) {
-          const extensao = poster.type === "image/png" ? "png" : "jpg";
-          posterPath = `hero/${crypto.randomUUID()}.${extensao}`;
-          const { error } = await supabase.storage.from("landing").upload(posterPath, poster, {
-            contentType: poster.type,
-            upsert: false,
-          });
-          if (error) throw new Error(`Falha no upload do poster: ${error.message}`);
-          enviados.push(posterPath);
-        }
+        const posterPath = poster
+          ? await enviarArquivo(poster, "poster")
+          : (config?.heroPosterPath ?? null);
+        if (poster && posterPath) enviados.push(posterPath);
 
         await salvarLandingHeroConfig({
           data: { heroVideoPath: videoPath, heroPosterPath: posterPath, heroVideoSom: permitirSom },
@@ -99,7 +99,9 @@ export function HeroVideoAdminCard() {
         limparSelecao();
         toast.success("Vídeo de abertura atualizado.");
       } catch (error) {
-        if (enviados.length) await supabase.storage.from("landing").remove(enviados);
+        await Promise.all(
+          enviados.map((path) => removerLandingHeroUpload({ data: { path } }).catch(() => null)),
+        );
         throw error;
       }
     });

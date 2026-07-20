@@ -128,7 +128,7 @@ function MulheresConectadasLanding() {
     queryFn: () => listarLandingHeroConfig(),
     staleTime: 5 * 60 * 1000,
   });
-  const depoimentos = depoimentosQ.data?.length ? depoimentosQ.data : DEPOIMENTOS_FALLBACK;
+  const depoimentos = depoimentosQ.data ?? DEPOIMENTOS_FALLBACK;
   const heroConfig = heroConfigQ.data;
 
   const municipios = useMemo(() => {
@@ -167,9 +167,11 @@ function MulheresConectadasLanding() {
             <a className="transition hover:text-[#d15c2e]" href="#formacao">
               A formação
             </a>
-            <a className="transition hover:text-[#d15c2e]" href="#depoimentos">
-              Depoimentos
-            </a>
+            {depoimentos.length ? (
+              <a className="transition hover:text-[#d15c2e]" href="#depoimentos">
+                Depoimentos
+              </a>
+            ) : null}
             <a className="transition hover:text-[#d15c2e]" href="#inscricao">
               Como participar
             </a>
@@ -347,33 +349,35 @@ function MulheresConectadasLanding() {
           </div>
         </section>
 
-        <section id="depoimentos" className="scroll-mt-24 bg-white py-20 sm:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
-              <div className="max-w-3xl">
-                <SectionEyebrow>Vozes do projeto</SectionEyebrow>
-                <h2 className="mt-4 font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                  Histórias contadas por quem vive essa experiência.
-                </h2>
+        {depoimentos.length ? (
+          <section id="depoimentos" className="scroll-mt-24 bg-white py-20 sm:py-28">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+                <div className="max-w-3xl">
+                  <SectionEyebrow>Vozes do projeto</SectionEyebrow>
+                  <h2 className="mt-4 font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
+                    Histórias contadas por quem vive essa experiência.
+                  </h2>
+                </div>
+                <p className="flex max-w-sm items-center gap-2 text-sm leading-6 text-[#05244d]/65">
+                  <PlayCircle className="size-5 shrink-0 text-[#d15c2e]" />
+                  Use os controles de cada vídeo para assistir com som e em tela cheia.
+                </p>
               </div>
-              <p className="flex max-w-sm items-center gap-2 text-sm leading-6 text-[#05244d]/65">
-                <PlayCircle className="size-5 shrink-0 text-[#d15c2e]" />
-                Use os controles de cada vídeo para assistir com som e em tela cheia.
-              </p>
-            </div>
 
-            <div className="mt-12 flex snap-x snap-mandatory items-start gap-5 overflow-x-auto pb-6 [scrollbar-color:#d15c2e_#fff5de]">
-              {depoimentos.map((depoimento) => (
-                <DepoimentoCard
-                  key={depoimento.videoUrl}
-                  nome={depoimento.nome}
-                  contexto={depoimento.contexto}
-                  videoUrl={depoimento.videoUrl}
-                />
-              ))}
+              <div className="mt-12 flex snap-x snap-mandatory items-start gap-5 overflow-x-auto pb-6 [scrollbar-color:#d15c2e_#fff5de]">
+                {depoimentos.map((depoimento) => (
+                  <DepoimentoCard
+                    key={depoimento.videoUrl}
+                    nome={depoimento.nome}
+                    contexto={depoimento.contexto}
+                    videoUrl={depoimento.videoUrl}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         <section id="inscricao" className="scroll-mt-24 py-20 sm:py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

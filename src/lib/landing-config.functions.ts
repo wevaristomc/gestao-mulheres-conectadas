@@ -17,6 +17,7 @@ const HERO_POSTER_PATH = z
   .regex(/^hero\/[a-z0-9-]+\.(?:jpe?g|png)$/i, "Caminho de poster inválido.")
   .max(500)
   .nullable();
+const HERO_UPLOAD_PATH = z.union([HERO_VIDEO_PATH.unwrap(), HERO_POSTER_PATH.unwrap()]);
 
 export type LandingHeroConfig = {
   heroVideoPath: string | null;
@@ -24,6 +25,11 @@ export type LandingHeroConfig = {
   heroPosterPath: string | null;
   heroPosterUrl: string | null;
   heroVideoSom: boolean;
+};
+
+export type LandingHeroUploadAssinado = {
+  path: string;
+  token: string;
 };
 
 const CONFIG_VAZIA: LandingHeroConfig = {
@@ -68,6 +74,14 @@ function pathGerenciado(path: string | null): path is string {
   return !!path && !path.startsWith("/") && !/^https?:\/\//i.test(path);
 }
 
+async function criarUrlAssinada(admin: any, path: string): Promise<LandingHeroUploadAssinado> {
+  const { data, error } = await admin.storage.from("landing").createSignedUploadUrl(path);
+  if (error || !data?.token) {
+    throw new Error(error?.message ?? "Não foi possível preparar o upload.");
+  }
+  return { path, token: data.token };
+}
+
 export const listarLandingHeroConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<LandingHeroConfig> => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -94,6 +108,35 @@ export const listarLandingHeroConfigAdmin = createServerFn({ method: "GET" })
       }
       throw new Error((error as Error).message);
     }
+  });
+
+export const prepararUploadLandingHero = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) =>
+    z.object({ tipo: z.enum(["video", "poster"]), mime: z.string().trim() }).parse(input),
+  )
+  .handler(async ({ data }): Promise<LandingHeroUploadAssinado> => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    if (data.tipo === "video") {
+      if (data.mime !== "video/mp4") throw new Error("O vídeo deve ser um arquivo MP4.");
+      return criarUrlAssinada(admin, `hero/${crypto.randomUUID()}.mp4`);
+    }
+    if (!["image/jpeg", "image/png"].includes(data.mime)) {
+      throw new Error("O poster deve ser uma imagem JPG ou PNG.");
+    }
+    const extensao = data.mime === "image/png" ? "png" : "jpg";
+    return criarUrlAssinada(admin, `hero/${crypto.randomUUID()}.${extensao}`);
+  });
+
+export const removerLandingHeroUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => z.object({ path: HERO_UPLOAD_PATH }).parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    await admin.storage.from("landing").remove([data.path]);
+    return { ok: true };
   });
 
 export const salvarLandingHeroConfig = createServerFn({ method: "POST" })
