@@ -81,8 +81,12 @@ function DepoimentosLandingPage() {
 
   const salvar = () =>
     operacao.mutate(async () => {
+      const nomeTrim = nome.trim();
+      const contextoTrim = contexto.trim();
+      if (nomeTrim.length < 2) throw new Error("Informe o nome (mín. 2 caracteres).");
+      if (contextoTrim.length < 2) throw new Error("Informe o contexto (mín. 2 caracteres).");
       if (edicao) {
-        await atualizarLandingDepoimento({ data: { id: edicao.id, nome, contexto } });
+        await atualizarLandingDepoimento({ data: { id: edicao.id, nome: nomeTrim, contexto: contextoTrim } });
         toast.success("Depoimento atualizado.");
       } else {
         if (!arquivo) throw new Error("Selecione um vídeo MP4.");
@@ -97,7 +101,7 @@ function DepoimentosLandingPage() {
           });
         if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
         try {
-          await criarLandingDepoimento({ data: { nome, contexto, videoPath } });
+          await criarLandingDepoimento({ data: { nome: nomeTrim, contexto: contextoTrim, videoPath } });
         } catch (error) {
           await supabase.storage.from("landing").remove([videoPath]);
           throw error;
