@@ -612,8 +612,8 @@ function InscricoesDigitaisTab() {
                         <SelectItem value="sem-turma">Selecionar turma</SelectItem>
                         {turmas.map((turma) => (
                           <SelectItem key={turma.id} value={turma.id}>
-                            {turma.nome} · {turnoLabel(turma.turno)} ·{" "}
-                            {turma.localAula || turma.municipio || "Local não informado"}
+                            {turma.nome}
+                            {turma.localAula ? ` · ${turma.localAula}` : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>

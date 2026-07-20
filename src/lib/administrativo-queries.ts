@@ -3,10 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { gerarCertificadoPDF, slugifyNome } from "@/lib/certificado-pdf";
 import { BUCKET as DOCUMENTOS_BUCKET } from "@/lib/base-conhecimento-queries";
 import { formatarDataBR } from "@/lib/date-utils";
-import {
-  missingColumnFromError,
-  operationalWriteError,
-} from "@/lib/supabase-write-errors";
+import { compararTurmasPorCodigo } from "@/lib/turmas";
+import { missingColumnFromError, operationalWriteError } from "@/lib/supabase-write-errors";
 
 // Padrão: cada query retorna { rows, error? } com descoberta de colunas em runtime.
 // Tabelas esperadas (todas com RLS por projeto): turmas, matriculas, cursistas,
@@ -24,22 +22,10 @@ export function turmasDoProjetoOptions(projetoId: string | null) {
       if (!projetoId) return { rows: [] };
       const { data, error } = await supabase
         .from("turmas")
-        .select("*")
+        .select("id, codigo, codigo_turma, nome_curso, curso, turno, municipio")
         .eq("projeto_id", projetoId);
       if (error) return { rows: [], error: error.message };
-      const rows = ((data ?? []) as Row[]).slice().sort((a, b) => {
-        const an =
-          (typeof a.nome === "string" && a.nome) ||
-          (typeof a.titulo === "string" && a.titulo) ||
-          (typeof a.descricao === "string" && a.descricao) ||
-          "";
-        const bn =
-          (typeof b.nome === "string" && b.nome) ||
-          (typeof b.titulo === "string" && b.titulo) ||
-          (typeof b.descricao === "string" && b.descricao) ||
-          "";
-        return String(an).localeCompare(String(bn), "pt-BR");
-      });
+      const rows = ((data ?? []) as Row[]).slice().sort(compararTurmasPorCodigo);
       return { rows };
     },
   });
@@ -84,16 +70,10 @@ export function cursistasComStatusOptions(turmaId: string | null) {
       // Busca qualificados por matricula_id ou cursista_id (o que existir).
       let qualRows: Row[] = [];
       if (matriculaIds.length) {
-        const q1 = await supabase
-          .from("qualificados")
-          .select("*")
-          .in("matricula_id", matriculaIds);
+        const q1 = await supabase.from("qualificados").select("*").in("matricula_id", matriculaIds);
         if (!q1.error) qualRows = (q1.data ?? []) as Row[];
         else if (cursistaIds.length) {
-          const q2 = await supabase
-            .from("qualificados")
-            .select("*")
-            .in("cursista_id", cursistaIds);
+          const q2 = await supabase.from("qualificados").select("*").in("cursista_id", cursistaIds);
           if (!q2.error) qualRows = (q2.data ?? []) as Row[];
         }
       }
@@ -127,8 +107,7 @@ export function cursistasComStatusOptions(turmaId: string | null) {
           qualificado: q
             ? {
                 id: q.id as string,
-                data_qualificacao:
-                  (q.data_qualificacao as string) ?? (q.data as string) ?? null,
+                data_qualificacao: (q.data_qualificacao as string) ?? (q.data as string) ?? null,
                 certificado_url: (q.certificado_url as string) ?? null,
               }
             : null,
@@ -198,11 +177,13 @@ export async function emitirCertificado(input: {
     }
     if (docRes.error) {
       // Não bloqueia — apenas loga.
-      // eslint-disable-next-line no-console
-      console.warn("[administrativo] Falha ao registrar certificado em documentos:", docRes.error.message);
+
+      console.warn(
+        "[administrativo] Falha ao registrar certificado em documentos:",
+        docRes.error.message,
+      );
     }
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn("[administrativo] Registro em documentos ignorado:", e);
   }
 
@@ -344,7 +325,10 @@ export async function upsertEntrega(tabela: EntregaTabela, input: EntregaInput) 
       delete payload[missingColumn];
       continue;
     }
-    throw operationalWriteError(res.error, tabela === "entregas_materiais" ? "materiais" : "benefícios");
+    throw operationalWriteError(
+      res.error,
+      tabela === "entregas_materiais" ? "materiais" : "benefícios",
+    );
   }
 
   throw new Error("Não foi possível adaptar a gravação ao banco de dados atual.");

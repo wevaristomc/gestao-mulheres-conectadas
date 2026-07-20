@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, FileSignature, Loader2, Paperclip, Printer } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,7 +19,10 @@ import {
   dadosInscricaoDigitalSchema,
   type DadosInscricaoDigital,
 } from "@/lib/inscricao-digital";
-import { criarInscricaoFormulario } from "@/lib/inscricoes-digitais.functions";
+import {
+  criarInscricaoFormulario,
+  listarTurmasInscricaoPublica,
+} from "@/lib/inscricoes-digitais.functions";
 import { ORIGEM_PUBLICA } from "@/lib/site";
 
 export const Route = createFileRoute("/inscricao")({
@@ -72,6 +75,7 @@ export const Route = createFileRoute("/inscricao")({
 
 const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 const MIMES_ACEITOS = ["application/pdf", "image/png", "image/jpeg"];
+const MUNICIPIOS_FALLBACK = ["Belo Horizonte", "Betim", "Juatuba"] as const;
 
 function arquivoParaBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -92,6 +96,22 @@ function validarArquivo(file: File, rotulo: string): void {
 }
 
 function InscricaoPublicaPage() {
+  const turmasQ = useQuery({
+    queryKey: ["inscricao-publica", "turmas"],
+    queryFn: () => listarTurmasInscricaoPublica(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const municipios = useMemo(() => {
+    const encontrados = Array.from(
+      new Set(
+        (turmasQ.data ?? [])
+          .map((turma) => turma.municipio?.trim())
+          .filter((municipio): municipio is string => Boolean(municipio)),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return encontrados.length > 0 ? encontrados : [...MUNICIPIOS_FALLBACK];
+  }, [turmasQ.data]);
+
   const [dados, setDados] = useState<DadosInscricaoDigital>({
     ...DADOS_INSCRICAO_VAZIOS,
     contatos_emergencia: DADOS_INSCRICAO_VAZIOS.contatos_emergencia.map((contato) => ({
@@ -214,7 +234,12 @@ function InscricaoPublicaPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-7">
-              <InscricaoDigitalFields value={dados} onChange={setDados} encerrarSeInelegivel />
+              <InscricaoDigitalFields
+                value={dados}
+                onChange={setDados}
+                encerrarSeInelegivel
+                municipios={municipios}
+              />
 
               <section hidden={inelegivel} className="space-y-4">
                 <div>

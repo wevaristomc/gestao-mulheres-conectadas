@@ -1,13 +1,16 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatarDataBR } from "@/lib/date-utils";
+import { compararTurmasPorCodigo, rotuloTurma } from "@/lib/turmas";
 
 // Todas as queries retornam { data, error } no mesmo padrão de dashboard-queries.ts.
 // O schema é descoberto em runtime — colunas ausentes viram "—" na UI.
 
 export type Row = Record<string, unknown> & { id: string };
 
-export function ordenarAulasPorDataHora<T extends Record<string, unknown> & { id?: string }>(rows: T[]): T[] {
+export function ordenarAulasPorDataHora<T extends Record<string, unknown> & { id?: string }>(
+  rows: T[],
+): T[] {
   return [...rows].sort((a, b) => {
     const da = String(a.data ?? "");
     const db = String(b.data ?? "");
@@ -42,18 +45,11 @@ export function turmasListOptions(projetoId: string | null, restrictToUserId?: s
         permitidas = new Set(((vinc.data ?? []) as { turma_id: string }[]).map((r) => r.turma_id));
         if (permitidas.size === 0) return { rows: [] };
       }
-      const { data, error } = await supabase
-        .from("turmas")
-        .select("*")
-        .eq("projeto_id", projetoId);
+      const { data, error } = await supabase.from("turmas").select("*").eq("projeto_id", projetoId);
       if (error) return { rows: [], error: error.message };
-      let rows = ((data ?? []) as Row[]);
+      let rows = (data ?? []) as Row[];
       if (permitidas) rows = rows.filter((r) => permitidas!.has(String(r.id)));
-      rows = rows.slice().sort((a, b) => {
-        const an = nomeTurma(a);
-        const bn = nomeTurma(b);
-        return an.localeCompare(bn, "pt-BR");
-      });
+      rows = rows.slice().sort(compararTurmasPorCodigo);
       return { rows };
     },
   });
@@ -105,10 +101,7 @@ export function cursistasByTurmaOptions(turmaId: string) {
         .select("*, cursistas(*), beneficiarias(*)")
         .eq("turma_id", turmaId);
       if (res.error) {
-        res = await supabase
-          .from("matriculas")
-          .select("*, cursistas(*)")
-          .eq("turma_id", turmaId);
+        res = await supabase.from("matriculas").select("*, cursistas(*)").eq("turma_id", turmaId);
       }
       if (res.error) {
         res = await supabase.from("matriculas").select("*").eq("turma_id", turmaId);
@@ -135,15 +128,17 @@ async function detectarTabelaFrequencia(): Promise<"frequencias" | "presencas" |
     .limit(1);
   if (!presencasProbe.error) {
     frequenciaTableCache = "presencas";
-    // eslint-disable-next-line no-console
+
     console.info("[frequencia] tabela detectada: presencas");
     return "presencas";
   }
 
   const presencasMsg = presencasProbe.error.message || "erro desconhecido";
-  const presencasNaoExiste = /relation .*presencas.* does not exist|could not find .*presencas|schema cache/i.test(presencasMsg);
+  const presencasNaoExiste =
+    /relation .*presencas.* does not exist|could not find .*presencas|schema cache/i.test(
+      presencasMsg,
+    );
   if (!presencasNaoExiste) {
-    // eslint-disable-next-line no-console
     console.error("[frequencia] falha ao detectar presencas", presencasProbe.error);
     throw new Error(`Falha ao acessar a tabela presencas: ${presencasMsg}`);
   }
@@ -154,18 +149,20 @@ async function detectarTabelaFrequencia(): Promise<"frequencias" | "presencas" |
     .limit(1);
   if (!frequenciasProbe.error) {
     frequenciaTableCache = "frequencias";
-    // eslint-disable-next-line no-console
+
     console.warn("[frequencia] tabela detectada: frequencias (fallback; presencas ausente)");
     return "frequencias";
   }
 
   const frequenciasMsg = frequenciasProbe.error.message || "erro desconhecido";
-  // eslint-disable-next-line no-console
+
   console.error("[frequencia] nenhuma tabela de frequência disponível", {
     presencas: presencasMsg,
     frequencias: frequenciasMsg,
   });
-  throw new Error(`Tabela de frequência indisponível. presencas: ${presencasMsg}; frequencias: ${frequenciasMsg}`);
+  throw new Error(
+    `Tabela de frequência indisponível. presencas: ${presencasMsg}; frequencias: ${frequenciasMsg}`,
+  );
 }
 
 export type FrequenciaRow = {
@@ -190,14 +187,13 @@ export function frequenciaByTurmaOptions(turmaId: string) {
       if (aulasRes.error) return { tableName, rows: [], error: aulasRes.error.message };
       const aulaIds = (aulasRes.data ?? []).map((a) => (a as { id: string }).id);
       if (!aulaIds.length) return { tableName, rows: [] };
-      const { data, error } = await supabase
-        .from(tableName)
-        .select("*")
-        .in("aula_id", aulaIds);
+      const { data, error } = await supabase.from(tableName).select("*").in("aula_id", aulaIds);
       if (error) return { tableName, rows: [], error: error.message };
       const rows = (data ?? []) as FrequenciaRow[];
-      // eslint-disable-next-line no-console
-      console.info(`[frequencia] ${tableName}: ${rows.length} registro(s) para turma ${turmaId} em ${aulaIds.length} aula(s)`);
+
+      console.info(
+        `[frequencia] ${tableName}: ${rows.length} registro(s) para turma ${turmaId} em ${aulaIds.length} aula(s)`,
+      );
       return { tableName, rows };
     },
   });
@@ -244,12 +240,14 @@ export async function upsertAula(input: {
       ? await supabase.from("aulas").update(p).eq("id", input.id)
       : await supabase.from("aulas").insert(p);
   };
-  let attempt = { ...payload };
+  const attempt = { ...payload };
   for (let i = 0; i < 6; i++) {
     const res = await write(attempt);
     if (!res.error) return;
     const msg = res.error.message || "";
-    const m = msg.match(/'([^']+)' column of 'aulas'/i) || msg.match(/column "?([a-z_]+)"? .* does not exist/i);
+    const m =
+      msg.match(/'([^']+)' column of 'aulas'/i) ||
+      msg.match(/column "?([a-z_]+)"? .* does not exist/i);
     if (!m) throw new Error(msg);
     const col = m[1];
     if (!(col in attempt)) throw new Error(msg);
@@ -296,7 +294,10 @@ export async function upsertTurma(input: UpsertTurmaInput) {
     res = await write("titulo");
   }
   // Se "descricao" ou "turno" faltarem, tenta sem esses campos.
-  if (res.error && /column .*(descricao|turno|data_inicio|data_fim).* does not exist/i.test(res.error.message)) {
+  if (
+    res.error &&
+    /column .*(descricao|turno|data_inicio|data_fim).* does not exist/i.test(res.error.message)
+  ) {
     const minimal: Record<string, unknown> = { projeto_id: input.projeto_id, nome: input.nome };
     if (input.id) {
       res = await supabase.from("turmas").update(minimal).eq("id", input.id);
@@ -383,14 +384,9 @@ export function pickFirst(row: Row | null | undefined, keys: string[]): string |
   return null;
 }
 
-// Rótulo humano de uma turma. Usa nome/titulo/descricao quando existirem;
-// caso contrário cai no codigo_turma (ex.: JBT-MC-01) ou nome_curso — nunca
-// exibe o UUID cru.
+// Mantido como alias para os consumidores pedagógicos existentes.
 export function nomeTurma(row: Row | null | undefined): string {
-  return (
-    pickFirst(row, ["nome", "titulo", "descricao", "codigo_turma", "nome_curso"]) ??
-    "Turma sem nome"
-  );
+  return rotuloTurma(row);
 }
 
 export function formatarData(iso: string | null | undefined): string {
@@ -443,7 +439,11 @@ export function evidenciasByAulaOptions(aulaId: string | null) {
 export function evidenciasCountByTurmaOptions(turmaId: string) {
   return queryOptions({
     queryKey: ["pedagogico", "evidencias-count-turma", turmaId],
-    queryFn: async (): Promise<{ byAula: Record<string, number>; total: number; error?: string }> => {
+    queryFn: async (): Promise<{
+      byAula: Record<string, number>;
+      total: number;
+      error?: string;
+    }> => {
       const { data, error } = await supabase
         .from("evidencias")
         .select("id, aula_id, tipo")
@@ -494,7 +494,9 @@ export type UploadComprovacaoInput = {
 const MAX_BYTES = 10 * 1024 * 1024;
 const OK_TYPES = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
 
-export async function uploadEvidenciasAula(input: UploadComprovacaoInput): Promise<{ inserted: number }> {
+export async function uploadEvidenciasAula(
+  input: UploadComprovacaoInput,
+): Promise<{ inserted: number }> {
   if (!input.files.length) return { inserted: 0 };
   const { data: sess } = await supabase.auth.getUser();
   const uid = sess?.user?.id ?? null;
@@ -532,7 +534,8 @@ export async function uploadEvidenciasAula(input: UploadComprovacaoInput): Promi
     if (up.error) throw new Error(`Falha ao enviar "${f.name}": ${up.error.message}`);
     const pub = supabase.storage.from("evidencias").getPublicUrl(path);
 
-    const tipoLabel = input.tipo === "lista_presenca" ? "Lista de presença" : "Registro fotográfico";
+    const tipoLabel =
+      input.tipo === "lista_presenca" ? "Lista de presença" : "Registro fotográfico";
     const descricao =
       `${tipoLabel} ${input.codigo_turma ?? ""} ${dataLabel}`.trim() +
       (input.contem_pmq ? " | PMQ:sim" : " | PMQ:nao");
