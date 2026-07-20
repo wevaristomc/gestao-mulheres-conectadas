@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Loader2, Pencil, Plus, Trash2, Upload } from "lucid
 import { toast } from "sonner";
 
 import { DepoimentoCard } from "@/components/landing/depoimento-card";
+import { HeroVideoAdminCard } from "@/components/landing/hero-video-admin-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -121,7 +122,7 @@ function DepoimentosLandingPage() {
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
-          Seu perfil não possui permissão para gerenciar os depoimentos da landing.
+          Seu perfil não possui permissão para gerenciar a landing.
         </CardContent>
       </Card>
     );
@@ -129,10 +130,12 @@ function DepoimentosLandingPage() {
 
   return (
     <div className="space-y-5">
+      <HeroVideoAdminCard />
+
       <Card>
         <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Depoimentos da landing</CardTitle>
+            <CardTitle>Depoimentos</CardTitle>
             <CardDescription className="mt-1">
               Troque vídeos, textos e ordem sem alterar o código do site público.
             </CardDescription>

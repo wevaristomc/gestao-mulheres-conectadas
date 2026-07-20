@@ -19,7 +19,9 @@ import {
 } from "lucide-react";
 
 import { DepoimentoCard } from "@/components/landing/depoimento-card";
+import { HeroVideo } from "@/components/landing/hero-video";
 import { listarTurmasInscricaoPublica } from "@/lib/inscricoes-digitais.functions";
+import { listarLandingHeroConfig } from "@/lib/landing-config.functions";
 import { listarLandingDepoimentos } from "@/lib/landing-depoimentos.functions";
 import { ORIGEM_PUBLICA } from "@/lib/site";
 
@@ -121,7 +123,13 @@ function MulheresConectadasLanding() {
     queryFn: () => listarLandingDepoimentos(),
     staleTime: 5 * 60 * 1000,
   });
+  const heroConfigQ = useQuery({
+    queryKey: ["landing-publica", "hero-config"],
+    queryFn: () => listarLandingHeroConfig(),
+    staleTime: 5 * 60 * 1000,
+  });
   const depoimentos = depoimentosQ.data?.length ? depoimentosQ.data : DEPOIMENTOS_FALLBACK;
+  const heroConfig = heroConfigQ.data;
 
   const municipios = useMemo(() => {
     const encontrados = new Set(
@@ -230,30 +238,22 @@ function MulheresConectadasLanding() {
               </p>
             </div>
 
-            <div className="relative mx-auto w-full max-w-xl">
-              <div className="absolute -inset-4 rotate-3 rounded-[2.5rem] border border-[#f5b033]/45" />
-              <div className="relative overflow-hidden rounded-[2.25rem] border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur md:p-7">
-                <div className="grid grid-cols-2 gap-4">
-                  <MetricCard value="150h" label="de formação híbrida" icon={Clock3} />
-                  <MetricCard value="600" label="mulheres nos dois ciclos" icon={Users} />
-                  <MetricCard value="12" label="turmas previstas" icon={GraduationCap} />
-                  <MetricCard
-                    value="75%"
-                    label="frequência para certificação"
-                    icon={CheckCircle2}
-                  />
-                </div>
-                <div className="mt-5 rounded-2xl bg-[#f5b033] p-5 text-[#05244d]">
-                  <p className="text-xs font-bold uppercase tracking-[0.15em]">
-                    Qualificação profissional
-                  </p>
-                  <p className="mt-2 font-display text-2xl font-bold leading-tight">
-                    Formação Digital + Suporte de TI + Programação Web
-                  </p>
-                </div>
-              </div>
-            </div>
+            {heroConfig?.heroVideoUrl ? (
+              <HeroVideo
+                videoUrl={heroConfig.heroVideoUrl}
+                posterUrl={heroConfig.heroPosterUrl}
+                permitirSom={heroConfig.heroVideoSom}
+              />
+            ) : (
+              <HeroMetricsCard />
+            )}
           </div>
+
+          {heroConfig?.heroVideoUrl ? (
+            <div className="mx-auto -mt-8 max-w-7xl px-4 pb-14 sm:px-6 lg:px-8">
+              <HeroMetricsBand />
+            </div>
+          ) : null}
         </section>
 
         <section
@@ -505,15 +505,66 @@ function MulheresConectadasLanding() {
   );
 }
 
+function HeroMetricsCard() {
+  return (
+    <div className="relative mx-auto w-full max-w-xl">
+      <div className="absolute -inset-4 rotate-3 rounded-[2.5rem] border border-[#f5b033]/45" />
+      <div className="relative overflow-hidden rounded-[2.25rem] border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur md:p-7">
+        <div className="grid grid-cols-2 gap-4">
+          <MetricCard value="150h" label="de formação híbrida" icon={Clock3} />
+          <MetricCard value="600" label="mulheres nos dois ciclos" icon={Users} />
+          <MetricCard value="12" label="turmas previstas" icon={GraduationCap} />
+          <MetricCard value="75%" label="frequência para certificação" icon={CheckCircle2} />
+        </div>
+        <div className="mt-5 rounded-2xl bg-[#f5b033] p-5 text-[#05244d]">
+          <p className="text-xs font-bold uppercase tracking-[0.15em]">Qualificação profissional</p>
+          <p className="mt-2 font-display text-2xl font-bold leading-tight">
+            Formação Digital + Suporte de TI + Programação Web
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeroMetricsBand() {
+  return (
+    <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-xl backdrop-blur">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard compact value="150h" label="de formação híbrida" icon={Clock3} />
+        <MetricCard compact value="600" label="mulheres nos dois ciclos" icon={Users} />
+        <MetricCard compact value="12" label="turmas previstas" icon={GraduationCap} />
+        <MetricCard compact value="75%" label="frequência para certificação" icon={CheckCircle2} />
+      </div>
+    </div>
+  );
+}
+
 function MetricCard({
   value,
   label,
   icon: Icon,
+  compact = false,
 }: {
   value: string;
   label: string;
   icon: typeof Clock3;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#05244d]/45 p-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f5b033]/15">
+          <Icon className="size-5 text-[#f5b033]" />
+        </span>
+        <div>
+          <p className="font-display text-2xl font-bold">{value}</p>
+          <p className="text-xs leading-5 text-white/65">{label}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-white/10 bg-[#05244d]/45 p-4 sm:p-5">
       <Icon className="size-5 text-[#f5b033]" />

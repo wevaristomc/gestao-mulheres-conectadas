@@ -14,7 +14,7 @@ function AdministrativoLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const tabs = [
     { to: "/administrativo/inscricoes", label: "Inscrições" },
-    { to: "/administrativo/depoimentos", label: "Depoimentos da landing" },
+    { to: "/administrativo/depoimentos", label: "Landing" },
     { to: "/administrativo/qualificacao", label: "Qualificação para Certificado" },
     { to: "/administrativo/beneficios", label: "Benefícios" },
     { to: "/administrativo/materiais", label: "Materiais" },
@@ -23,7 +23,7 @@ function AdministrativoLayout() {
     <div>
       <PageHeader
         title="Administrativo"
-        description="Inscrições, qualificação para certificados e entregas de benefícios e materiais."
+        description="Inscrições, landing, qualificação para certificados e entregas de benefícios e materiais."
       />
       <nav className="mb-4 flex gap-1 overflow-x-auto border-b">
         {tabs.map((t) => {
