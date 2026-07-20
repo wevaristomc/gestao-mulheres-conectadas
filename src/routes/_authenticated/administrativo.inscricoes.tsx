@@ -256,7 +256,7 @@ function InscricoesDigitaisTab() {
       if (origem !== "todas" && row.origem !== origem) return false;
       if (
         termo &&
-        !`${row.dados.nome} ${row.dados.cpf} ${row.turmaNome} ${row.dados.municipio} ${row.dados.polo_preferido} ${row.dados.bairro_referencia} ${row.dados.turno_preferido}`
+        !`${row.dados.nome} ${row.dados.nome_social} ${row.dados.cpf} ${row.turmaNome} ${row.dados.municipio} ${row.dados.polo_preferido} ${row.dados.bairro_referencia} ${row.dados.turno_preferido}`
           .toLocaleLowerCase("pt-BR")
           .includes(termo)
       )
@@ -457,8 +457,13 @@ function InscricoesDigitaisTab() {
                       <TableRow key={row.id}>
                         <TableCell>
                           <div className="font-medium">
-                            {row.dados.nome || "Nome não identificado"}
+                            {row.dados.nome_social || row.dados.nome || "Nome não identificado"}
                           </div>
+                          {row.dados.nome_social ? (
+                            <div className="text-xs text-muted-foreground">
+                              Nome completo: {row.dados.nome || "Não identificado"}
+                            </div>
+                          ) : null}
                           <div className="text-xs text-muted-foreground">
                             {formatCpf(row.dados.cpf) || "CPF não identificado"}
                             {calcularIdade(row.dados.data_nascimento) != null ? (
@@ -594,7 +599,10 @@ function InscricoesDigitaisTab() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                       Preferências para alocação
                     </p>
-                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-5">
+                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-6">
+                      <div>
+                        <strong>Nome social:</strong> {dadosEdicao.nome_social || "Não informado"}
+                      </div>
                       <div>
                         <strong>Turno:</strong> {turnoLabel(dadosEdicao.turno_preferido)}
                       </div>

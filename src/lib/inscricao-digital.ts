@@ -64,6 +64,8 @@ const contatoEmergenciaSchema = z.object({
 export const dadosInscricaoDigitalSchema = z
   .object({
     nome: z.string().trim().min(3, "Informe o nome completo.").max(180),
+    usa_nome_social: z.enum(["sim", "nao"]).default("nao"),
+    nome_social: textoOpcional,
     cpf: z.string().trim().refine(isValidCpf, "CPF inválido."),
     data_nascimento: textoOpcional,
     genero: textoOpcional,
@@ -138,6 +140,13 @@ export const dadosInscricaoDigitalSchema = z
     drive_arquivo_id: textoOpcional,
   })
   .superRefine((dados, contexto) => {
+    if (dados.usa_nome_social === "sim" && !dados.nome_social.trim()) {
+      contexto.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["nome_social"],
+        message: "Informe o nome social ou marque que não utiliza.",
+      });
+    }
     if (dados.restricao_alimentar && !dados.qual_restricao_alimentar.trim()) {
       contexto.addIssue({
         code: z.ZodIssueCode.custom,
@@ -166,6 +175,8 @@ export const dadosInscricaoDigitalSchema = z
     ...dados,
     cpf: onlyDigits(dados.cpf),
     tipo_deficiencia: dados.pcd ? dados.tipo_deficiencia : "",
+    usa_nome_social: (dados.usa_nome_social === "sim" ? "sim" : "nao") as "sim" | "nao",
+    nome_social: dados.usa_nome_social === "sim" ? dados.nome_social.trim() : "",
     qual_programa_social: dados.beneficiaria_programa_social ? dados.qual_programa_social : "",
     qual_restricao_alimentar: dados.restricao_alimentar ? dados.qual_restricao_alimentar : "",
   }));
@@ -175,6 +186,8 @@ export type DadosInscricaoDigitalNormalizados = z.output<typeof dadosInscricaoDi
 
 export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   nome: "",
+  usa_nome_social: "nao",
+  nome_social: "",
   cpf: "",
   data_nascimento: "",
   genero: "",
