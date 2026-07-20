@@ -99,9 +99,14 @@ function normalizarDadosOcr(
     const numero = numeroConfianca(confianca);
     if (numero != null) confiancas[campo] = numero;
   }
+  const nomeSocial = texto(fonte.nome_social);
+  const usaNomeSocial = (escolhaPermitida(fonte.usa_nome_social, ["sim", "nao"]) ||
+    (nomeSocial ? "sim" : "nao")) as "sim" | "nao";
   return {
     ...DADOS_INSCRICAO_VAZIOS,
     nome: texto(fonte.nome),
+    usa_nome_social: usaNomeSocial,
+    nome_social: usaNomeSocial === "sim" ? nomeSocial : "",
     cpf: onlyDigits(texto(fonte.cpf)),
     data_nascimento: texto(fonte.data_nascimento),
     genero: texto(fonte.genero),
@@ -550,7 +555,8 @@ export const importarFichaComOcr = createServerFn({ method: "POST" })
 Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON válido neste formato:
 {
   "dados": {
-    "nome": "", "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio",
+    "nome": "", "usa_nome_social": "nao", "nome_social": "",
+    "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio",
     "genero": "", "raca": "", "pcd": false, "tipo_deficiencia": "",
     "telefone": "", "email": "", "endereco": "", "municipio": "",
     "bairro_referencia": "", "turno_preferido": "",
@@ -573,7 +579,7 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
 Use "sim" ou "nao" em identifica_se_mulher; P, M, G, GG ou XG em tamanho_camisa;
 "manha", "tarde", "noite" ou "qualquer" em turno_preferido; e os textos exatos das opções
 de situação de trabalho e renda familiar apresentados na ficha.
-Inclua em "confiancas" todos os campos retornados, inclusive os campos dos dois contatos,
+Inclua em "confiancas" todos os campos retornados, inclusive nome_social, os campos dos dois contatos,
 turno_preferido, polo_preferido e bairro_referencia, usando valores entre 0 e 1.
 Campos ausentes ou ilegíveis devem ser string vazia (ou false) e confiança 0.`;
       const visao = await executarVisaoRouter({
@@ -783,9 +789,13 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
         ficha_inscricao_url: await urlArquivo(admin, row.arquivo_origem_path),
         observacao_importacao: [
           `Inscrição digital ${row.id} (${row.origem}).`,
+          dados.nome_social ? `Nome social informado: ${dados.nome_social}.` : null,
+
           row.documento_path ? `Documento: ${row.documento_path}.` : "Documento não anexado.",
           row.comprovante_path ? `Comprovante: ${row.comprovante_path}.` : "Comprovante pendente.",
-        ].join(" "),
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
       if (matriculaError) throw new Error(matriculaError.message);
       const { error: updateError } = await admin

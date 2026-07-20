@@ -144,6 +144,38 @@ export function InscricaoDigitalFields({
                 autoComplete="name"
               />
             </Field>
+            <Field {...propsCampo("usa_nome_social")} label="Você utiliza nome social?" required>
+              <Select
+                value={value.usa_nome_social || undefined}
+                onValueChange={(valor) =>
+                  set("usa_nome_social", valor as DadosInscricaoDigital["usa_nome_social"])
+                }
+                disabled={disabled}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nao">Não</SelectItem>
+                  <SelectItem value="sim">Sim</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            {value.usa_nome_social === "sim" ? (
+              <Field {...propsCampo("nome_social")} label="Nome social" required>
+                <Input
+                  value={value.nome_social}
+                  onChange={(e) => set("nome_social", e.target.value)}
+                  disabled={disabled}
+                  autoComplete="nickname"
+                  placeholder="Nome pelo qual você deseja ser chamada"
+                />
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Usaremos este nome no atendimento e na comunicação. O nome completo permanece
+                  registrado apenas para conferência documental e matrícula.
+                </p>
+              </Field>
+            ) : null}
             <Field {...propsCampo("cpf")} label="CPF" required>
               <Input
                 value={value.cpf}

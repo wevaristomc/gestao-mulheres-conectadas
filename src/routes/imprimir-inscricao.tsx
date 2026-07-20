@@ -62,6 +62,7 @@ function FichaImpressaoPage() {
           <h2 className="font-bold uppercase">1. Elegibilidade e dados pessoais</h2>
           {linha("Identifica-se como mulher", d.identifica_se_mulher === "sim" ? "Sim" : "Não")}
           {linha("Nome completo", d.nome)}
+          {linha("Nome social", d.nome_social || "Não informado")}
           <div className="grid grid-cols-2 gap-5">
             {linha("CPF", formatCpf(d.cpf))}
             {linha("Data de nascimento", d.data_nascimento)}
