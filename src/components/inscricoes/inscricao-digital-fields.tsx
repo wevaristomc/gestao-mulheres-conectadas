@@ -17,6 +17,8 @@ import { formatCpf, formatPhone, onlyDigits } from "@/lib/cpf";
 import {
   AUTORIZACAO_DADOS_TEXTO,
   campoBaixaConfianca,
+  municipioDoPoloInscricao,
+  POLOS_INSCRICAO,
   RENDAS_FAMILIARES,
   SITUACOES_TRABALHO,
   TAMANHOS_CAMISA,
@@ -83,6 +85,11 @@ export function InscricaoDigitalFields({
     campo,
     destacar: baixa(campo),
   });
+  const setPoloPreferido = (polo: string) => {
+    const municipio = municipioDoPoloInscricao(polo);
+    onChange({ ...value, polo_preferido: polo, municipio: municipio || value.municipio });
+  };
+
   const setContato = (indice: number, campo: "nome" | "telefone" | "parentesco", valor: string) => {
     const contatos = value.contatos_emergencia.map((contato, posicao) =>
       posicao === indice ? { ...contato, [campo]: valor } : contato,
@@ -229,6 +236,24 @@ export function InscricaoDigitalFields({
               disabled={disabled}
               autoComplete="street-address"
             />
+          </Field>
+          <Field {...propsCampo("polo_preferido")} label="Polo de preferência" required>
+            <Select
+              value={value.polo_preferido || undefined}
+              onValueChange={setPoloPreferido}
+              disabled={disabled}
+            >
+              <SelectTrigger aria-label="Polo de preferência">
+                <SelectValue placeholder="Selecione o polo mais próximo" />
+              </SelectTrigger>
+              <SelectContent>
+                {POLOS_INSCRICAO.map((polo) => (
+                  <SelectItem key={polo.nome} value={polo.nome}>
+                    {polo.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field {...propsCampo("municipio")} label="Município" required>
             {municipios ? (

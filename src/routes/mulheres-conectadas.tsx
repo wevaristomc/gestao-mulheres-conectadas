@@ -20,6 +20,7 @@ import {
 
 import { DepoimentoCard } from "@/components/landing/depoimento-card";
 import { HeroVideo } from "@/components/landing/hero-video";
+import { MUNICIPIOS_INSCRICAO } from "@/lib/inscricao-digital";
 import { listarTurmasInscricaoPublica } from "@/lib/inscricoes-digitais.functions";
 import { listarLandingHeroConfig } from "@/lib/landing-config.functions";
 import { listarLandingDepoimentos } from "@/lib/landing-depoimentos.functions";
@@ -132,10 +133,12 @@ function MulheresConectadasLanding() {
   const heroConfig = heroConfigQ.data;
 
   const municipios = useMemo(() => {
-    const encontrados = new Set(
-      (turmasQ.data ?? []).map((turma) => turma.municipio?.trim()).filter(Boolean),
-    );
-    return encontrados.size ? Array.from(encontrados) : ["Belo Horizonte", "Betim", "Juatuba"];
+    const base = new Set<string>(MUNICIPIOS_INSCRICAO);
+    (turmasQ.data ?? [])
+      .map((turma) => turma.municipio?.trim())
+      .filter((municipio): municipio is string => Boolean(municipio))
+      .forEach((municipio) => base.add(municipio));
+    return Array.from(base).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [turmasQ.data]);
 
   return (

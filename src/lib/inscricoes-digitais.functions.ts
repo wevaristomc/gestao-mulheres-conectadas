@@ -112,6 +112,7 @@ function normalizarDadosOcr(
     email: texto(fonte.email),
     endereco: texto(fonte.endereco),
     municipio: texto(fonte.municipio),
+    polo_preferido: texto(fonte.polo_preferido),
     bairro_referencia: texto(fonte.bairro_referencia),
     turno_preferido: turnoPreferido(fonte.turno_preferido),
     identifica_se_mulher: escolhaPermitida(fonte.identifica_se_mulher, ["sim", "nao"]),
@@ -573,7 +574,7 @@ Use "sim" ou "nao" em identifica_se_mulher; P, M, G, GG ou XG em tamanho_camisa;
 "manha", "tarde", "noite" ou "qualquer" em turno_preferido; e os textos exatos das opções
 de situação de trabalho e renda familiar apresentados na ficha.
 Inclua em "confiancas" todos os campos retornados, inclusive os campos dos dois contatos,
-turno_preferido e bairro_referencia, usando valores entre 0 e 1.
+turno_preferido, polo_preferido e bairro_referencia, usando valores entre 0 e 1.
 Campos ausentes ou ilegíveis devem ser string vazia (ou false) e confiança 0.`;
       const visao = await executarVisaoRouter({
         admin,

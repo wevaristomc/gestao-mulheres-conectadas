@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
 import {
   DADOS_INSCRICAO_VAZIOS,
+  MUNICIPIOS_INSCRICAO,
   dadosInscricaoDigitalSchema,
   type DadosInscricaoDigital,
 } from "@/lib/inscricao-digital";
@@ -109,7 +110,9 @@ function InscricaoPublicaPage() {
           .filter((municipio): municipio is string => Boolean(municipio)),
       ),
     ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-    return encontrados.length > 0 ? encontrados : [...MUNICIPIOS_FALLBACK];
+    const base = new Set<string>(MUNICIPIOS_INSCRICAO);
+    encontrados.forEach((municipio) => base.add(municipio));
+    return Array.from(base).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [turmasQ.data]);
 
   const [dados, setDados] = useState<DadosInscricaoDigital>({
@@ -230,7 +233,7 @@ function InscricaoPublicaPage() {
               <CardTitle>Dados da candidata</CardTitle>
               <CardDescription>
                 Os campos marcados com * são obrigatórios. A turma será escolhida pela coordenação
-                com base no município, referência e turno informados.
+                com base no polo, município, referência e turno informados.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-7">

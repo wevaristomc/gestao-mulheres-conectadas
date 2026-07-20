@@ -168,20 +168,37 @@ function sugerirTurma(
 ): TurmaInscricaoPublica | null {
   const municipio = normalizarComparacao(dados.municipio);
   const turno = normalizarComparacao(dados.turno_preferido);
+  const polo = normalizarComparacao(dados.polo_preferido);
   if (!municipio || !turno) return null;
-  return (
-    turmas.find((turma) => {
-      const municipioTurma = normalizarComparacao(turma.municipio);
-      const municipioCoincide =
-        municipioTurma === municipio ||
+  const turnoCompativel = (turma: TurmaInscricaoPublica) =>
+    turno === "qualquer" || normalizarComparacao(turma.turno) === turno;
+  const municipioCompativel = (turma: TurmaInscricaoPublica) => {
+    const municipioTurma = normalizarComparacao(turma.municipio);
+    return (
+      !!municipioTurma &&
+      (municipioTurma === municipio ||
         municipioTurma.includes(municipio) ||
-        municipio.includes(municipioTurma);
-      const turnoCoincide = turno === "qualquer" || normalizarComparacao(turma.turno) === turno;
-      return !!municipioTurma && municipioCoincide && turnoCoincide;
-    }) ?? null
+        municipio.includes(municipioTurma))
+    );
+  };
+  const poloCompativel = (turma: TurmaInscricaoPublica) => {
+    if (!polo) return false;
+    const local = normalizarComparacao(`${turma.nome} ${turma.localAula} ${turma.localEndereco}`);
+    const termos = polo
+      .replace(/\bbh\b/g, "belo horizonte")
+      .split(/\s+-\s+|\s+/)
+      .filter((termo) => termo.length > 2 && termo !== "polo");
+    return termos.length > 0 && termos.every((termo) => local.includes(termo));
+  };
+
+  return (
+    turmas.find(
+      (turma) => municipioCompativel(turma) && turnoCompativel(turma) && poloCompativel(turma),
+    ) ??
+    turmas.find((turma) => municipioCompativel(turma) && turnoCompativel(turma)) ??
+    null
   );
 }
-
 function arquivoParaBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -239,7 +256,7 @@ function InscricoesDigitaisTab() {
       if (origem !== "todas" && row.origem !== origem) return false;
       if (
         termo &&
-        !`${row.dados.nome} ${row.dados.cpf} ${row.turmaNome} ${row.dados.municipio} ${row.dados.bairro_referencia} ${row.dados.turno_preferido}`
+        !`${row.dados.nome} ${row.dados.cpf} ${row.turmaNome} ${row.dados.municipio} ${row.dados.polo_preferido} ${row.dados.bairro_referencia} ${row.dados.turno_preferido}`
           .toLocaleLowerCase("pt-BR")
           .includes(termo)
       )
@@ -462,7 +479,9 @@ function InscricoesDigitaisTab() {
                         <TableCell>
                           <div className="font-medium">{turnoLabel(row.dados.turno_preferido)}</div>
                           <div className="max-w-56 text-xs text-muted-foreground">
-                            {row.dados.municipio || "Município não informado"}
+                            {row.dados.polo_preferido ||
+                              row.dados.municipio ||
+                              "Local não informado"}
                             {row.dados.bairro_referencia ? ` · ${row.dados.bairro_referencia}` : ""}
                           </div>
                         </TableCell>
@@ -575,9 +594,12 @@ function InscricoesDigitaisTab() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                       Preferências para alocação
                     </p>
-                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-5">
                       <div>
                         <strong>Turno:</strong> {turnoLabel(dadosEdicao.turno_preferido)}
+                      </div>
+                      <div>
+                        <strong>Polo:</strong> {dadosEdicao.polo_preferido || "Não informado"}
                       </div>
                       <div>
                         <strong>Município:</strong> {dadosEdicao.municipio || "Não informado"}
