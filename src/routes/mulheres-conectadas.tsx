@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { DepoimentoCard } from "@/components/landing/depoimento-card";
 import { listarTurmasInscricaoPublica } from "@/lib/inscricoes-digitais.functions";
 import { listarLandingDepoimentos } from "@/lib/landing-depoimentos.functions";
 import { ORIGEM_PUBLICA } from "@/lib/site";
@@ -361,27 +362,14 @@ function MulheresConectadasLanding() {
               </p>
             </div>
 
-            <div className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-6 [scrollbar-color:#d15c2e_#fff5de]">
+            <div className="mt-12 flex snap-x snap-mandatory items-start gap-5 overflow-x-auto pb-6 [scrollbar-color:#d15c2e_#fff5de]">
               {depoimentos.map((depoimento) => (
-                <article
+                <DepoimentoCard
                   key={depoimento.videoUrl}
-                  className="min-w-[82vw] snap-start overflow-hidden rounded-[2rem] border border-[#05244d]/10 bg-[#05244d] text-white shadow-xl sm:min-w-[24rem] lg:min-w-[27rem]"
-                >
-                  <video
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="aspect-video w-full bg-black object-cover"
-                    aria-label={`Depoimento de ${depoimento.nome}`}
-                  >
-                    <source src={depoimento.videoUrl} type="video/mp4" />
-                    Seu navegador não consegue reproduzir este vídeo.
-                  </video>
-                  <div className="p-6">
-                    <p className="font-display text-2xl font-bold">{depoimento.nome}</p>
-                    <p className="mt-1 text-sm text-white/65">{depoimento.contexto}</p>
-                  </div>
-                </article>
+                  nome={depoimento.nome}
+                  contexto={depoimento.contexto}
+                  videoUrl={depoimento.videoUrl}
+                />
               ))}
             </div>
           </div>
