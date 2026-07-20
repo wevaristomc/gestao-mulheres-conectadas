@@ -64,6 +64,7 @@ type Props = {
   mostrarConfianca?: boolean;
   disabled?: boolean;
   encerrarSeInelegivel?: boolean;
+  municipios?: readonly string[];
 };
 
 export function InscricaoDigitalFields({
@@ -72,6 +73,7 @@ export function InscricaoDigitalFields({
   mostrarConfianca = false,
   disabled = false,
   encerrarSeInelegivel = false,
+  municipios,
 }: Props) {
   const set = <K extends keyof DadosInscricaoDigital>(campo: K, valor: DadosInscricaoDigital[K]) =>
     onChange({ ...value, [campo]: valor });
@@ -229,12 +231,31 @@ export function InscricaoDigitalFields({
             />
           </Field>
           <Field {...propsCampo("municipio")} label="Município" required>
-            <Input
-              value={value.municipio}
-              onChange={(e) => set("municipio", e.target.value)}
-              disabled={disabled}
-              autoComplete="address-level2"
-            />
+            {municipios ? (
+              <Select
+                value={value.municipio || undefined}
+                onValueChange={(municipio) => set("municipio", municipio)}
+                disabled={disabled}
+              >
+                <SelectTrigger aria-label="Município">
+                  <SelectValue placeholder="Selecione a cidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {municipios.map((municipio) => (
+                    <SelectItem key={municipio} value={municipio}>
+                      {municipio}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                value={value.municipio}
+                onChange={(e) => set("municipio", e.target.value)}
+                disabled={disabled}
+                autoComplete="address-level2"
+              />
+            )}
           </Field>
           <Field
             {...propsCampo("bairro_referencia")}

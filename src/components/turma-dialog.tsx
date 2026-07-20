@@ -5,13 +5,22 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { upsertTurma, pickFirst, type Row } from "@/lib/pedagogico-queries";
 
@@ -34,7 +43,7 @@ export function TurmaDialog({ open, onOpenChange, projetoId, turma }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    setNome(pickFirst(turma ?? undefined, ["nome", "titulo"]) ?? "");
+    setNome(pickFirst(turma ?? undefined, ["nome_curso", "curso"]) ?? "");
     setTurno((pickFirst(turma ?? undefined, ["turno", "periodo"]) ?? "").toLowerCase());
     setDataInicio((pickFirst(turma ?? undefined, ["data_inicio", "inicio"]) ?? "").slice(0, 10));
     setDataFim((pickFirst(turma ?? undefined, ["data_fim", "fim"]) ?? "").slice(0, 10));
@@ -69,23 +78,30 @@ export function TurmaDialog({ open, onOpenChange, projetoId, turma }: Props) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{turma ? "Editar turma" : "Nova turma"}</DialogTitle>
-          <DialogDescription>
-            Preencha os dados da turma. O nome é obrigatório.
-          </DialogDescription>
+          <DialogDescription>Preencha os dados da turma. O nome é obrigatório.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="nome">Nome *</Label>
-            <Input id="nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Turma A - Manhã" />
+            <Input
+              id="nome"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex.: Turma A - Manhã"
+            />
           </div>
           <div className="grid gap-1.5">
             <Label>Turno</Label>
             <Select value={turno || "none"} onValueChange={(v) => setTurno(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">—</SelectItem>
                 {TURNOS.map((t) => (
-                  <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                  <SelectItem key={t} value={t} className="capitalize">
+                    {t}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -93,16 +109,31 @@ export function TurmaDialog({ open, onOpenChange, projetoId, turma }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="ini">Início</Label>
-              <Input id="ini" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+              <Input
+                id="ini"
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="fim">Fim</Label>
-              <Input id="fim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+              <Input
+                id="fim"
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+              />
             </div>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="desc">Descrição</Label>
-            <Textarea id="desc" rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
+            <Textarea
+              id="desc"
+              rows={3}
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>

@@ -14,6 +14,7 @@ import {
 } from "@/lib/inscricao-digital";
 import { PAPEIS_COORDENACAO, requirePapel } from "@/lib/rbac-guard";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { codigoTurma, rotuloTurma } from "@/lib/turmas";
 
 const PAPEIS_LEITURA = [...PAPEIS_COORDENACAO, "professor"] as const;
 const UUID = z.string().uuid();
@@ -251,9 +252,8 @@ export const listarTurmasInscricaoPublica = createServerFn({ method: "GET" }).ha
       id: turma.id,
       projetoId: turma.projeto_id,
       projetoNome: turma.projetos?.nome ?? "Mulheres Conectadas",
-      nome:
-        turma.nome_curso ?? turma.curso ?? turma.codigo_turma ?? turma.codigo ?? "Turma sem nome",
-      codigo: turma.codigo ?? turma.codigo_turma ?? null,
+      nome: rotuloTurma(turma),
+      codigo: codigoTurma(turma),
       curso: turma.nome_curso ?? turma.curso ?? null,
       municipio: turma.municipio ?? null,
       turno: turma.turno ?? null,

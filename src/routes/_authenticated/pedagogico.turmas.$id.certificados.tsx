@@ -92,7 +92,7 @@ function CertificadosTab() {
   const selecionadas = elegiveis.filter((r) => sel[r.id]);
 
   const turma = turmaQ.data?.row;
-  const cursoNome = pickFirst(turma, ["nome_curso", "nome", "titulo"]) ?? "Turma";
+  const cursoNome = pickFirst(turma, ["nome_curso", "curso"]) ?? "Turma";
   const municipio = pickFirst(turma, ["municipio"]);
   const inicio = pickFirst(turma, ["data_inicio", "inicio"]);
   const fim = pickFirst(turma, ["data_fim", "fim"]);

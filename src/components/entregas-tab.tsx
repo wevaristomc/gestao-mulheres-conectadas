@@ -44,6 +44,7 @@ import {
   type EntregaTabela,
   type Row,
 } from "@/lib/administrativo-queries";
+import { compararTurmasPorCodigo, rotuloTurma } from "@/lib/turmas";
 
 type Props = {
   tabela: EntregaTabela;
@@ -97,15 +98,9 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
 
   const cursistasQ = useQuery(cursistasComStatusOptions(form.turmaId));
   const cursistas = cursistasQ.data?.rows ?? [];
-  const turmas = turmasQ.data?.rows ?? [];
   const turmasOrdenadas = useMemo(
-    () =>
-      [...turmas].sort((a, b) => {
-        const na = pickFirst(a, ["nome", "titulo"]) ?? "";
-        const nb = pickFirst(b, ["nome", "titulo"]) ?? "";
-        return na.localeCompare(nb, "pt-BR");
-      }),
-    [turmas],
+    () => [...(turmasQ.data?.rows ?? [])].sort(compararTurmasPorCodigo),
+    [turmasQ.data?.rows],
   );
 
   const abrirNovo = () => {
@@ -187,126 +182,154 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
           <ul className="divide-y md:hidden">
             {listQ.isLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <li key={i} className="p-3"><Skeleton className="h-4 w-40" /></li>
+                <li key={i} className="p-3">
+                  <Skeleton className="h-4 w-40" />
+                </li>
               ))
             ) : rows.length === 0 ? (
-              <li className="p-6 text-center text-sm text-muted-foreground">Nenhuma entrega registrada.</li>
-            ) : rows.map((r) => {
-              const cursista = (r.cursistas as Row | null | undefined) ?? null;
-              const turma = (r.turmas as Row | null | undefined) ?? null;
-              const cursistaNome = pickFirst(cursista, ["nome", "nome_completo"]) ?? (r.cursista_id as string | undefined) ?? "—";
-              const turmaNome = pickFirst(turma, ["nome", "titulo"]) ?? null;
-              return (
-                <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="break-words text-sm font-semibold">{(r.descricao as string) ?? "—"}</div>
-                    <div className="break-words text-xs text-muted-foreground">
-                      {cursistaNome}{turmaNome ? ` • ${turmaNome}` : ""}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{formatarData(r.data_entrega as string)}</span>
-                      {r.quantidade != null ? <span>Qtd: {String(r.quantidade)}</span> : null}
-                      {mostrarValor && r.valor != null ? <span>{formatBRL(Number(r.valor))}</span> : null}
-                      <Badge variant="secondary" className="capitalize">{(r.status as string) ?? "—"}</Badge>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => abrirEditar(r)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => { if (confirm("Remover esta entrega?")) deleteMut.mutate(r.id); }}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="hidden md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-32">Data</TableHead>
-                <TableHead>{labelDescricao}</TableHead>
-                <TableHead>Cursista / Turma</TableHead>
-                <TableHead className="w-24">Qtd.</TableHead>
-                {mostrarValor ? <TableHead className="w-32">Valor</TableHead> : null}
-                <TableHead className="w-28">Status</TableHead>
-                <TableHead className="w-24 text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {listQ.isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell colSpan={mostrarValor ? 7 : 6}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : rows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={mostrarValor ? 7 : 6}
-                    className="text-center text-sm text-muted-foreground py-8"
-                  >
-                    Nenhuma entrega registrada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((r) => {
-                  const cursista = (r.cursistas as Row | null | undefined) ?? null;
-                  const turma = (r.turmas as Row | null | undefined) ?? null;
-                  const cursistaNome =
-                    pickFirst(cursista, ["nome", "nome_completo"]) ??
-                    (r.cursista_id as string | undefined) ??
-                    "—";
-                  const turmaNome = pickFirst(turma, ["nome", "titulo"]) ?? null;
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatarData(r.data_entrega as string)}
-                      </TableCell>
-                      <TableCell className="font-medium">
+              <li className="p-6 text-center text-sm text-muted-foreground">
+                Nenhuma entrega registrada.
+              </li>
+            ) : (
+              rows.map((r) => {
+                const cursista = (r.cursistas as Row | null | undefined) ?? null;
+                const turma = (r.turmas as Row | null | undefined) ?? null;
+                const cursistaNome =
+                  pickFirst(cursista, ["nome", "nome_completo"]) ??
+                  (r.cursista_id as string | undefined) ??
+                  "—";
+                const turmaNome = turma ? rotuloTurma(turma) : null;
+                return (
+                  <li key={r.id} className="flex min-w-0 items-start justify-between gap-2 p-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="break-words text-sm font-semibold">
                         {(r.descricao as string) ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div>{cursistaNome}</div>
-                        {turmaNome ? (
-                          <div className="text-xs text-muted-foreground">{turmaNome}</div>
+                      </div>
+                      <div className="break-words text-xs text-muted-foreground">
+                        {cursistaNome}
+                        {turmaNome ? ` • ${turmaNome}` : ""}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>{formatarData(r.data_entrega as string)}</span>
+                        {r.quantidade != null ? <span>Qtd: {String(r.quantidade)}</span> : null}
+                        {mostrarValor && r.valor != null ? (
+                          <span>{formatBRL(Number(r.valor))}</span>
                         ) : null}
-                      </TableCell>
-                      <TableCell>{r.quantidade != null ? String(r.quantidade) : "—"}</TableCell>
-                      {mostrarValor ? (
-                        <TableCell>
-                          {r.valor != null ? formatBRL(Number(r.valor)) : "—"}
-                        </TableCell>
-                      ) : null}
-                      <TableCell>
                         <Badge variant="secondary" className="capitalize">
                           {(r.status as string) ?? "—"}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button size="icon" variant="ghost" onClick={() => abrirEditar(r)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => {
-                            if (confirm("Remover esta entrega?")) deleteMut.mutate(r.id);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-10 w-10"
+                        onClick={() => abrirEditar(r)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-10 w-10"
+                        onClick={() => {
+                          if (confirm("Remover esta entrega?")) deleteMut.mutate(r.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-32">Data</TableHead>
+                  <TableHead>{labelDescricao}</TableHead>
+                  <TableHead>Cursista / Turma</TableHead>
+                  <TableHead className="w-24">Qtd.</TableHead>
+                  {mostrarValor ? <TableHead className="w-32">Valor</TableHead> : null}
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-24 text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {listQ.isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={mostrarValor ? 7 : 6}>
+                        <Skeleton className="h-4 w-full" />
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+                  ))
+                ) : rows.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={mostrarValor ? 7 : 6}
+                      className="text-center text-sm text-muted-foreground py-8"
+                    >
+                      Nenhuma entrega registrada.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  rows.map((r) => {
+                    const cursista = (r.cursistas as Row | null | undefined) ?? null;
+                    const turma = (r.turmas as Row | null | undefined) ?? null;
+                    const cursistaNome =
+                      pickFirst(cursista, ["nome", "nome_completo"]) ??
+                      (r.cursista_id as string | undefined) ??
+                      "—";
+                    const turmaNome = turma ? rotuloTurma(turma) : null;
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatarData(r.data_entrega as string)}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {(r.descricao as string) ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div>{cursistaNome}</div>
+                          {turmaNome ? (
+                            <div className="text-xs text-muted-foreground">{turmaNome}</div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>{r.quantidade != null ? String(r.quantidade) : "—"}</TableCell>
+                        {mostrarValor ? (
+                          <TableCell>
+                            {r.valor != null ? formatBRL(Number(r.valor)) : "—"}
+                          </TableCell>
+                        ) : null}
+                        <TableCell>
+                          <Badge variant="secondary" className="capitalize">
+                            {(r.status as string) ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" onClick={() => abrirEditar(r)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              if (confirm("Remover esta entrega?")) deleteMut.mutate(r.id);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -340,7 +363,7 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
                   <SelectContent>
                     {turmasOrdenadas.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {pickFirst(t, ["nome", "titulo"]) ?? t.id}
+                        {rotuloTurma(t)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -428,10 +451,7 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
             {mostrarValor ? (
               <div>
                 <Label>Status</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => setForm({ ...form, status: v })}
-                >
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -460,9 +480,7 @@ export function EntregasTab({ tabela, titulo, labelDescricao, mostrarValor, stat
               Cancelar
             </Button>
             <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
-              {saveMut.isPending ? (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              ) : null}
+              {saveMut.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
               Salvar
             </Button>
           </DialogFooter>
