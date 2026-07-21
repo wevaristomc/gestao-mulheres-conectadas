@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { isValidCpf, onlyDigits } from "@/lib/cpf";
 
-export const ORIGENS_INSCRICAO = ["formulario", "ocr"] as const;
+export const ORIGENS_INSCRICAO = ["formulario", "ocr", "google_forms"] as const;
 export const STATUS_INSCRICAO = [
   "pendente",
   "em_revisao",

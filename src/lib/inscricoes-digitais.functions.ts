@@ -463,6 +463,624 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
       }),
     );
   });
+type ArquivoPlanilhaGoogleForms = {
+  nome: string;
+  mime?: string;
+  base64: string;
+};
+
+type StatusLinhaGoogleForms =
+  "importar" | "duplicada" | "nao_elegivel" | "sem_autorizacao" | "erro";
+
+export type LinhaPreviewGoogleForms = {
+  linha: number;
+  nome: string;
+  email: string;
+  telefone: string;
+  municipio: string;
+  bairroReferencia: string;
+  turnoPreferido: string;
+  status: StatusLinhaGoogleForms;
+  motivo: string;
+};
+
+export type ResultadoPreviewGoogleForms = {
+  resumo: Record<StatusLinhaGoogleForms, number> & { total: number };
+  linhas: LinhaPreviewGoogleForms[];
+};
+
+export type RelatorioInscricoesLinha = {
+  municipio: string;
+  bairroReferencia: string;
+  turnoPreferido: string;
+  total: number;
+  pendentes: number;
+  emRevisao: number;
+  aprovadas: number;
+  rejeitadas: number;
+  duplicadas: number;
+  turmas: number;
+  vagas: number;
+  demandaSemOferta: boolean;
+};
+
+export type RelatorioInscricoesRegiao = {
+  geradoEm: string;
+  total: number;
+  pendentes: number;
+  porTurno: Record<string, number>;
+  porMunicipio: Array<{
+    municipio: string;
+    total: number;
+    pendentes: number;
+    porTurno: Record<string, number>;
+    turmas: number;
+    vagas: number;
+  }>;
+  linhas: RelatorioInscricoesLinha[];
+};
+
+const ArquivoGoogleFormsSchema = z.object({
+  nome: z.string().trim().min(1).max(240),
+  mime: z.string().optional().default(""),
+  base64: z.string().min(8).max(30_000_000),
+});
+
+function normalizarTextoComparacao(valor: string | null | undefined): string {
+  return (valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizarHeader(valor: unknown): string {
+  return normalizarTextoComparacao(String(valor ?? ""))
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseCsv(textoCsv: string): string[][] {
+  const textoLimpo = textoCsv.replace(/^\uFEFF/, "");
+  const primeiraLinha = textoLimpo.split("\n")[0] ?? "";
+  const delimitador =
+    (primeiraLinha.match(/;/g)?.length ?? 0) > (primeiraLinha.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const linhas: string[][] = [];
+  let atual = "";
+  let linha: string[] = [];
+  let aspas = false;
+  for (let i = 0; i < textoLimpo.length; i += 1) {
+    const ch = textoLimpo[i];
+    const prox = textoLimpo[i + 1];
+    if (ch === '"') {
+      if (aspas && prox === '"') {
+        atual += '"';
+        i += 1;
+      } else {
+        aspas = !aspas;
+      }
+    } else if (ch === delimitador && !aspas) {
+      linha.push(atual.trim());
+      atual = "";
+    } else if ((ch === "\n" || ch === "\r") && !aspas) {
+      if (ch === "\r" && prox === "\n") i += 1;
+      linha.push(atual.trim());
+      if (linha.some((celula) => celula.length > 0)) linhas.push(linha);
+      linha = [];
+      atual = "";
+    } else {
+      atual += ch;
+    }
+  }
+  linha.push(atual.trim());
+  if (linha.some((celula) => celula.length > 0)) linhas.push(linha);
+  return linhas;
+}
+
+function bytesParaTextoUtf8(bytes: Uint8Array): string {
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+async function lerPlanilhaGoogleForms(
+  arquivo: ArquivoPlanilhaGoogleForms,
+): Promise<Record<string, string>[]> {
+  const bytes = bytesDeBase64(arquivo.base64);
+  const nome = arquivo.nome.toLowerCase();
+  let matriz: unknown[][];
+  if (/\.xlsx?$/.test(nome) || /spreadsheet|excel/i.test(arquivo.mime ?? "")) {
+    const XLSX: any = await import("xlsx");
+    const wb = XLSX.read(bytes, { type: "array" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    matriz = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false }) as unknown[][];
+  } else {
+    matriz = parseCsv(bytesParaTextoUtf8(bytes));
+  }
+  const cabecalho = (matriz[0] ?? []).map((v) => String(v ?? "").trim());
+  if (!cabecalho.length) throw new Error("A planilha não possui cabeçalho.");
+  return matriz.slice(1).map((linha) => {
+    const row: Record<string, string> = {};
+    cabecalho.forEach((header, index) => {
+      row[header] = String(linha[index] ?? "").trim();
+    });
+    return row;
+  });
+}
+
+function valorColuna(row: Record<string, string>, candidatos: string[]): string {
+  const entradas = Object.entries(row);
+  const normalizados = candidatos.map(normalizarHeader);
+  const encontrado = entradas.find(([header]) => {
+    const h = normalizarHeader(header);
+    return normalizados.some((c) => h.includes(c) || c.includes(h));
+  });
+  return encontrado?.[1]?.trim() ?? "";
+}
+
+function simNao(valor: string): boolean {
+  return /^(sim|s|true|1|autorizo|concordo|aceito)/i.test(normalizarTextoComparacao(valor));
+}
+
+function ehNao(valor: string): boolean {
+  return /^(nao|n|false|0)/i.test(normalizarTextoComparacao(valor));
+}
+
+function normalizarMunicipioForms(valor: string, municipiosOficiais: string[]): string {
+  const norm = normalizarTextoComparacao(valor);
+  if (!norm) return "";
+  const oficial = municipiosOficiais.find(
+    (municipio) => normalizarTextoComparacao(municipio) === norm,
+  );
+  if (oficial) return oficial;
+  if (["bh", "b h", "belo horizonte"].includes(norm)) return "Belo Horizonte";
+  return valor.trim();
+}
+
+function normalizarTurnoForms(valor: string): string {
+  const norm = normalizarTextoComparacao(valor);
+  if (norm.includes("manha")) return "manha";
+  if (norm.includes("tarde")) return "tarde";
+  if (norm.includes("noite")) return "noite";
+  if (norm.includes("qualquer")) return "qualquer";
+  return "";
+}
+
+function normalizarTrabalho(valor: string): string {
+  const norm = normalizarTextoComparacao(valor);
+  if (!norm) return "";
+  if (norm.includes("carteira") || norm.includes("clt") || norm.includes("assinada"))
+    return "Sim, com carteira assinada";
+  if (norm.includes("informal") || norm.includes("autonom") || norm.includes("proprio"))
+    return "Sim, informal/autônoma";
+  if (norm.startsWith("nao") || norm.includes("desempreg") || norm.includes("nao estou"))
+    return "Não estou trabalhando";
+  return valor.trim();
+}
+
+function normalizarRenda(valor: string): string {
+  const norm = normalizarTextoComparacao(valor);
+  if (!norm) return "";
+  if (norm.includes("acima") || norm.includes("mais de 2")) return "Acima de 2 salários mínimos";
+  if (norm.includes("1 a 2") || norm.includes("um a dois") || norm.includes("de 1"))
+    return "De 1 a 2 salários mínimos";
+  if (norm.includes("ate") || norm.includes("1 salario") || norm.includes("um salario"))
+    return "Até 1 salário mínimo";
+  return valor.trim();
+}
+
+function normalizarCamisa(valor: string): string {
+  const v = valor.trim().toUpperCase();
+  if (["P", "M", "G", "GG", "XG"].includes(v)) return v;
+  return "";
+}
+
+function formatarDataForms(valor: string): string {
+  const v = valor.trim();
+  if (!v) return "";
+  const m = v.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+  if (!m) return v;
+  const ano = m[3].length === 2 ? "20" + m[3] : m[3];
+  return m[1].padStart(2, "0") + "/" + m[2].padStart(2, "0") + "/" + ano + (m[4] ? " " + m[4] : "");
+}
+
+function dadosGoogleForms(
+  row: Record<string, string>,
+  municipiosOficiais: string[],
+): DadosInscricaoDigitalNormalizados {
+  const carimbo = valorColuna(row, ["carimbo de data hora", "timestamp", "data hora"]);
+  const idade = valorColuna(row, ["idade"]);
+  const restricaoRaw = valorColuna(row, ["restricao alimentar"]);
+  const restricaoQual = valorColuna(row, ["qual restricao", "qual e a restricao", "qual"]);
+  const pcdRaw = valorColuna(row, ["possui alguma deficiencia", "deficiencia", "pcd"]);
+  const pcdQual = valorColuna(row, ["qual deficiencia", "tipo deficiencia"]);
+  const programaRaw = valorColuna(row, ["beneficiaria de programa social", "programa social"]);
+  const observacoes = [
+    carimbo
+      ? "Pré-inscrição Google Forms de " + formatarDataForms(carimbo) + "."
+      : "Pré-inscrição Google Forms.",
+    idade ? "Idade informada: " + idade + "." : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const restricaoTexto = [restricaoRaw, restricaoQual].filter(Boolean).join(" — ");
+  const temRestricao = restricaoTexto ? !ehNao(restricaoTexto) : false;
+  const temPcd = pcdRaw ? !ehNao(pcdRaw) : !!pcdQual;
+  const identificaMulherRaw = valorColuna(row, [
+    "voce se identifica como mulher",
+    "identifica como mulher",
+  ]);
+
+  return {
+    ...normalizarDadosOcr({}, {}),
+    usa_nome_social: "nao",
+    nome_social: "",
+    nome: valorColuna(row, ["nome completo", "nome"]),
+    email: valorColuna(row, ["e mail", "email"]),
+    telefone: onlyDigits(valorColuna(row, ["telefone whatsapp", "whatsapp", "telefone"])),
+    endereco: valorColuna(row, [
+      "endereco rua e numero",
+      "endereco rua numero",
+      "rua e numero",
+      "endereco",
+    ]),
+    bairro_referencia: valorColuna(row, ["bairro", "bairro referencia"]),
+    municipio: normalizarMunicipioForms(
+      valorColuna(row, ["cidade", "municipio"]),
+      municipiosOficiais,
+    ),
+    turno_preferido: normalizarTurnoForms(valorColuna(row, ["qual turno", "turno"])),
+    disponibilidade_outros_turnos: simNao(
+      valorColuna(row, [
+        "disponibilidade em mais de um turno",
+        "mais de um turno",
+        "outros turnos",
+      ]),
+    ),
+    tamanho_camisa: normalizarCamisa(valorColuna(row, ["tamanho da camisa", "camisa"])),
+    restricao_alimentar: temRestricao,
+    qual_restricao_alimentar: temRestricao ? restricaoTexto : "",
+    pcd: temPcd,
+    tipo_deficiencia: temPcd ? pcdQual || pcdRaw : "",
+    situacao_trabalho: normalizarTrabalho(
+      valorColuna(row, ["atualmente voce esta trabalhando", "trabalhando", "situacao trabalho"]),
+    ),
+    renda_familiar: normalizarRenda(valorColuna(row, ["renda familiar", "renda"])),
+    beneficiaria_programa_social: simNao(programaRaw),
+    qual_programa_social: simNao(programaRaw) ? programaRaw : "",
+    motivo_participacao: valorColuna(row, [
+      "por que deseja participar",
+      "porque deseja participar",
+      "deseja participar",
+    ]),
+    autorizacao_dados: simNao(
+      valorColuna(row, ["autorizacao para uso dos dados", "autoriza", "uso dos dados", "lgpd"]),
+    ),
+    autorizacao_dados_em: carimbo || new Date().toISOString(),
+    identifica_se_mulher: identificaMulherRaw
+      ? simNao(identificaMulherRaw)
+        ? "sim"
+        : "nao"
+      : "sim",
+    observacoes,
+  };
+}
+
+function chaveNomeMunicipio(
+  dados: Pick<DadosInscricaoDigitalNormalizados, "nome" | "municipio">,
+): string {
+  return normalizarTextoComparacao(dados.nome) + "::" + normalizarTextoComparacao(dados.municipio);
+}
+
+async function prepararPreviewGoogleForms(
+  admin: any,
+  projetoId: string,
+  arquivo: ArquivoPlanilhaGoogleForms,
+): Promise<ResultadoPreviewGoogleForms & { dadosImportar: DadosInscricaoDigitalNormalizados[] }> {
+  const [turmasRes, inscricoesRes] = await Promise.all([
+    admin.from("turmas").select("municipio").eq("projeto_id", projetoId).limit(500),
+    admin.from("inscricoes_digitais").select("dados").eq("projeto_id", projetoId).limit(5000),
+  ]);
+  if (turmasRes.error) throw new Error(turmasRes.error.message);
+  if (inscricoesRes.error) throw new Error(inscricoesRes.error.message);
+  const municipiosOficiais: string[] = Array.from(
+    new Set((turmasRes.data ?? []).map((t: any) => texto(t.municipio)).filter(Boolean)),
+  );
+  const telefonesExistentes = new Set<string>();
+  const nomesMunicipiosExistentes = new Set<string>();
+  for (const row of (inscricoesRes.data ?? []) as any[]) {
+    const dados = normalizarDadosOcr(row.dados, row.dados?.confiancas);
+    const telefone = onlyDigits(dados.telefone);
+    if (telefone) telefonesExistentes.add(telefone);
+    if (dados.nome && dados.municipio) nomesMunicipiosExistentes.add(chaveNomeMunicipio(dados));
+  }
+  const telefonesArquivo = new Set<string>();
+  const nomesArquivo = new Set<string>();
+  const rows = await lerPlanilhaGoogleForms(arquivo);
+  const resumo = {
+    total: rows.length,
+    importar: 0,
+    duplicada: 0,
+    nao_elegivel: 0,
+    sem_autorizacao: 0,
+    erro: 0,
+  };
+  const linhas: LinhaPreviewGoogleForms[] = [];
+  const dadosImportar: DadosInscricaoDigitalNormalizados[] = [];
+  rows.forEach((row, index) => {
+    try {
+      const dados = dadosGoogleForms(row, municipiosOficiais);
+      let status: StatusLinhaGoogleForms = "importar";
+      let motivo = "Pronta para importar";
+      if (dados.identifica_se_mulher !== "sim") {
+        status = "nao_elegivel";
+        motivo = "Não elegível pelo critério do edital";
+      } else if (!dados.autorizacao_dados) {
+        status = "sem_autorizacao";
+        motivo = "Sem consentimento LGPD";
+      } else {
+        const telefone = onlyDigits(dados.telefone);
+        const chaveNome = chaveNomeMunicipio(dados);
+        const duplicadaTelefone =
+          telefone && (telefonesExistentes.has(telefone) || telefonesArquivo.has(telefone));
+        const duplicadaNome =
+          !telefone &&
+          dados.nome &&
+          dados.municipio &&
+          (nomesMunicipiosExistentes.has(chaveNome) || nomesArquivo.has(chaveNome));
+        if (duplicadaTelefone || duplicadaNome) {
+          status = "duplicada";
+          motivo = duplicadaTelefone
+            ? "Telefone já importado/cadastrado"
+            : "Nome e município já importados/cadastrados";
+        }
+      }
+      if (status === "importar") {
+        const telefone = onlyDigits(dados.telefone);
+        if (telefone) telefonesArquivo.add(telefone);
+        if (dados.nome && dados.municipio) nomesArquivo.add(chaveNomeMunicipio(dados));
+        dadosImportar.push(dados);
+      }
+      resumo[status] += 1;
+      linhas.push({
+        linha: index + 2,
+        nome: dados.nome,
+        email: dados.email,
+        telefone: dados.telefone,
+        municipio: dados.municipio,
+        bairroReferencia: dados.bairro_referencia,
+        turnoPreferido: dados.turno_preferido,
+        status,
+        motivo,
+      });
+    } catch (error) {
+      resumo.erro += 1;
+      linhas.push({
+        linha: index + 2,
+        nome: "",
+        email: "",
+        telefone: "",
+        municipio: "",
+        bairroReferencia: "",
+        turnoPreferido: "",
+        status: "erro",
+        motivo: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+  return { resumo, linhas, dadosImportar };
+}
+
+export const previewImportacaoGoogleForms = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) =>
+    z.object({ projetoId: UUID, arquivo: ArquivoGoogleFormsSchema }).parse(input),
+  )
+  .handler(async ({ data }): Promise<ResultadoPreviewGoogleForms> => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    const preview = await prepararPreviewGoogleForms(admin, data.projetoId, data.arquivo);
+    return { resumo: preview.resumo, linhas: preview.linhas };
+  });
+
+export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) =>
+    z.object({ projetoId: UUID, arquivo: ArquivoGoogleFormsSchema }).parse(input),
+  )
+  .handler(async ({ data }): Promise<ResultadoPreviewGoogleForms> => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    const preview = await prepararPreviewGoogleForms(admin, data.projetoId, data.arquivo);
+    for (const dados of preview.dadosImportar) {
+      try {
+        const { error } = await admin.from("inscricoes_digitais").insert({
+          projeto_id: data.projetoId,
+          turma_id: null,
+          origem: "google_forms",
+          status: "pendente",
+          dados,
+        });
+        if (error) throw new Error(error.message);
+      } catch (error) {
+        preview.resumo.importar -= 1;
+        preview.resumo.erro += 1;
+        preview.linhas.push({
+          linha: 0,
+          nome: dados.nome,
+          email: dados.email,
+          telefone: dados.telefone,
+          municipio: dados.municipio,
+          bairroReferencia: dados.bairro_referencia,
+          turnoPreferido: dados.turno_preferido,
+          status: "erro",
+          motivo: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return { resumo: preview.resumo, linhas: preview.linhas };
+  });
+
+function turnoRelatorio(valor: string): string {
+  return valor || "Não informado";
+}
+
+async function montarRelatorioInscricoes(
+  admin: any,
+  projetoId: string,
+): Promise<RelatorioInscricoesRegiao> {
+  const [inscricoesRes, turmasRes] = await Promise.all([
+    admin
+      .from("inscricoes_digitais")
+      .select("status, dados")
+      .eq("projeto_id", projetoId)
+      .limit(10000),
+    admin.from("turmas").select("municipio, turno, vagas").eq("projeto_id", projetoId).limit(1000),
+  ]);
+  if (inscricoesRes.error) throw new Error(inscricoesRes.error.message);
+  if (turmasRes.error) throw new Error(turmasRes.error.message);
+  const oferta = new Map<string, { turmas: number; vagas: number }>();
+  for (const turma of (turmasRes.data ?? []) as any[]) {
+    const municipio = texto(turma.municipio) || "Não informado";
+    const turno = turnoRelatorio(turnoPreferido(turma.turno) || texto(turma.turno));
+    const key = normalizarTextoComparacao(municipio) + "::" + turno;
+    const atual = oferta.get(key) ?? { turmas: 0, vagas: 0 };
+    atual.turmas += 1;
+    atual.vagas += Number(turma.vagas ?? 0) || 0;
+    oferta.set(key, atual);
+  }
+  const linhasMap = new Map<string, RelatorioInscricoesLinha>();
+  const municipioMap = new Map<
+    string,
+    {
+      municipio: string;
+      total: number;
+      pendentes: number;
+      porTurno: Record<string, number>;
+      turmas: number;
+      vagas: number;
+    }
+  >();
+  const porTurno: Record<string, number> = {};
+  let total = 0;
+  let pendentes = 0;
+  for (const row of (inscricoesRes.data ?? []) as any[]) {
+    const dados = normalizarDadosOcr(row.dados, row.dados?.confiancas);
+    const municipio = dados.municipio || "Não informado";
+    const bairro = dados.bairro_referencia || "Não informado";
+    const turno = turnoRelatorio(dados.turno_preferido);
+    const status = (row.status as StatusInscricaoDigital) ?? "pendente";
+    const ofertaKey = normalizarTextoComparacao(municipio) + "::" + turno;
+    const ofertaLinha = oferta.get(ofertaKey) ?? { turmas: 0, vagas: 0 };
+    const key = municipio + "::" + bairro + "::" + turno;
+    const linha = linhasMap.get(key) ?? {
+      municipio,
+      bairroReferencia: bairro,
+      turnoPreferido: turno,
+      total: 0,
+      pendentes: 0,
+      emRevisao: 0,
+      aprovadas: 0,
+      rejeitadas: 0,
+      duplicadas: 0,
+      turmas: ofertaLinha.turmas,
+      vagas: ofertaLinha.vagas,
+      demandaSemOferta: false,
+    };
+    linha.total += 1;
+    if (status === "pendente") linha.pendentes += 1;
+    else if (status === "em_revisao") linha.emRevisao += 1;
+    else if (status === "aprovada") linha.aprovadas += 1;
+    else if (status === "rejeitada") linha.rejeitadas += 1;
+    else if (status === "duplicada") linha.duplicadas += 1;
+    linha.demandaSemOferta =
+      linha.total > 0 && (linha.turmas === 0 || (linha.vagas > 0 && linha.total > linha.vagas));
+    linhasMap.set(key, linha);
+    total += 1;
+    if (status === "pendente") pendentes += 1;
+    porTurno[turno] = (porTurno[turno] ?? 0) + 1;
+    const munKey = normalizarTextoComparacao(municipio);
+    const mun = municipioMap.get(munKey) ?? {
+      municipio,
+      total: 0,
+      pendentes: 0,
+      porTurno: {},
+      turmas: 0,
+      vagas: 0,
+    };
+    mun.total += 1;
+    if (status === "pendente") mun.pendentes += 1;
+    mun.porTurno[turno] = (mun.porTurno[turno] ?? 0) + 1;
+    municipioMap.set(munKey, mun);
+  }
+  for (const [key, valor] of oferta) {
+    const municipioNorm = key.split("::")[0];
+    const mun = municipioMap.get(municipioNorm);
+    if (mun) {
+      mun.turmas += valor.turmas;
+      mun.vagas += valor.vagas;
+    }
+  }
+  return {
+    geradoEm: new Date().toISOString(),
+    total,
+    pendentes,
+    porTurno,
+    porMunicipio: Array.from(municipioMap.values()).sort((a, b) => b.total - a.total),
+    linhas: Array.from(linhasMap.values()).sort((a, b) => b.total - a.total),
+  };
+}
+
+export const listarRelatorioInscricoesPorRegiao = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => ProjetoInput.parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    return montarRelatorioInscricoes(admin, data.projetoId);
+  });
+
+export const gerarAnaliseIaRelatorioInscricoes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => ProjetoInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    const relatorio = await montarRelatorioInscricoes(admin, data.projetoId);
+    const { executarAiRouter } = await import("@/lib/ia.functions");
+    const prompt =
+      "Analise as inscrições do projeto Mulheres Conectadas por região, bairro e turno. Responda em português brasileiro, em tópicos objetivos, com: 1) leitura da demanda por município/turno; 2) regiões com demanda sem oferta ou acima das vagas; 3) recomendações de alocação/abertura de turmas; 4) alertas operacionais. Dados agregados JSON:\n" +
+      JSON.stringify(relatorio, null, 2);
+    const resposta = await executarAiRouter({
+      admin,
+      processo: "relatorio_inscricoes",
+      mensagens: [
+        {
+          role: "system",
+          content:
+            "Você é uma analista de planejamento pedagógico e territorial do projeto Mulheres Conectadas.",
+        },
+        { role: "user", content: prompt },
+      ],
+      defaults: { max_tokens: 1800, temperatura: 0.25 },
+    });
+    try {
+      await admin.from("agent_runs").insert({
+        processo: "relatorio_inscricoes",
+        status: "concluido",
+        entrada: relatorio,
+        saida: resposta.content,
+        user_id: context.userId,
+      });
+    } catch {
+      // Tabela/colunas variam entre instalações; ia_logs_uso já registra a chamada.
+    }
+    return {
+      analise: resposta.content,
+      relatorio,
+      provedor: resposta.provedor,
+      modelo: resposta.modelo,
+    };
+  });
 
 export const listarArquivosDriveParaInscricao = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
