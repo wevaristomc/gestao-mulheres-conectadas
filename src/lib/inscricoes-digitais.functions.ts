@@ -472,6 +472,12 @@ type ArquivoPlanilhaGoogleForms = {
 type StatusLinhaGoogleForms =
   "importar" | "duplicada" | "nao_elegivel" | "sem_autorizacao" | "erro";
 
+type ResumoPreviewGoogleForms = Record<StatusLinhaGoogleForms, number> & {
+  total: number;
+  fora_area: number;
+  menor_idade: number;
+};
+
 export type LinhaPreviewGoogleForms = {
   linha: number;
   nome: string;
@@ -482,10 +488,12 @@ export type LinhaPreviewGoogleForms = {
   turnoPreferido: string;
   status: StatusLinhaGoogleForms;
   motivo: string;
+  foraArea: boolean;
+  menorIdade: boolean;
 };
 
 export type ResultadoPreviewGoogleForms = {
-  resumo: Record<StatusLinhaGoogleForms, number> & { total: number };
+  resumo: ResumoPreviewGoogleForms;
   linhas: LinhaPreviewGoogleForms[];
 };
 
@@ -598,11 +606,27 @@ async function lerPlanilhaGoogleForms(
   }
   const cabecalho = (matriz[0] ?? []).map((v) => String(v ?? "").trim());
   if (!cabecalho.length) throw new Error("A planilha não possui cabeçalho.");
+  const indiceColuna18 = cabecalho.findIndex((header) => normalizarHeader(header) === "coluna 18");
+  const ultimoIndice = cabecalho.length - 1;
+  const valoresUltimaColuna = matriz
+    .slice(1)
+    .map((linha) => String(linha[ultimoIndice] ?? "").trim())
+    .filter(Boolean);
+  const ultimaColunaPareceAutorizacao =
+    ultimoIndice >= 0 &&
+    valoresUltimaColuna.length > 0 &&
+    valoresUltimaColuna.every((valor) => ehSimOuNao(valor));
+  const indiceAutorizacao =
+    indiceColuna18 >= 0 ? indiceColuna18 : ultimaColunaPareceAutorizacao ? ultimoIndice : -1;
+
   return matriz.slice(1).map((linha) => {
     const row: Record<string, string> = {};
     cabecalho.forEach((header, index) => {
       row[header] = String(linha[index] ?? "").trim();
     });
+    if (indiceAutorizacao >= 0) {
+      row.__autorizacao_dados_forms = String(linha[indiceAutorizacao] ?? "").trim();
+    }
     return row;
   });
 }
@@ -625,15 +649,80 @@ function ehNao(valor: string): boolean {
   return /^(nao|n|false|0)/i.test(normalizarTextoComparacao(valor));
 }
 
-function normalizarMunicipioForms(valor: string, municipiosOficiais: string[]): string {
+function ehSimOuNao(valor: string): boolean {
   const norm = normalizarTextoComparacao(valor);
+  return /^(sim|s|nao|n)$/.test(norm);
+}
+
+function valorAutorizacaoForms(row: Record<string, string>): string {
+  return (
+    valorColuna(row, ["autorizacao para uso dos dados", "autoriza", "uso dos dados", "lgpd"]) ||
+    row.__autorizacao_dados_forms ||
+    ""
+  );
+}
+
+function distanciaEdicao(a: string, b: string): number {
+  const dp = Array.from({ length: a.length + 1 }, () => Array<number>(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i += 1) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j += 1) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const custo = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + custo);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function normalizarMunicipioForms(valor: string, municipiosOficiais: string[]): string {
+  const bruto = valor.trim();
+  const norm = normalizarTextoComparacao(bruto)
+    .replace(/\bmg\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!norm) return "";
+
   const oficial = municipiosOficiais.find(
     (municipio) => normalizarTextoComparacao(municipio) === norm,
   );
   if (oficial) return oficial;
-  if (["bh", "b h", "belo horizonte"].includes(norm)) return "Belo Horizonte";
-  return valor.trim();
+
+  const semPontuacao = norm
+    .replace(/[-_/,.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const primeiroTrecho =
+    semPontuacao.split(/\s+(?:e|ou)\s+|\s*\/\s*|\s*-\s*|\s*,\s*/)[0]?.trim() ?? semPontuacao;
+
+  if (semPontuacao.includes("betim") || primeiroTrecho === "betim") return "Betim";
+  if (["bh", "b h", "belo horizonte"].includes(semPontuacao)) return "Belo Horizonte";
+  if (semPontuacao.includes("belo horizonte")) return "Belo Horizonte";
+  if (semPontuacao.includes("juatuba")) return "Juatuba";
+  if (semPontuacao.includes("ibirite") || semPontuacao.includes("ibirité")) return "Ibirité";
+
+  const candidatos = ["Betim", "Belo Horizonte", "Juatuba", "Ibirité"];
+  const comparavel = primeiroTrecho || semPontuacao;
+  const aproximado = candidatos.find(
+    (cidade) => distanciaEdicao(comparavel, normalizarTextoComparacao(cidade)) <= 2,
+  );
+  if (aproximado) return aproximado;
+
+  return bruto;
+}
+
+function idadeInformadaGoogleForms(observacoes: string): number | null {
+  const match = observacoes.match(/Idade informada:\s*(\d{1,3})/i);
+  if (!match) return null;
+  const idade = Number(match[1]);
+  return Number.isFinite(idade) ? idade : null;
+}
+
+function adicionarObservacaoGoogleForms(
+  dados: DadosInscricaoDigitalNormalizados,
+  observacao: string,
+) {
+  dados.observacoes = [dados.observacoes, observacao].filter(Boolean).join(" ");
 }
 
 function normalizarTurnoForms(valor: string): string {
@@ -752,9 +841,7 @@ function dadosGoogleForms(
       "porque deseja participar",
       "deseja participar",
     ]),
-    autorizacao_dados: simNao(
-      valorColuna(row, ["autorizacao para uso dos dados", "autoriza", "uso dos dados", "lgpd"]),
-    ),
+    autorizacao_dados: simNao(valorAutorizacaoForms(row)),
     autorizacao_dados_em: carimbo || new Date().toISOString(),
     identifica_se_mulher: identificaMulherRaw
       ? simNao(identificaMulherRaw)
@@ -803,14 +890,34 @@ async function prepararPreviewGoogleForms(
     nao_elegivel: 0,
     sem_autorizacao: 0,
     erro: 0,
-  };
+    fora_area: 0,
+    menor_idade: 0,
+  } satisfies ResumoPreviewGoogleForms;
   const linhas: LinhaPreviewGoogleForms[] = [];
   const dadosImportar: DadosInscricaoDigitalNormalizados[] = [];
   rows.forEach((row, index) => {
     try {
       const dados = dadosGoogleForms(row, municipiosOficiais);
+      const municipioEmArea = municipiosOficiais.some(
+        (municipio) =>
+          normalizarTextoComparacao(municipio) === normalizarTextoComparacao(dados.municipio),
+      );
+      const foraArea = !!dados.municipio && !municipioEmArea;
+      const idadeInformada = idadeInformadaGoogleForms(dados.observacoes);
+      const menorIdade = idadeInformada != null && idadeInformada < 18;
+      if (foraArea) {
+        resumo.fora_area += 1;
+        adicionarObservacaoGoogleForms(
+          dados,
+          `Município fora da área de turmas cadastradas: ${dados.municipio}.`,
+        );
+      }
+      if (menorIdade) {
+        resumo.menor_idade += 1;
+        adicionarObservacaoGoogleForms(dados, "Menor de 18 anos pela idade informada no Forms.");
+      }
       let status: StatusLinhaGoogleForms = "importar";
-      let motivo = "Pronta para importar";
+      let motivo = foraArea ? "Fora da área de turmas; coordenação decide" : "Pronta para importar";
       if (dados.identifica_se_mulher !== "sim") {
         status = "nao_elegivel";
         motivo = "Não elegível pelo critério do edital";
@@ -851,6 +958,8 @@ async function prepararPreviewGoogleForms(
         turnoPreferido: dados.turno_preferido,
         status,
         motivo,
+        foraArea,
+        menorIdade,
       });
     } catch (error) {
       resumo.erro += 1;
@@ -864,6 +973,8 @@ async function prepararPreviewGoogleForms(
         turnoPreferido: "",
         status: "erro",
         motivo: error instanceof Error ? error.message : String(error),
+        foraArea: false,
+        menorIdade: false,
       });
     }
   });
@@ -914,6 +1025,8 @@ export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
           turnoPreferido: dados.turno_preferido,
           status: "erro",
           motivo: error instanceof Error ? error.message : String(error),
+          foraArea: false,
+          menorIdade: false,
         });
       }
     }
@@ -1233,6 +1346,65 @@ Campos ausentes ou ilegíveis devem ser string vazia (ou false) e confiança 0.`
     }
   });
 
+export const anexarDocumentoInscricao = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        id: UUID,
+        projetoId: UUID,
+        tipo: z.enum(["documento", "comprovante"]),
+        arquivo: AnexoPublicoSchema,
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    const { data: row, error: readError } = await admin
+      .from("inscricoes_digitais")
+      .select("id, documento_path, comprovante_path")
+      .eq("id", data.id)
+      .eq("projeto_id", data.projetoId)
+      .maybeSingle();
+    if (readError || !row) throw new Error("Inscrição não encontrada.");
+
+    const bytes = await anexoEmPdf(data.arquivo.base64, data.arquivo.mime);
+    const storagePath = `inscricoes/${data.id}/${data.tipo}.pdf`;
+    const { error: uploadError } = await admin.storage
+      .from("evidencias")
+      .upload(storagePath, bytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    if (uploadError) {
+      throw new Error(
+        `Falha ao arquivar ${data.tipo === "documento" ? "o documento" : "o comprovante"}: ${uploadError.message}`,
+      );
+    }
+
+    const patch = {
+      [data.tipo === "documento" ? "documento_path" : "comprovante_path"]:
+        `evidencias:${storagePath}`,
+      revisado_por: context.userId,
+      revisado_em: new Date().toISOString(),
+    };
+    const { data: atualizado, error: updateError } = await admin
+      .from("inscricoes_digitais")
+      .update(patch)
+      .eq("id", data.id)
+      .eq("projeto_id", data.projetoId)
+      .select("documento_path, comprovante_path")
+      .single();
+    if (updateError) throw new Error(updateError.message);
+
+    return {
+      documentoPath: atualizado.documento_path ?? null,
+      documentoUrl: await urlArquivo(admin, atualizado.documento_path ?? null),
+      comprovantePath: atualizado.comprovante_path ?? null,
+      comprovanteUrl: await urlArquivo(admin, atualizado.comprovante_path ?? null),
+    };
+  });
 export const salvarRevisaoInscricao = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>

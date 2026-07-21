@@ -67,6 +67,7 @@ import {
   type TurnoPreferido,
 } from "@/lib/inscricao-digital";
 import {
+  anexarDocumentoInscricao,
   aprovarInscricao,
   confirmarImportacaoGoogleForms,
   gerarAnaliseIaRelatorioInscricoes,
@@ -150,14 +151,67 @@ function calcularIdade(dataNascimento: string | null | undefined): number | null
   return idade;
 }
 
+function idadeInformadaObservacoes(observacoes: string | null | undefined): number | null {
+  const match = (observacoes ?? "").match(/Idade informada:\s*(\d{1,3})/i);
+  if (!match) return null;
+  const idade = Number(match[1]);
+  return Number.isFinite(idade) ? idade : null;
+}
+
+function municipioForaDaArea(row: InscricaoDigitalRow, turmas: TurmaInscricaoPublica[]): boolean {
+  const municipio = normalizarComparacao(row.dados.municipio);
+  if (!municipio) return false;
+  const municipiosComTurma = new Set(
+    turmas.map((turma) => normalizarComparacao(turma.municipio)).filter(Boolean),
+  );
+  return municipiosComTurma.size > 0 && !municipiosComTurma.has(municipio);
+}
+
+function BadgesPendenciasInscricao({
+  row,
+  turmas,
+}: {
+  row: InscricaoDigitalRow;
+  turmas: TurmaInscricaoPublica[];
+}) {
+  const idadeInformada = idadeInformadaObservacoes(row.dados.observacoes);
+  const badges = [
+    !row.documentoPath
+      ? { label: "Documento pendente", className: "border-amber-300 text-amber-800" }
+      : null,
+    municipioForaDaArea(row, turmas)
+      ? { label: "Fora da área de turmas", className: "border-orange-300 text-orange-800" }
+      : null,
+    idadeInformada != null && idadeInformada < 18
+      ? { label: "Menor de 18 (idade informada)", className: "border-purple-300 text-purple-800" }
+      : null,
+  ].filter(Boolean) as Array<{ label: string; className: string }>;
+  if (!badges.length) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {badges.map((badge) => (
+        <Badge key={badge.label} variant="outline" className={badge.className}>
+          {badge.label}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 function AnexoPreview({
   titulo,
   url,
   ausente,
+  onUpload,
+  uploading,
+  disabled,
 }: {
   titulo: string;
   url: string | null;
   ausente: string;
+  onUpload?: (file: File) => void;
+  uploading?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <section className="space-y-2 rounded-lg border bg-background p-3">
@@ -182,6 +236,25 @@ function AnexoPreview({
           {ausente}
         </p>
       )}
+      {onUpload ? (
+        <div className="space-y-1">
+          <Input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            disabled={disabled || uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.currentTarget.value = "";
+              if (file) onUpload(file);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            {uploading
+              ? "Enviando..."
+              : "PDF, JPG ou PNG até 10 MB. Fotos serão arquivadas em PDF."}
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -343,6 +416,48 @@ function InscricoesDigitaisTab() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const anexarDocumento = useMutation({
+    mutationFn: async ({ tipo, file }: { tipo: "documento" | "comprovante"; file: File }) => {
+      if (!projetoId || !revisao) throw new Error("Inscrição não selecionada.");
+      if (file.size > 10 * 1024 * 1024) throw new Error("O arquivo deve ter no máximo 10 MB.");
+      const base64 = await arquivoParaBase64(file);
+      return anexarDocumentoInscricao({
+        data: {
+          id: revisao.id,
+          projetoId,
+          tipo,
+          arquivo: { nome: file.name, mime: file.type || "application/pdf", base64 },
+        },
+      });
+    },
+    onSuccess: (resultado, variaveis) => {
+      setRevisao((atual) =>
+        atual
+          ? {
+              ...atual,
+              documentoPath: resultado.documentoPath,
+              documentoUrl: resultado.documentoUrl,
+              comprovantePath: resultado.comprovantePath,
+              comprovanteUrl: resultado.comprovanteUrl,
+            }
+          : atual,
+      );
+      toast.success(variaveis.tipo === "documento" ? "Documento anexado." : "Comprovante anexado.");
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const confirmarAprovacao = () => {
+    if (!revisao) return;
+    if (!revisao.documentoPath) {
+      const ok = window.confirm(
+        "Aprovar sem documento anexado? A pendência será registrada na observação da matrícula para cobrança posterior.",
+      );
+      if (!ok) return;
+    }
+    aprovar.mutate();
+  };
   const gerarAnalise = useMutation({
     mutationFn: async () => {
       if (!projetoId) throw new Error("Selecione um projeto ativo.");
@@ -535,6 +650,7 @@ function InscricoesDigitaisTab() {
                               CPF já cadastrado
                             </Badge>
                           ) : null}
+                          <BadgesPendenciasInscricao row={row} turmas={turmas} />
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{turnoLabel(row.dados.turno_preferido)}</div>
@@ -644,11 +760,25 @@ function InscricoesDigitaisTab() {
                     titulo="Documento com foto (RG/CNH)"
                     url={revisao.documentoUrl}
                     ausente="Documento com foto não anexado."
+                    onUpload={
+                      podeEditar
+                        ? (file) => anexarDocumento.mutate({ tipo: "documento", file })
+                        : undefined
+                    }
+                    uploading={anexarDocumento.isPending}
+                    disabled={anexarDocumento.isPending}
                   />
                   <AnexoPreview
                     titulo="Comprovante de endereço"
                     url={revisao.comprovanteUrl}
                     ausente="Comprovante pendente; poderá ser cobrado pela coordenação."
+                    onUpload={
+                      podeEditar
+                        ? (file) => anexarDocumento.mutate({ tipo: "comprovante", file })
+                        : undefined
+                    }
+                    uploading={anexarDocumento.isPending}
+                    disabled={anexarDocumento.isPending}
                   />
                 </div>
               </ScrollArea>
@@ -662,9 +792,12 @@ function InscricoesDigitaisTab() {
                     </div>
                   ) : null}
                   <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                      Preferências para alocação
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                        Preferências para alocação
+                      </p>
+                      <BadgesPendenciasInscricao row={revisao} turmas={turmas} />
+                    </div>
                     <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-6">
                       <div>
                         <strong>Nome social:</strong> {dadosEdicao.nome_social || "Não informado"}
@@ -755,10 +888,7 @@ function InscricoesDigitaisTab() {
                     {salvar.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Salvar revisão
                   </Button>
-                  <Button
-                    onClick={() => aprovar.mutate()}
-                    disabled={aprovar.isPending || !turmaEdicao}
-                  >
+                  <Button onClick={confirmarAprovacao} disabled={aprovar.isPending || !turmaEdicao}>
                     {aprovar.isPending ? (
                       <Loader2 className="mr-2 size-4 animate-spin" />
                     ) : (
@@ -1056,11 +1186,13 @@ function ImportarGoogleFormsDialog({
           </div>
           {preview ? (
             <div className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-5">
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
                 <ResumoMini label="A importar" valor={preview.resumo.importar} />
                 <ResumoMini label="Duplicadas" valor={preview.resumo.duplicada} />
                 <ResumoMini label="Não elegíveis" valor={preview.resumo.nao_elegivel} />
                 <ResumoMini label="Sem autorização" valor={preview.resumo.sem_autorizacao} />
+                <ResumoMini label="Fora da área" valor={preview.resumo.fora_area} />
+                <ResumoMini label="Menores" valor={preview.resumo.menor_idade} />
                 <ResumoMini label="Erros" valor={preview.resumo.erro} />
               </div>
               <div className="max-h-80 overflow-auto rounded-md border">
@@ -1084,7 +1216,27 @@ function ImportarGoogleFormsDialog({
                         <TableCell>{linha.telefone || "—"}</TableCell>
                         <TableCell>{linha.municipio || "—"}</TableCell>
                         <TableCell>{turnoLabel(linha.turnoPreferido)}</TableCell>
-                        <TableCell>{statusPreviewLabel(linha.status)}</TableCell>
+                        <TableCell>
+                          <div>{statusPreviewLabel(linha.status)}</div>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {linha.foraArea ? (
+                              <Badge
+                                variant="outline"
+                                className="border-orange-300 text-orange-800"
+                              >
+                                Fora da área
+                              </Badge>
+                            ) : null}
+                            {linha.menorIdade ? (
+                              <Badge
+                                variant="outline"
+                                className="border-purple-300 text-purple-800"
+                              >
+                                Menor de 18
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {linha.motivo}
                         </TableCell>
