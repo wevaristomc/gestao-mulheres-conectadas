@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -27,6 +28,7 @@ import { InscricaoDigitalFields } from "@/components/inscricoes/inscricao-digita
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -61,6 +63,8 @@ import { formatCpf } from "@/lib/cpf";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
 import {
   DadosInscricaoDigital,
+  faixaEtariaInscricao,
+  idadeReferenciaInscricao,
   InscricaoDigitalRow,
   StatusInscricaoDigital,
   TURNO_PREFERIDO_LABEL,
@@ -72,6 +76,7 @@ import {
   aprovarInscricao,
   confirmarImportacaoGoogleForms,
   gerarAnaliseIaRelatorioInscricoes,
+  listarDashboardInscricoes,
   importarFichaComOcr,
   listarArquivosDriveParaInscricao,
   listarInscricoesDigitais,
@@ -80,6 +85,8 @@ import {
   previewImportacaoGoogleForms,
   rejeitarInscricao,
   salvarRevisaoInscricao,
+  type DashboardDistribuicaoItem,
+  type DashboardInscricoes,
   type RelatorioInscricoesRegiao,
   type ResultadoPreviewGoogleForms,
 } from "@/lib/inscricoes-digitais.functions";
@@ -139,26 +146,6 @@ function turnoLabel(valor: string | null | undefined): string {
   if (!valor) return "Não informado";
   return TURNO_PREFERIDO_LABEL[valor as TurnoPreferido] ?? valor;
 }
-function calcularIdade(dataNascimento: string | null | undefined): number | null {
-  if (!dataNascimento) return null;
-  const nascimento = new Date(`${dataNascimento}T12:00:00`);
-  if (Number.isNaN(nascimento.getTime()) || nascimento > new Date()) return null;
-  const hoje = new Date();
-  let idade = hoje.getFullYear() - nascimento.getFullYear();
-  const aniversarioPassou =
-    hoje.getMonth() > nascimento.getMonth() ||
-    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() >= nascimento.getDate());
-  if (!aniversarioPassou) idade -= 1;
-  return idade;
-}
-
-function idadeInformadaObservacoes(observacoes: string | null | undefined): number | null {
-  const match = (observacoes ?? "").match(/Idade informada:\s*(\d{1,3})/i);
-  if (!match) return null;
-  const idade = Number(match[1]);
-  return Number.isFinite(idade) ? idade : null;
-}
-
 function municipioForaDaArea(row: InscricaoDigitalRow, turmas: TurmaInscricaoPublica[]): boolean {
   const municipio = normalizarComparacao(row.dados.municipio);
   if (!municipio) return false;
@@ -175,7 +162,7 @@ function BadgesPendenciasInscricao({
   row: InscricaoDigitalRow;
   turmas: TurmaInscricaoPublica[];
 }) {
-  const idadeInformada = idadeInformadaObservacoes(row.dados.observacoes);
+  const idadeInformada = idadeReferenciaInscricao(row.dados);
   const badges = [
     !row.documentoPath
       ? { label: "Documento pendente", className: "border-amber-300 text-amber-800" }
@@ -325,6 +312,12 @@ function InscricoesDigitaisTab() {
     () => (turmasQ.data ?? []).filter((turma) => turma.projetoId === projetoId),
     [projetoId, turmasQ.data],
   );
+  const dashboardKey = ["administrativo", "inscricoes-dashboard", projetoId];
+  const dashboardQ = useQuery({
+    queryKey: dashboardKey,
+    enabled: !!projetoId && podeEditar,
+    queryFn: () => listarDashboardInscricoes({ data: { projetoId: projetoId! } }),
+  });
   const relatorioKey = ["administrativo", "inscricoes-relatorio-regiao", projetoId];
   const relatorioQ = useQuery({
     queryKey: relatorioKey,
@@ -373,6 +366,7 @@ function InscricoesDigitaisTab() {
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({ queryKey: dashboardKey });
     queryClient.invalidateQueries({ queryKey: relatorioKey });
   };
   const salvar = useMutation({
@@ -530,6 +524,14 @@ function InscricoesDigitaisTab() {
         />
       </div>
 
+      {podeEditar ? (
+        <DashboardInscricoesCard
+          dashboard={dashboardQ.data}
+          carregando={dashboardQ.isLoading}
+          erro={dashboardQ.error as Error | null}
+        />
+      ) : null}
+
       <Card>
         <CardHeader className="gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -637,9 +639,10 @@ function InscricoesDigitaisTab() {
                           ) : null}
                           <div className="text-xs text-muted-foreground">
                             {formatCpf(row.dados.cpf) || "CPF não identificado"}
-                            {calcularIdade(row.dados.data_nascimento) != null ? (
+                            {idadeReferenciaInscricao(row.dados) != null ? (
                               <div className="text-xs text-muted-foreground">
-                                {calcularIdade(row.dados.data_nascimento)} anos
+                                {idadeReferenciaInscricao(row.dados)} anos ·{" "}
+                                {faixaEtariaInscricao(row.dados)}
                               </div>
                             ) : null}
                           </div>
@@ -818,8 +821,13 @@ function InscricoesDigitaisTab() {
                       </div>
                       <div>
                         <strong>Idade:</strong>{" "}
-                        {calcularIdade(dadosEdicao.data_nascimento) ?? "Não calculada"}
-                        {calcularIdade(dadosEdicao.data_nascimento) != null ? " anos" : ""}
+                        {idadeReferenciaInscricao(dadosEdicao) != null
+                          ? `${idadeReferenciaInscricao(dadosEdicao)} anos`
+                          : "Não calculada"}
+                      </div>
+                      <div>
+                        <strong>Faixa etária:</strong>{" "}
+                        {faixaEtariaInscricao(dadosEdicao) || "Não calculada"}
                       </div>
                     </div>
                   </div>
@@ -980,6 +988,324 @@ function ResumoCard({
   );
 }
 
+function formatarPercentual(valor: number): string {
+  return `${Math.round(valor * 100)}%`;
+}
+
+function formatarDecimal(valor: number | null | undefined): string {
+  if (valor == null || !Number.isFinite(valor)) return "?";
+  return valor.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+}
+
+function statusDashboardLabel(valor: string): string {
+  return STATUS_LABEL[valor as StatusInscricaoDigital] ?? valor;
+}
+
+function origemDashboardLabel(valor: string): string {
+  return ORIGEM_LABEL[valor as keyof typeof ORIGEM_LABEL] ?? valor;
+}
+
+function DashboardMetricCard({
+  titulo,
+  valor,
+  detalhe,
+}: {
+  titulo: string;
+  valor: string | number;
+  detalhe?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <div className="text-xs font-medium text-muted-foreground">{titulo}</div>
+      <div className="mt-1 text-2xl font-semibold">{valor}</div>
+      {detalhe ? <div className="mt-1 text-xs text-muted-foreground">{detalhe}</div> : null}
+    </div>
+  );
+}
+
+function DistribuicaoLista({
+  titulo,
+  itens,
+  limitar = 6,
+  rotulo = (valor) => valor,
+}: {
+  titulo: string;
+  itens: DashboardDistribuicaoItem[];
+  limitar?: number;
+  rotulo?: (valor: string) => string;
+}) {
+  const exibidos = itens.slice(0, limitar);
+  const maior = Math.max(...exibidos.map((item) => item.total), 1);
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <h3 className="mb-3 text-sm font-semibold">{titulo}</h3>
+      <div className="space-y-3">
+        {exibidos.length ? (
+          exibidos.map((item) => (
+            <div key={item.label} className="space-y-1">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate">{rotulo(item.label)}</span>
+                <span className="shrink-0 font-medium">
+                  {item.total} ? {formatarPercentual(item.percentual)}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-[#f2a62a]"
+                  style={{ width: `${Math.max(6, (item.total / maior) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">Sem dados para exibir.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GraficoBarrasDashboard({
+  titulo,
+  itens,
+  limitar = 8,
+  altura = "h-72",
+}: {
+  titulo: string;
+  itens: DashboardDistribuicaoItem[];
+  limitar?: number;
+  altura?: string;
+}) {
+  const dados = itens.slice(0, limitar).map((item) => ({
+    ...item,
+    nomeCurto: item.label.length > 22 ? `${item.label.slice(0, 21)}?` : item.label,
+  }));
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <h3 className="mb-3 text-sm font-semibold">{titulo}</h3>
+      {dados.length ? (
+        <ChartContainer
+          config={{ total: { label: "Candidatas", color: "#f2a62a" } }}
+          className={altura}
+        >
+          <BarChart data={dados} layout="vertical" margin={{ left: 8, right: 24 }}>
+            <CartesianGrid horizontal={false} />
+            <XAxis type="number" hide />
+            <YAxis
+              dataKey="nomeCurto"
+              type="category"
+              tickLine={false}
+              axisLine={false}
+              width={126}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent hideLabel formatter={(value) => `${value} candidata(s)`} />
+              }
+            />
+            <Bar dataKey="total" fill="var(--color-total)" radius={4} />
+          </BarChart>
+        </ChartContainer>
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem dados para exibir.</p>
+      )}
+    </div>
+  );
+}
+
+function DashboardInscricoesCard({
+  dashboard,
+  carregando,
+  erro,
+}: {
+  dashboard?: DashboardInscricoes;
+  carregando: boolean;
+  erro: Error | null;
+}) {
+  const pendenciasPrincipais = dashboard?.pendencias.slice(0, 5) ?? [];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Dashboard de pré-inscrições</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Visão inspirada no relatório de pré-inscrições: panorama geral, território, idade, perfil
+          social, logística e pendências para conferência.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {carregando ? (
+          <div className="space-y-3">
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-72 w-full" />
+          </div>
+        ) : erro ? (
+          <p className="text-sm text-destructive">{erro.message}</p>
+        ) : dashboard ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              <DashboardMetricCard titulo="Inscrições na fila" valor={dashboard.total} />
+              <DashboardMetricCard
+                titulo="Elegíveis preliminarmente"
+                valor={dashboard.elegiveisPreliminarmente}
+                detalhe={`${formatarPercentual(dashboard.total ? dashboard.elegiveisPreliminarmente / dashboard.total : 0)} da base`}
+              />
+              <DashboardMetricCard
+                titulo="Cadastros para revisão"
+                valor={dashboard.cadastrosParaRevisao}
+                detalhe="documento, idade, área, consentimento ou duplicidade"
+              />
+              <DashboardMetricCard
+                titulo="Sem documento"
+                valor={dashboard.semDocumento}
+                detalhe="pendência operacional"
+              />
+              <DashboardMetricCard
+                titulo="Idade média / mediana"
+                valor={`${formatarDecimal(dashboard.idadeMedia)} / ${formatarDecimal(dashboard.idadeMediana)}`}
+                detalhe="anos"
+              />
+              <DashboardMetricCard
+                titulo="Maior concentração"
+                valor={dashboard.concentracaoPrincipal?.municipio ?? "?"}
+                detalhe={
+                  dashboard.concentracaoPrincipal
+                    ? formatarPercentual(dashboard.concentracaoPrincipal.percentual)
+                    : undefined
+                }
+              />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+              <GraficoBarrasDashboard
+                titulo="Distribuição por município/região"
+                itens={dashboard.porMunicipio}
+              />
+              <GraficoBarrasDashboard titulo="Perfil etário" itens={dashboard.porFaixaEtaria} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <DistribuicaoLista
+                titulo="Turno preferencial"
+                itens={dashboard.porTurno}
+                rotulo={turnoLabel}
+              />
+              <DistribuicaoLista titulo="Situação de trabalho" itens={dashboard.porTrabalho} />
+              <DistribuicaoLista titulo="Renda familiar" itens={dashboard.porRenda} />
+              <DistribuicaoLista titulo="Tamanho de camisa" itens={dashboard.porCamisa} />
+              <DistribuicaoLista titulo="Programa social" itens={dashboard.porProgramaSocial} />
+              <DistribuicaoLista
+                titulo="Mais de um turno"
+                itens={dashboard.porDisponibilidadeTurnos}
+              />
+              <DistribuicaoLista
+                titulo="Restrição alimentar"
+                itens={dashboard.porRestricaoAlimentar}
+              />
+              <DistribuicaoLista titulo="PCD/necessidade" itens={dashboard.porDeficiencia} />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-lg border bg-background p-4">
+                <h3 className="mb-3 text-sm font-semibold">Região, vulnerabilidade e turnos</h3>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Município</TableHead>
+                        <TableHead>Candidatas</TableHead>
+                        <TableHead>%</TableHead>
+                        <TableHead>Idade média</TableHead>
+                        <TableHead>Não trabalhando</TableHead>
+                        <TableHead>Até 1 SM</TableHead>
+                        <TableHead>Programa social</TableHead>
+                        <TableHead>Manhã</TableHead>
+                        <TableHead>Tarde</TableHead>
+                        <TableHead>Noite</TableHead>
+                        <TableHead>Turmas/vagas</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboard.porMunicipio.slice(0, 12).map((linha) => (
+                        <TableRow key={linha.label}>
+                          <TableCell className="font-medium">{linha.label}</TableCell>
+                          <TableCell>{linha.total}</TableCell>
+                          <TableCell>{formatarPercentual(linha.percentual)}</TableCell>
+                          <TableCell>{formatarDecimal(linha.idadeMedia)}</TableCell>
+                          <TableCell>{linha.naoTrabalhando}</TableCell>
+                          <TableCell>{linha.ateUmSalario}</TableCell>
+                          <TableCell>{linha.programaSocial}</TableCell>
+                          <TableCell>{linha.turnos.manha ?? 0}</TableCell>
+                          <TableCell>{linha.turnos.tarde ?? 0}</TableCell>
+                          <TableCell>{linha.turnos.noite ?? 0}</TableCell>
+                          <TableCell>
+                            {linha.turmas} / {linha.vagas}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <DistribuicaoLista
+                  titulo="Pendências para conferência"
+                  itens={pendenciasPrincipais}
+                  limitar={5}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <DistribuicaoLista
+                    titulo="Origem das inscrições"
+                    itens={dashboard.porOrigem}
+                    rotulo={origemDashboardLabel}
+                  />
+                  <DistribuicaoLista
+                    titulo="Status da fila"
+                    itens={dashboard.porStatus}
+                    rotulo={statusDashboardLabel}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-background p-4">
+              <h3 className="mb-3 text-sm font-semibold">
+                Bairros e referências com maior demanda
+              </h3>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Município</TableHead>
+                      <TableHead>Bairro/referência</TableHead>
+                      <TableHead>Candidatas</TableHead>
+                      <TableHead>% da cidade</TableHead>
+                      <TableHead>Manhã</TableHead>
+                      <TableHead>Noite</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dashboard.porBairro.slice(0, 40).map((linha) => (
+                      <TableRow key={`${linha.municipio}-${linha.bairro}`}>
+                        <TableCell>{linha.municipio}</TableCell>
+                        <TableCell className="font-medium">{linha.bairro}</TableCell>
+                        <TableCell>{linha.total}</TableCell>
+                        <TableCell>{formatarPercentual(linha.percentualCidade)}</TableCell>
+                        <TableCell>{linha.manha}</TableCell>
+                        <TableCell>{linha.noite}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function RelatorioInscricoesCard({
   relatorio,
   carregando,
@@ -1123,6 +1449,7 @@ function RelatorioInscricoesCard({
 
 function statusPreviewLabel(status: string): string {
   if (status === "importar") return "A importar";
+  if (status === "atualizar") return "Atualizar";
   if (status === "duplicada") return "Duplicada";
   if (status === "nao_elegivel") return "Não elegível";
   if (status === "sem_autorizacao") return "Sem autorização";
@@ -1142,6 +1469,7 @@ function ImportarGoogleFormsDialog({
 }) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<ResultadoPreviewGoogleForms | null>(null);
+  const [reprocessarExistentes, setReprocessarExistentes] = useState(false);
   const arquivoPayload = async () => {
     if (!arquivo) throw new Error("Selecione um arquivo CSV ou XLSX.");
     if (arquivo.size > 20 * 1024 * 1024) throw new Error("O arquivo deve ter no máximo 20 MB.");
@@ -1149,16 +1477,22 @@ function ImportarGoogleFormsDialog({
   };
   const gerarPreview = useMutation({
     mutationFn: async () =>
-      previewImportacaoGoogleForms({ data: { projetoId, arquivo: await arquivoPayload() } }),
+      previewImportacaoGoogleForms({
+        data: { projetoId, arquivo: await arquivoPayload(), reprocessarExistentes },
+      }),
     onSuccess: (resultado) => setPreview(resultado),
     onError: (error: Error) => toast.error(error.message),
   });
   const confirmar = useMutation({
     mutationFn: async () =>
-      confirmarImportacaoGoogleForms({ data: { projetoId, arquivo: await arquivoPayload() } }),
+      confirmarImportacaoGoogleForms({
+        data: { projetoId, arquivo: await arquivoPayload(), reprocessarExistentes },
+      }),
     onSuccess: (resultado) => {
       setPreview(resultado);
-      toast.success(`${resultado.resumo.importar} pré-inscrição(ões) importada(s).`);
+      toast.success(
+        `${resultado.resumo.importar} importada(s) e ${resultado.resumo.atualizar} atualizada(s).`,
+      );
       onImported();
       if (resultado.resumo.erro === 0) {
         onOpenChange(false);
@@ -1191,10 +1525,28 @@ function ImportarGoogleFormsDialog({
             />
             <p className="text-xs text-muted-foreground">CSV ou XLSX, até 20 MB.</p>
           </div>
+          <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+            <Checkbox
+              checked={reprocessarExistentes}
+              onCheckedChange={(valor) => {
+                setReprocessarExistentes(valor === true);
+                setPreview(null);
+              }}
+            />
+            <span>
+              <span className="font-medium">Reprocessar inscrições já importadas</span>
+              <span className="block text-xs text-muted-foreground">
+                Atualiza inscrições existentes encontradas por telefone ou nome+município para
+                preencher campos faltantes, como idade/faixa etária, sem criar duplicatas.
+                Inscrições já aprovadas não são alteradas.
+              </span>
+            </span>
+          </label>
           {preview ? (
             <div className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
+              <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-8">
                 <ResumoMini label="A importar" valor={preview.resumo.importar} />
+                <ResumoMini label="Atualizar" valor={preview.resumo.atualizar} />
                 <ResumoMini label="Duplicadas" valor={preview.resumo.duplicada} />
                 <ResumoMini label="Não elegíveis" valor={preview.resumo.nao_elegivel} />
                 <ResumoMini label="Sem autorização" valor={preview.resumo.sem_autorizacao} />
@@ -1283,7 +1635,11 @@ function ImportarGoogleFormsDialog({
           </Button>
           <Button
             onClick={() => confirmar.mutate()}
-            disabled={!arquivo || !preview?.resumo.importar || confirmar.isPending}
+            disabled={
+              !arquivo ||
+              !(preview?.resumo.importar || preview?.resumo.atualizar) ||
+              confirmar.isPending
+            }
           >
             {confirmar.isPending ? (
               <Loader2 className="mr-2 size-4 animate-spin" />

@@ -6,6 +6,9 @@ import { formatCpf, isValidCpf, onlyDigits } from "@/lib/cpf";
 import {
   DADOS_INSCRICAO_VAZIOS,
   dadosInscricaoDigitalSchema,
+  faixaEtariaInscricao,
+  idadeReferenciaInscricao,
+  normalizarIdadeInformada,
   type DadosInscricaoDigitalNormalizados,
   type InscricaoDigitalRow,
   type OrigemInscricaoDigital,
@@ -109,6 +112,12 @@ function normalizarDadosOcr(
     nome_social: usaNomeSocial === "sim" ? nomeSocial : "",
     cpf: onlyDigits(texto(fonte.cpf)),
     data_nascimento: texto(fonte.data_nascimento),
+    idade_informada: normalizarIdadeInformada(fonte.idade_informada),
+    faixa_etaria: faixaEtariaInscricao({
+      data_nascimento: texto(fonte.data_nascimento),
+      idade_informada: normalizarIdadeInformada(fonte.idade_informada),
+      faixa_etaria: texto(fonte.faixa_etaria),
+    }),
     genero: texto(fonte.genero),
     raca: texto(fonte.raca),
     pcd: booleano(fonte.pcd),
@@ -470,7 +479,7 @@ type ArquivoPlanilhaGoogleForms = {
 };
 
 type StatusLinhaGoogleForms =
-  "importar" | "duplicada" | "nao_elegivel" | "sem_autorizacao" | "erro";
+  "importar" | "atualizar" | "duplicada" | "nao_elegivel" | "sem_autorizacao" | "erro";
 
 type ResumoPreviewGoogleForms = Record<StatusLinhaGoogleForms, number> & {
   total: number;
@@ -528,6 +537,74 @@ export type RelatorioInscricoesRegiao = {
     vagas: number;
   }>;
   linhas: RelatorioInscricoesLinha[];
+};
+
+export type DashboardDistribuicaoItem = {
+  label: string;
+  total: number;
+  percentual: number;
+};
+
+export type DashboardInscricoesRegiaoItem = DashboardDistribuicaoItem & {
+  idadeMedia: number | null;
+  naoTrabalhando: number;
+  ateUmSalario: number;
+  programaSocial: number;
+  turnos: Record<string, number>;
+  turmas: number;
+  vagas: number;
+};
+
+export type DashboardInscricoesBairroItem = DashboardDistribuicaoItem & {
+  municipio: string;
+  bairro: string;
+  percentualCidade: number;
+  manha: number;
+  noite: number;
+};
+
+export type DashboardInscricoes = {
+  geradoEm: string;
+  total: number;
+  pendentes: number;
+  emRevisao: number;
+  aprovadas: number;
+  rejeitadas: number;
+  duplicadas: number;
+  elegiveisPreliminarmente: number;
+  cadastrosParaRevisao: number;
+  semDocumento: number;
+  menoresDe18: number;
+  acimaDe60: number;
+  foraAreaTurmas: number;
+  idadeMedia: number | null;
+  idadeMediana: number | null;
+  concentracaoPrincipal: {
+    municipio: string;
+    percentual: number;
+  } | null;
+  porMunicipio: DashboardInscricoesRegiaoItem[];
+  porFaixaEtaria: Array<
+    DashboardDistribuicaoItem & {
+      naoTrabalhando: number;
+      ateUmSalario: number;
+      programaSocial: number;
+      manha: number;
+      noite: number;
+    }
+  >;
+  porTrabalho: DashboardDistribuicaoItem[];
+  porRenda: DashboardDistribuicaoItem[];
+  porTurno: DashboardDistribuicaoItem[];
+  porCamisa: DashboardDistribuicaoItem[];
+  porProgramaSocial: DashboardDistribuicaoItem[];
+  porDisponibilidadeTurnos: DashboardDistribuicaoItem[];
+  porRestricaoAlimentar: DashboardDistribuicaoItem[];
+  porDeficiencia: DashboardDistribuicaoItem[];
+  porOrigem: DashboardDistribuicaoItem[];
+  porStatus: DashboardDistribuicaoItem[];
+  porBairro: DashboardInscricoesBairroItem[];
+  pendencias: DashboardDistribuicaoItem[];
 };
 
 const ArquivoGoogleFormsSchema = z.object({
@@ -768,13 +845,75 @@ function normalizarCamisa(valor: string): string {
   return "";
 }
 
-function formatarDataForms(valor: string): string {
+function partesDataForms(valor: string): {
+  dia: number;
+  mes: number;
+  ano: number;
+  hora: number;
+  minuto: number;
+  segundo: number;
+} | null {
   const v = valor.trim();
-  if (!v) return "";
-  const m = v.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
-  if (!m) return v;
-  const ano = m[3].length === 2 ? "20" + m[3] : m[3];
-  return m[1].padStart(2, "0") + "/" + m[2].padStart(2, "0") + "/" + ano + (m[4] ? " " + m[4] : "");
+  if (!v) return null;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+  const ano = Number(m[3].length === 2 ? "20" + m[3] : m[3]);
+  const dia = Number(m[1]);
+  const mes = Number(m[2]);
+  const hora = Number(m[4] ?? 0);
+  const minuto = Number(m[5] ?? 0);
+  const segundo = Number(m[6] ?? 0);
+  if (
+    !Number.isInteger(ano) ||
+    !Number.isInteger(mes) ||
+    !Number.isInteger(dia) ||
+    mes < 1 ||
+    mes > 12 ||
+    dia < 1 ||
+    dia > 31 ||
+    hora < 0 ||
+    hora > 23 ||
+    minuto < 0 ||
+    minuto > 59 ||
+    segundo < 0 ||
+    segundo > 59
+  ) {
+    return null;
+  }
+  const data = new Date(Date.UTC(ano, mes - 1, dia, hora, minuto, segundo));
+  if (
+    data.getUTCFullYear() !== ano ||
+    data.getUTCMonth() !== mes - 1 ||
+    data.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+  return { dia, mes, ano, hora, minuto, segundo };
+}
+
+function carimboFormsParaIso(valor: string, fallbackIso: string): string {
+  const partes = partesDataForms(valor);
+  if (!partes) return fallbackIso;
+  return new Date(
+    Date.UTC(partes.ano, partes.mes - 1, partes.dia, partes.hora, partes.minuto, partes.segundo),
+  ).toISOString();
+}
+
+function formatarDataForms(valor: string): string {
+  const partes = partesDataForms(valor);
+  if (!partes) return valor.trim();
+  return (
+    String(partes.dia).padStart(2, "0") +
+    "/" +
+    String(partes.mes).padStart(2, "0") +
+    "/" +
+    partes.ano +
+    (partes.hora || partes.minuto || partes.segundo
+      ? ` ${String(partes.hora).padStart(2, "0")}:${String(partes.minuto).padStart(2, "0")}${
+          partes.segundo ? `:${String(partes.segundo).padStart(2, "0")}` : ""
+        }`
+      : "")
+  );
 }
 
 function dadosGoogleForms(
@@ -782,7 +921,9 @@ function dadosGoogleForms(
   municipiosOficiais: string[],
 ): DadosInscricaoDigitalNormalizados {
   const carimbo = valorColuna(row, ["carimbo de data hora", "timestamp", "data hora"]);
-  const idade = valorColuna(row, ["idade"]);
+  const importadoEm = new Date().toISOString();
+  const autorizacaoDadosEm = carimboFormsParaIso(carimbo, importadoEm);
+  const idade = normalizarIdadeInformada(valorColuna(row, ["idade"]));
   const restricaoRaw = valorColuna(row, ["restricao alimentar"]);
   const restricaoQual = valorColuna(row, ["qual restricao", "qual e a restricao", "qual"]);
   const pcdRaw = valorColuna(row, ["possui alguma deficiencia", "deficiencia", "pcd"]);
@@ -808,6 +949,12 @@ function dadosGoogleForms(
     ...normalizarDadosOcr({}, {}),
     usa_nome_social: "nao",
     nome_social: "",
+    idade_informada: idade,
+    faixa_etaria: faixaEtariaInscricao({
+      data_nascimento: "",
+      idade_informada: idade,
+      faixa_etaria: "",
+    }),
     nome: valorColuna(row, ["nome completo", "nome"]),
     email: valorColuna(row, ["e mail", "email"]),
     telefone: onlyDigits(valorColuna(row, ["telefone whatsapp", "whatsapp", "telefone"])),
@@ -847,7 +994,7 @@ function dadosGoogleForms(
       "deseja participar",
     ]),
     autorizacao_dados: simNao(valorAutorizacaoForms(row)),
-    autorizacao_dados_em: carimbo || new Date().toISOString(),
+    autorizacao_dados_em: autorizacaoDadosEm,
     identifica_se_mulher: identificaMulherRaw
       ? simNao(identificaMulherRaw)
         ? "sim"
@@ -863,27 +1010,120 @@ function chaveNomeMunicipio(
   return normalizarTextoComparacao(dados.nome) + "::" + normalizarTextoComparacao(dados.municipio);
 }
 
+type InscricaoExistenteGoogleForms = {
+  id: string;
+  status: string;
+  dados: DadosInscricaoDigitalNormalizados;
+};
+
+function valorPreenchidoGoogleForms(valor: unknown): boolean {
+  if (typeof valor === "string") return valor.trim().length > 0;
+  if (typeof valor === "number") return Number.isFinite(valor);
+  if (typeof valor === "boolean") return valor;
+  if (Array.isArray(valor)) return valor.some((item) => valorPreenchidoGoogleForms(item));
+  if (valor && typeof valor === "object")
+    return Object.values(valor).some(valorPreenchidoGoogleForms);
+  return false;
+}
+
+function dividirEmLotes<T>(itens: T[], tamanho = 150): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < itens.length; i += tamanho) lotes.push(itens.slice(i, i + tamanho));
+  return lotes;
+}
+
+function mesclarDadosGoogleForms(
+  atual: DadosInscricaoDigitalNormalizados,
+  importado: DadosInscricaoDigitalNormalizados,
+): DadosInscricaoDigitalNormalizados {
+  const mesclado: Record<string, unknown> = { ...atual };
+  for (const [campo, valor] of Object.entries(importado)) {
+    if (
+      [
+        "confiancas",
+        "observacoes",
+        "motivo_rejeicao",
+        "arquivo_nome_original",
+        "drive_arquivo_id",
+      ].includes(campo)
+    ) {
+      continue;
+    }
+    const existente = mesclado[campo];
+    if (campo === "autorizacao_dados_em" && valorPreenchidoGoogleForms(valor)) {
+      mesclado[campo] = valor;
+      continue;
+    }
+    if (campo === "autorizacao_dados" && valor === true) {
+      mesclado[campo] = true;
+      continue;
+    }
+    if (typeof valor === "boolean") {
+      if (valor === true && existente !== true) mesclado[campo] = true;
+      continue;
+    }
+    if (!valorPreenchidoGoogleForms(existente) && valorPreenchidoGoogleForms(valor)) {
+      mesclado[campo] = valor;
+    }
+  }
+
+  const observacoes = [String(atual.observacoes ?? "")];
+  for (const trecho of String(importado.observacoes ?? "")
+    .split(/(?<=\.)\s+/)
+    .map((parte) => parte.trim())
+    .filter(Boolean)) {
+    if (!observacoes.join(" ").includes(trecho)) observacoes.push(trecho);
+  }
+  mesclado.observacoes = observacoes.filter(Boolean).join(" ").trim();
+  mesclado.confiancas = { ...(atual.confiancas ?? {}), ...(importado.confiancas ?? {}) };
+  mesclado.faixa_etaria = faixaEtariaInscricao({
+    data_nascimento: String(mesclado.data_nascimento ?? ""),
+    idade_informada: String(mesclado.idade_informada ?? ""),
+    faixa_etaria: String(mesclado.faixa_etaria ?? ""),
+  });
+  return normalizarDadosOcr(mesclado, mesclado.confiancas);
+}
+
 async function prepararPreviewGoogleForms(
   admin: any,
   projetoId: string,
   arquivo: ArquivoPlanilhaGoogleForms,
-): Promise<ResultadoPreviewGoogleForms & { dadosImportar: DadosInscricaoDigitalNormalizados[] }> {
+  reprocessarExistentes = false,
+): Promise<
+  ResultadoPreviewGoogleForms & {
+    dadosImportar: DadosInscricaoDigitalNormalizados[];
+    dadosAtualizar: Array<{ id: string; dados: DadosInscricaoDigitalNormalizados }>;
+  }
+> {
   const [turmasRes, inscricoesRes] = await Promise.all([
     admin.from("turmas").select("municipio").eq("projeto_id", projetoId).limit(500),
-    admin.from("inscricoes_digitais").select("dados").eq("projeto_id", projetoId).limit(5000),
+    admin
+      .from("inscricoes_digitais")
+      .select("id, status, dados")
+      .eq("projeto_id", projetoId)
+      .limit(10000),
   ]);
   if (turmasRes.error) throw new Error(turmasRes.error.message);
   if (inscricoesRes.error) throw new Error(inscricoesRes.error.message);
   const municipiosOficiais: string[] = Array.from(
     new Set((turmasRes.data ?? []).map((t: any) => texto(t.municipio)).filter(Boolean)),
   );
-  const telefonesExistentes = new Set<string>();
-  const nomesMunicipiosExistentes = new Set<string>();
+  const inscricoesPorTelefone = new Map<string, InscricaoExistenteGoogleForms>();
+  const inscricoesPorNomeMunicipio = new Map<string, InscricaoExistenteGoogleForms>();
   for (const row of (inscricoesRes.data ?? []) as any[]) {
     const dados = normalizarDadosOcr(row.dados, row.dados?.confiancas);
+    const existente: InscricaoExistenteGoogleForms = {
+      id: String(row.id),
+      status: texto(row.status),
+      dados,
+    };
     const telefone = onlyDigits(dados.telefone);
-    if (telefone) telefonesExistentes.add(telefone);
-    if (dados.nome && dados.municipio) nomesMunicipiosExistentes.add(chaveNomeMunicipio(dados));
+    if (telefone && !inscricoesPorTelefone.has(telefone))
+      inscricoesPorTelefone.set(telefone, existente);
+    if (dados.nome && dados.municipio) {
+      const chave = chaveNomeMunicipio(dados);
+      if (!inscricoesPorNomeMunicipio.has(chave)) inscricoesPorNomeMunicipio.set(chave, existente);
+    }
   }
   const telefonesArquivo = new Set<string>();
   const nomesArquivo = new Set<string>();
@@ -891,6 +1131,7 @@ async function prepararPreviewGoogleForms(
   const resumo = {
     total: rows.length,
     importar: 0,
+    atualizar: 0,
     duplicada: 0,
     nao_elegivel: 0,
     sem_autorizacao: 0,
@@ -900,6 +1141,7 @@ async function prepararPreviewGoogleForms(
   } satisfies ResumoPreviewGoogleForms;
   const linhas: LinhaPreviewGoogleForms[] = [];
   const dadosImportar: DadosInscricaoDigitalNormalizados[] = [];
+  const dadosAtualizar: Array<{ id: string; dados: DadosInscricaoDigitalNormalizados }> = [];
   rows.forEach((row, index) => {
     try {
       const dados = dadosGoogleForms(row, municipiosOficiais);
@@ -908,7 +1150,7 @@ async function prepararPreviewGoogleForms(
           normalizarTextoComparacao(municipio) === normalizarTextoComparacao(dados.municipio),
       );
       const foraArea = !!dados.municipio && !municipioEmArea;
-      const idadeInformada = idadeInformadaGoogleForms(dados.observacoes);
+      const idadeInformada = idadeReferenciaInscricao(dados);
       const menorIdade = idadeInformada != null && idadeInformada < 18;
       if (foraArea) {
         resumo.fora_area += 1;
@@ -932,26 +1174,42 @@ async function prepararPreviewGoogleForms(
       } else {
         const telefone = onlyDigits(dados.telefone);
         const chaveNome = chaveNomeMunicipio(dados);
-        const duplicadaTelefone =
-          telefone && (telefonesExistentes.has(telefone) || telefonesArquivo.has(telefone));
-        const duplicadaNome =
-          !telefone &&
-          dados.nome &&
-          dados.municipio &&
-          (nomesMunicipiosExistentes.has(chaveNome) || nomesArquivo.has(chaveNome));
-        if (duplicadaTelefone || duplicadaNome) {
+        const duplicadaArquivo = telefone
+          ? telefonesArquivo.has(telefone)
+          : !!(dados.nome && dados.municipio && nomesArquivo.has(chaveNome));
+        const existente = telefone
+          ? inscricoesPorTelefone.get(telefone)
+          : dados.nome && dados.municipio
+            ? inscricoesPorNomeMunicipio.get(chaveNome)
+            : undefined;
+        if (duplicadaArquivo) {
           status = "duplicada";
-          motivo = duplicadaTelefone
-            ? "Telefone já importado/cadastrado"
-            : "Nome e município já importados/cadastrados";
+          motivo = "Linha repetida dentro do próprio arquivo";
+        } else if (existente) {
+          if (reprocessarExistentes && existente.status !== "aprovada") {
+            status = "atualizar";
+            motivo = "Inscrição existente será reprocessada para preencher dados faltantes";
+            dadosAtualizar.push({
+              id: existente.id,
+              dados: mesclarDadosGoogleForms(existente.dados, dados),
+            });
+          } else {
+            status = "duplicada";
+            motivo =
+              existente.status === "aprovada"
+                ? "Inscrição já aprovada; não será reprocessada"
+                : reprocessarExistentes
+                  ? "Inscrição já encontrada"
+                  : "Inscrição já importada/cadastrada";
+          }
         }
       }
-      if (status === "importar") {
+      if (status === "importar" || status === "atualizar") {
         const telefone = onlyDigits(dados.telefone);
         if (telefone) telefonesArquivo.add(telefone);
         if (dados.nome && dados.municipio) nomesArquivo.add(chaveNomeMunicipio(dados));
-        dadosImportar.push(dados);
       }
+      if (status === "importar") dadosImportar.push(dados);
       resumo[status] += 1;
       linhas.push({
         linha: index + 2,
@@ -987,65 +1245,459 @@ async function prepararPreviewGoogleForms(
       });
     }
   });
-  return { resumo, linhas, dadosImportar };
+  return { resumo, linhas, dadosImportar, dadosAtualizar };
 }
-
 export const previewImportacaoGoogleForms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>
-    z.object({ projetoId: UUID, arquivo: ArquivoGoogleFormsSchema }).parse(input),
+    z
+      .object({
+        projetoId: UUID,
+        arquivo: ArquivoGoogleFormsSchema,
+        reprocessarExistentes: z.boolean().optional().default(false),
+      })
+      .parse(input),
   )
   .handler(async ({ data }): Promise<ResultadoPreviewGoogleForms> => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
-    const preview = await prepararPreviewGoogleForms(admin, data.projetoId, data.arquivo);
+    const preview = await prepararPreviewGoogleForms(
+      admin,
+      data.projetoId,
+      data.arquivo,
+      data.reprocessarExistentes,
+    );
     return { resumo: preview.resumo, linhas: preview.linhas };
   });
 
 export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>
-    z.object({ projetoId: UUID, arquivo: ArquivoGoogleFormsSchema }).parse(input),
+    z
+      .object({
+        projetoId: UUID,
+        arquivo: ArquivoGoogleFormsSchema,
+        reprocessarExistentes: z.boolean().optional().default(false),
+      })
+      .parse(input),
   )
   .handler(async ({ data }): Promise<ResultadoPreviewGoogleForms> => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
-    const preview = await prepararPreviewGoogleForms(admin, data.projetoId, data.arquivo);
-    for (const dados of preview.dadosImportar) {
+    const preview = await prepararPreviewGoogleForms(
+      admin,
+      data.projetoId,
+      data.arquivo,
+      data.reprocessarExistentes,
+    );
+    const resumoFinal = { ...preview.resumo, importar: 0, atualizar: 0 };
+    const linhas = [...preview.linhas];
+
+    for (const lote of dividirEmLotes(preview.dadosAtualizar, 150)) {
+      const atualizadoEm = new Date().toISOString();
+      const registros = lote.map((item) => ({
+        id: item.id,
+        projeto_id: data.projetoId,
+        dados: item.dados,
+        atualizado_em: atualizadoEm,
+      }));
       try {
-        const { error } = await admin.from("inscricoes_digitais").insert({
-          projeto_id: data.projetoId,
-          turma_id: null,
-          origem: "google_forms",
-          status: "pendente",
-          dados,
-        });
+        const { error } = await admin
+          .from("inscricoes_digitais")
+          .upsert(registros, { onConflict: "id" });
         if (error) throw new Error(error.message);
+        resumoFinal.atualizar += lote.length;
       } catch (error) {
-        preview.resumo.importar -= 1;
-        preview.resumo.erro += 1;
-        preview.linhas.push({
+        resumoFinal.erro += lote.length;
+        linhas.push({
           linha: 0,
-          nome: dados.nome,
-          email: dados.email,
-          telefone: dados.telefone,
-          idadeInformada: idadeInformadaGoogleForms(dados.observacoes)?.toString() ?? "",
-          municipio: dados.municipio,
-          bairroReferencia: dados.bairro_referencia,
-          turnoPreferido: dados.turno_preferido,
-          autorizacaoDados: dados.autorizacao_dados,
+          nome: `${lote.length} inscrição(ões) existente(s)`,
+          email: "",
+          telefone: "",
+          idadeInformada: "",
+          municipio: "",
+          bairroReferencia: "",
+          turnoPreferido: "",
+          autorizacaoDados: false,
           status: "erro",
-          motivo: error instanceof Error ? error.message : String(error),
+          motivo: `Falha ao atualizar lote de ${lote.length}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
           foraArea: false,
           menorIdade: false,
         });
       }
     }
-    return { resumo: preview.resumo, linhas: preview.linhas };
+
+    for (const lote of dividirEmLotes(preview.dadosImportar, 150)) {
+      const registros = lote.map((dados) => ({
+        projeto_id: data.projetoId,
+        turma_id: null,
+        origem: "google_forms",
+        status: "pendente",
+        dados,
+      }));
+      try {
+        const { error } = await admin.from("inscricoes_digitais").insert(registros);
+        if (error) throw new Error(error.message);
+        resumoFinal.importar += lote.length;
+      } catch (error) {
+        resumoFinal.erro += lote.length;
+        linhas.push({
+          linha: 0,
+          nome: `${lote.length} nova(s) inscrição(ões)`,
+          email: "",
+          telefone: "",
+          idadeInformada: "",
+          municipio: "",
+          bairroReferencia: "",
+          turnoPreferido: "",
+          autorizacaoDados: false,
+          status: "erro",
+          motivo: `Falha ao inserir lote de ${lote.length}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          foraArea: false,
+          menorIdade: false,
+        });
+      }
+    }
+
+    return { resumo: resumoFinal, linhas };
   });
 
 function turnoRelatorio(valor: string): string {
   return valor || "Não informado";
+}
+
+function percentual(total: number, base: number): number {
+  if (!base) return 0;
+  return total / base;
+}
+
+function incrementar(map: Map<string, number>, label: string, valor = 1): void {
+  map.set(label, (map.get(label) ?? 0) + valor);
+}
+
+function distribuicao(map: Map<string, number>, base: number): DashboardDistribuicaoItem[] {
+  return Array.from(map.entries())
+    .map(([label, total]) => ({ label, total, percentual: percentual(total, base) }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+}
+
+function media(valores: number[]): number | null {
+  if (!valores.length) return null;
+  return valores.reduce((sum, valor) => sum + valor, 0) / valores.length;
+}
+
+function mediana(valores: number[]): number | null {
+  if (!valores.length) return null;
+  const ordenados = [...valores].sort((a, b) => a - b);
+  const meio = Math.floor(ordenados.length / 2);
+  if (ordenados.length % 2) return ordenados[meio];
+  return (ordenados[meio - 1] + ordenados[meio]) / 2;
+}
+
+function faixaEtariaDashboard(idade: number | null): string {
+  if (idade == null) return "Não informada";
+  if (idade <= 15) return "Até 15 anos";
+  if (idade <= 17) return "16 a 17 anos";
+  if (idade <= 24) return "18 a 24 anos";
+  if (idade <= 34) return "25 a 34 anos";
+  if (idade <= 44) return "35 a 44 anos";
+  if (idade <= 54) return "45 a 54 anos";
+  if (idade <= 60) return "55 a 60 anos";
+  return "Acima de 60 anos";
+}
+
+function simNaoDashboard(valor: boolean): string {
+  return valor ? "Sim" : "Não";
+}
+
+async function montarDashboardInscricoes(
+  admin: any,
+  projetoId: string,
+): Promise<DashboardInscricoes> {
+  const [inscricoesRes, turmasRes] = await Promise.all([
+    admin
+      .from("inscricoes_digitais")
+      .select("status, origem, dados, documento_path")
+      .eq("projeto_id", projetoId)
+      .limit(10000),
+    admin.from("turmas").select("municipio, turno, vagas").eq("projeto_id", projetoId).limit(1000),
+  ]);
+  if (inscricoesRes.error) throw new Error(inscricoesRes.error.message);
+  if (turmasRes.error) throw new Error(turmasRes.error.message);
+
+  const municipiosComTurma = new Set<string>();
+  const ofertaMunicipio = new Map<string, { turmas: number; vagas: number }>();
+  for (const turma of (turmasRes.data ?? []) as any[]) {
+    const municipio = texto(turma.municipio) || "Não informado";
+    const key = normalizarTextoComparacao(municipio);
+    municipiosComTurma.add(key);
+    const atual = ofertaMunicipio.get(key) ?? { turmas: 0, vagas: 0 };
+    atual.turmas += 1;
+    atual.vagas += Number(turma.vagas ?? 0) || 0;
+    ofertaMunicipio.set(key, atual);
+  }
+
+  const porTrabalho = new Map<string, number>();
+  const porRenda = new Map<string, number>();
+  const porTurno = new Map<string, number>();
+  const porCamisa = new Map<string, number>();
+  const porProgramaSocial = new Map<string, number>();
+  const porDisponibilidadeTurnos = new Map<string, number>();
+  const porRestricaoAlimentar = new Map<string, number>();
+  const porDeficiencia = new Map<string, number>();
+  const porOrigem = new Map<string, number>();
+  const porStatus = new Map<string, number>();
+  const pendencias = new Map<string, number>();
+  const idades: number[] = [];
+  const municipioMap = new Map<
+    string,
+    {
+      label: string;
+      total: number;
+      idades: number[];
+      naoTrabalhando: number;
+      ateUmSalario: number;
+      programaSocial: number;
+      turnos: Record<string, number>;
+    }
+  >();
+  const faixaMap = new Map<
+    string,
+    {
+      label: string;
+      total: number;
+      naoTrabalhando: number;
+      ateUmSalario: number;
+      programaSocial: number;
+      manha: number;
+      noite: number;
+    }
+  >();
+  const bairroMap = new Map<
+    string,
+    {
+      municipio: string;
+      bairro: string;
+      total: number;
+      manha: number;
+      noite: number;
+    }
+  >();
+  const totalPorMunicipio = new Map<string, number>();
+
+  let total = 0;
+  let pendentes = 0;
+  let emRevisao = 0;
+  let aprovadas = 0;
+  let rejeitadas = 0;
+  let duplicadas = 0;
+  let elegiveisPreliminarmente = 0;
+  let cadastrosParaRevisao = 0;
+  let semDocumento = 0;
+  let menoresDe18 = 0;
+  let acimaDe60 = 0;
+  let foraAreaTurmas = 0;
+
+  for (const row of (inscricoesRes.data ?? []) as any[]) {
+    const dados = normalizarDadosOcr(row.dados, row.dados?.confiancas);
+    const status = (row.status as StatusInscricaoDigital) ?? "pendente";
+    const origem = texto(row.origem) || "Não informada";
+    const municipio = dados.municipio || "Não informado";
+    const municipioKey = normalizarTextoComparacao(municipio);
+    const bairro = dados.bairro_referencia || "Não informado";
+    const turno = turnoRelatorio(dados.turno_preferido);
+    const idade = idadeReferenciaInscricao(dados);
+    const faixa = faixaEtariaDashboard(idade);
+    const naoTrabalhando = dados.situacao_trabalho === "Não estou trabalhando";
+    const ateUmSalario = dados.renda_familiar === "Até 1 salário mínimo";
+    const programaSocial = dados.beneficiaria_programa_social || !!dados.qual_programa_social;
+    const temRestricao = dados.restricao_alimentar || !!dados.qual_restricao_alimentar;
+    const temDeficiencia = dados.pcd || !!dados.tipo_deficiencia;
+    const consentimento = dados.autorizacao_dados || !!dados.autorizacao_dados_em;
+    const mulher = dados.identifica_se_mulher === "sim";
+    const foraArea = municipioKey ? !municipiosComTurma.has(municipioKey) : true;
+    const semDoc = !texto(row.documento_path);
+    const precisaRevisao =
+      status === "duplicada" ||
+      semDoc ||
+      foraArea ||
+      !mulher ||
+      !consentimento ||
+      (idade != null && (idade < 16 || idade > 60));
+
+    total += 1;
+    if (status === "pendente") pendentes += 1;
+    if (status === "em_revisao") emRevisao += 1;
+    if (status === "aprovada") aprovadas += 1;
+    if (status === "rejeitada") rejeitadas += 1;
+    if (status === "duplicada") duplicadas += 1;
+    if (semDoc) semDocumento += 1;
+    if (foraArea) foraAreaTurmas += 1;
+    if (idade != null) {
+      idades.push(idade);
+      if (idade < 18) menoresDe18 += 1;
+      if (idade > 60) acimaDe60 += 1;
+    }
+    if (mulher && consentimento && (idade == null || (idade >= 16 && idade <= 60))) {
+      elegiveisPreliminarmente += 1;
+    }
+    if (precisaRevisao) cadastrosParaRevisao += 1;
+
+    incrementar(porTrabalho, dados.situacao_trabalho || "Não informado");
+    incrementar(porRenda, dados.renda_familiar || "Não informado");
+    incrementar(porTurno, turno);
+    incrementar(porCamisa, dados.tamanho_camisa || "Não informado");
+    incrementar(porProgramaSocial, simNaoDashboard(programaSocial));
+    incrementar(porDisponibilidadeTurnos, simNaoDashboard(dados.disponibilidade_outros_turnos));
+    incrementar(porRestricaoAlimentar, simNaoDashboard(temRestricao));
+    incrementar(porDeficiencia, simNaoDashboard(temDeficiencia));
+    incrementar(porOrigem, origem);
+    incrementar(porStatus, status);
+    if (semDoc) incrementar(pendencias, "Documento pendente");
+    if (foraArea) incrementar(pendencias, "Fora da ?rea de turmas");
+    if (!mulher) incrementar(pendencias, "Não se identifica como mulher");
+    if (!consentimento) incrementar(pendencias, "Consentimento não confirmado");
+    if (status === "duplicada") incrementar(pendencias, "Inscrição duplicada");
+    if (idade != null && idade < 16) incrementar(pendencias, "Abaixo de 16 anos");
+    if (idade != null && idade >= 16 && idade < 18) incrementar(pendencias, "Menor de 18 anos");
+    if (idade != null && idade > 60) incrementar(pendencias, "Acima de 60 anos");
+
+    const municipioAtual = municipioMap.get(municipioKey) ?? {
+      label: municipio,
+      total: 0,
+      idades: [],
+      naoTrabalhando: 0,
+      ateUmSalario: 0,
+      programaSocial: 0,
+      turnos: {},
+    };
+    municipioAtual.total += 1;
+    if (idade != null) municipioAtual.idades.push(idade);
+    if (naoTrabalhando) municipioAtual.naoTrabalhando += 1;
+    if (ateUmSalario) municipioAtual.ateUmSalario += 1;
+    if (programaSocial) municipioAtual.programaSocial += 1;
+    municipioAtual.turnos[turno] = (municipioAtual.turnos[turno] ?? 0) + 1;
+    municipioMap.set(municipioKey, municipioAtual);
+    totalPorMunicipio.set(municipioKey, (totalPorMunicipio.get(municipioKey) ?? 0) + 1);
+
+    const faixaAtual = faixaMap.get(faixa) ?? {
+      label: faixa,
+      total: 0,
+      naoTrabalhando: 0,
+      ateUmSalario: 0,
+      programaSocial: 0,
+      manha: 0,
+      noite: 0,
+    };
+    faixaAtual.total += 1;
+    if (naoTrabalhando) faixaAtual.naoTrabalhando += 1;
+    if (ateUmSalario) faixaAtual.ateUmSalario += 1;
+    if (programaSocial) faixaAtual.programaSocial += 1;
+    if (turno === "manha") faixaAtual.manha += 1;
+    if (turno === "noite") faixaAtual.noite += 1;
+    faixaMap.set(faixa, faixaAtual);
+
+    const bairroKey = `${municipioKey}::${normalizarTextoComparacao(bairro)}`;
+    const bairroAtual = bairroMap.get(bairroKey) ?? {
+      municipio,
+      bairro,
+      total: 0,
+      manha: 0,
+      noite: 0,
+    };
+    bairroAtual.total += 1;
+    if (turno === "manha") bairroAtual.manha += 1;
+    if (turno === "noite") bairroAtual.noite += 1;
+    bairroMap.set(bairroKey, bairroAtual);
+  }
+
+  const porMunicipio = Array.from(municipioMap.entries())
+    .map(([key, item]) => {
+      const oferta = ofertaMunicipio.get(key) ?? { turmas: 0, vagas: 0 };
+      return {
+        label: item.label,
+        total: item.total,
+        percentual: percentual(item.total, total),
+        idadeMedia: media(item.idades),
+        naoTrabalhando: item.naoTrabalhando,
+        ateUmSalario: item.ateUmSalario,
+        programaSocial: item.programaSocial,
+        turnos: item.turnos,
+        turmas: oferta.turmas,
+        vagas: oferta.vagas,
+      };
+    })
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+
+  const ordemFaixas = [
+    "Até 15 anos",
+    "16 a 17 anos",
+    "18 a 24 anos",
+    "25 a 34 anos",
+    "35 a 44 anos",
+    "45 a 54 anos",
+    "55 a 60 anos",
+    "Acima de 60 anos",
+    "Não informada",
+  ];
+  const porFaixaEtaria = Array.from(faixaMap.values())
+    .map((item) => ({ ...item, percentual: percentual(item.total, total) }))
+    .sort((a, b) => ordemFaixas.indexOf(a.label) - ordemFaixas.indexOf(b.label));
+
+  const porBairro = Array.from(bairroMap.entries())
+    .map(([key, item]) => {
+      const municipioKey = key.split("::")[0];
+      return {
+        label: `${item.municipio} ? ${item.bairro}`,
+        municipio: item.municipio,
+        bairro: item.bairro,
+        total: item.total,
+        percentual: percentual(item.total, total),
+        percentualCidade: percentual(item.total, totalPorMunicipio.get(municipioKey) ?? 0),
+        manha: item.manha,
+        noite: item.noite,
+      };
+    })
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+
+  return {
+    geradoEm: new Date().toISOString(),
+    total,
+    pendentes,
+    emRevisao,
+    aprovadas,
+    rejeitadas,
+    duplicadas,
+    elegiveisPreliminarmente,
+    cadastrosParaRevisao,
+    semDocumento,
+    menoresDe18,
+    acimaDe60,
+    foraAreaTurmas,
+    idadeMedia: media(idades),
+    idadeMediana: mediana(idades),
+    concentracaoPrincipal: porMunicipio[0]
+      ? { municipio: porMunicipio[0].label, percentual: porMunicipio[0].percentual }
+      : null,
+    porMunicipio,
+    porFaixaEtaria,
+    porTrabalho: distribuicao(porTrabalho, total),
+    porRenda: distribuicao(porRenda, total),
+    porTurno: distribuicao(porTurno, total),
+    porCamisa: distribuicao(porCamisa, total),
+    porProgramaSocial: distribuicao(porProgramaSocial, total),
+    porDisponibilidadeTurnos: distribuicao(porDisponibilidadeTurnos, total),
+    porRestricaoAlimentar: distribuicao(porRestricaoAlimentar, total),
+    porDeficiencia: distribuicao(porDeficiencia, total),
+    porOrigem: distribuicao(porOrigem, total),
+    porStatus: distribuicao(porStatus, total),
+    porBairro,
+    pendencias: distribuicao(pendencias, total),
+  };
 }
 
 async function montarRelatorioInscricoes(
@@ -1161,6 +1813,15 @@ export const listarRelatorioInscricoesPorRegiao = createServerFn({ method: "POST
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
     return montarRelatorioInscricoes(admin, data.projetoId);
+  });
+
+export const listarDashboardInscricoes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => ProjetoInput.parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    return montarDashboardInscricoes(admin, data.projetoId);
   });
 
 export const gerarAnaliseIaRelatorioInscricoes = createServerFn({ method: "POST" })
@@ -1298,7 +1959,7 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
 {
   "dados": {
     "nome": "", "usa_nome_social": "nao", "nome_social": "",
-    "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio",
+    "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio", "idade_informada": "", "faixa_etaria": "",
     "genero": "", "raca": "", "pcd": false, "tipo_deficiencia": "",
     "telefone": "", "email": "", "endereco": "", "municipio": "",
     "bairro_referencia": "", "turno_preferido": "",
@@ -1321,7 +1982,7 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
 Use "sim" ou "nao" em identifica_se_mulher; P, M, G, GG ou XG em tamanho_camisa;
 "manha", "tarde", "noite" ou "qualquer" em turno_preferido; e os textos exatos das opções
 de situação de trabalho e renda familiar apresentados na ficha.
-Inclua em "confiancas" todos os campos retornados, inclusive nome_social, os campos dos dois contatos,
+Inclua em "confiancas" todos os campos retornados, inclusive nome_social, idade_informada, faixa_etaria, os campos dos dois contatos,
 turno_preferido, polo_preferido e bairro_referencia, usando valores entre 0 e 1.
 Campos ausentes ou ilegíveis devem ser string vazia (ou false) e confiança 0.`;
       const visao = await executarVisaoRouter({

@@ -11,6 +11,8 @@ import {
 import { formatCpf } from "@/lib/cpf";
 import {
   AUTORIZACAO_DADOS_TEXTO,
+  faixaEtariaInscricao,
+  idadeReferenciaInscricao,
   TURNO_PREFERIDO_LABEL,
   type TurnoPreferido,
 } from "@/lib/inscricao-digital";
@@ -66,6 +68,11 @@ function FichaImpressaoPage() {
           <div className="grid grid-cols-2 gap-5">
             {linha("CPF", formatCpf(d.cpf))}
             {linha("Data de nascimento", d.data_nascimento)}
+            {linha(
+              "Idade informada/calculada",
+              idadeReferenciaInscricao(d) != null ? `${idadeReferenciaInscricao(d)} anos` : "",
+            )}
+            {linha("Faixa etária", faixaEtariaInscricao(d))}
             {linha("Gênero", d.genero)}
             {linha("Raça/cor", d.raca)}
           </div>
