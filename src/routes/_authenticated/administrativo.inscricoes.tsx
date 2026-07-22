@@ -1201,9 +1201,13 @@ function ImportarGoogleFormsDialog({
                     <TableRow>
                       <TableHead>Linha</TableHead>
                       <TableHead>Nome</TableHead>
+                      <TableHead>E-mail</TableHead>
                       <TableHead>Telefone</TableHead>
+                      <TableHead>Idade</TableHead>
                       <TableHead>Município</TableHead>
+                      <TableHead>Bairro/ref.</TableHead>
                       <TableHead>Turno</TableHead>
+                      <TableHead>LGPD</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Motivo</TableHead>
                     </TableRow>
@@ -1213,9 +1217,15 @@ function ImportarGoogleFormsDialog({
                       <TableRow key={`${linha.linha}-${index}`}>
                         <TableCell>{linha.linha || "—"}</TableCell>
                         <TableCell>{linha.nome || "—"}</TableCell>
+                        <TableCell className="max-w-56 truncate">{linha.email || "—"}</TableCell>
                         <TableCell>{linha.telefone || "—"}</TableCell>
+                        <TableCell>{linha.idadeInformada || "—"}</TableCell>
                         <TableCell>{linha.municipio || "—"}</TableCell>
+                        <TableCell className="max-w-52 truncate">
+                          {linha.bairroReferencia || "—"}
+                        </TableCell>
                         <TableCell>{turnoLabel(linha.turnoPreferido)}</TableCell>
+                        <TableCell>{linha.autorizacaoDados ? "Sim" : "Não"}</TableCell>
                         <TableCell>
                           <div>{statusPreviewLabel(linha.status)}</div>
                           <div className="mt-1 flex flex-wrap gap-1">

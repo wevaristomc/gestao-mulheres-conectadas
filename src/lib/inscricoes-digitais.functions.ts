@@ -483,9 +483,11 @@ export type LinhaPreviewGoogleForms = {
   nome: string;
   email: string;
   telefone: string;
+  idadeInformada: string;
   municipio: string;
   bairroReferencia: string;
   turnoPreferido: string;
+  autorizacaoDados: boolean;
   status: StatusLinhaGoogleForms;
   motivo: string;
   foraArea: boolean;
@@ -634,9 +636,12 @@ async function lerPlanilhaGoogleForms(
 function valorColuna(row: Record<string, string>, candidatos: string[]): string {
   const entradas = Object.entries(row);
   const normalizados = candidatos.map(normalizarHeader);
+  const exato = entradas.find(([header]) => normalizados.includes(normalizarHeader(header)));
+  if (exato) return exato[1]?.trim() ?? "";
+
   const encontrado = entradas.find(([header]) => {
     const h = normalizarHeader(header);
-    return normalizados.some((c) => h.includes(c) || c.includes(h));
+    return normalizados.some((c) => h.includes(c));
   });
   return encontrado?.[1]?.trim() ?? "";
 }
@@ -953,9 +958,11 @@ async function prepararPreviewGoogleForms(
         nome: dados.nome,
         email: dados.email,
         telefone: dados.telefone,
+        idadeInformada: idadeInformada != null ? String(idadeInformada) : "",
         municipio: dados.municipio,
         bairroReferencia: dados.bairro_referencia,
         turnoPreferido: dados.turno_preferido,
+        autorizacaoDados: dados.autorizacao_dados,
         status,
         motivo,
         foraArea,
@@ -968,9 +975,11 @@ async function prepararPreviewGoogleForms(
         nome: "",
         email: "",
         telefone: "",
+        idadeInformada: "",
         municipio: "",
         bairroReferencia: "",
         turnoPreferido: "",
+        autorizacaoDados: false,
         status: "erro",
         motivo: error instanceof Error ? error.message : String(error),
         foraArea: false,
@@ -1020,9 +1029,11 @@ export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
           nome: dados.nome,
           email: dados.email,
           telefone: dados.telefone,
+          idadeInformada: idadeInformadaGoogleForms(dados.observacoes)?.toString() ?? "",
           municipio: dados.municipio,
           bairroReferencia: dados.bairro_referencia,
           turnoPreferido: dados.turno_preferido,
+          autorizacaoDados: dados.autorizacao_dados,
           status: "erro",
           motivo: error instanceof Error ? error.message : String(error),
           foraArea: false,
