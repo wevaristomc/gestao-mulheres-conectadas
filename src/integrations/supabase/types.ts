@@ -349,6 +349,129 @@ export type Database = {
           },
         ]
       }
+      ia_logs_uso: {
+        Row: {
+          criado_em: string
+          erro: string | null
+          id: string
+          modelo: string | null
+          processo: string | null
+          provedor: string | null
+          sucesso: boolean
+          tokens_entrada: number
+          tokens_saida: number
+        }
+        Insert: {
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          modelo?: string | null
+          processo?: string | null
+          provedor?: string | null
+          sucesso?: boolean
+          tokens_entrada?: number
+          tokens_saida?: number
+        }
+        Update: {
+          criado_em?: string
+          erro?: string | null
+          id?: string
+          modelo?: string | null
+          processo?: string | null
+          provedor?: string | null
+          sucesso?: boolean
+          tokens_entrada?: number
+          tokens_saida?: number
+        }
+        Relationships: []
+      }
+      ia_politicas: {
+        Row: {
+          atualizado_em: string
+          complexidade: string | null
+          criado_em: string
+          descricao: string | null
+          id: string
+          max_tokens: number | null
+          prioridade: number
+          processo: string
+          provedor_preferido: string | null
+          temperatura: number | null
+          usar_fallback: boolean
+        }
+        Insert: {
+          atualizado_em?: string
+          complexidade?: string | null
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          max_tokens?: number | null
+          prioridade?: number
+          processo: string
+          provedor_preferido?: string | null
+          temperatura?: number | null
+          usar_fallback?: boolean
+        }
+        Update: {
+          atualizado_em?: string
+          complexidade?: string | null
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          max_tokens?: number | null
+          prioridade?: number
+          processo?: string
+          provedor_preferido?: string | null
+          temperatura?: number | null
+          usar_fallback?: boolean
+        }
+        Relationships: []
+      }
+      ia_provedores: {
+        Row: {
+          api_key: string | null
+          ativo: boolean
+          atualizado_em: string
+          base_url: string
+          criado_em: string
+          gratuito: boolean
+          id: string
+          modelo_padrao: string | null
+          modelos_disponiveis: Json | null
+          nome_exibicao: string | null
+          prioridade: number
+          provedor: string
+        }
+        Insert: {
+          api_key?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          base_url: string
+          criado_em?: string
+          gratuito?: boolean
+          id?: string
+          modelo_padrao?: string | null
+          modelos_disponiveis?: Json | null
+          nome_exibicao?: string | null
+          prioridade?: number
+          provedor: string
+        }
+        Update: {
+          api_key?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          base_url?: string
+          criado_em?: string
+          gratuito?: boolean
+          id?: string
+          modelo_padrao?: string | null
+          modelos_disponiveis?: Json | null
+          nome_exibicao?: string | null
+          prioridade?: number
+          provedor?: string
+        }
+        Relationships: []
+      }
       importacoes_presenca: {
         Row: {
           arquivo_nome: string | null
