@@ -1104,6 +1104,7 @@ function RelatorioInscricoesCard({
 
 function statusPreviewLabel(status: string): string {
   if (status === "importar") return "A importar";
+  if (status === "atualizar") return "Atualizar";
   if (status === "duplicada") return "Duplicada";
   if (status === "nao_elegivel") return "Não elegível";
   if (status === "sem_autorizacao") return "Sem autorização";
@@ -1123,6 +1124,7 @@ function ImportarGoogleFormsDialog({
 }) {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<ResultadoPreviewGoogleForms | null>(null);
+  const [reprocessarExistentes, setReprocessarExistentes] = useState(false);
   const arquivoPayload = async () => {
     if (!arquivo) throw new Error("Selecione um arquivo CSV ou XLSX.");
     if (arquivo.size > 20 * 1024 * 1024) throw new Error("O arquivo deve ter no máximo 20 MB.");
@@ -1130,16 +1132,22 @@ function ImportarGoogleFormsDialog({
   };
   const gerarPreview = useMutation({
     mutationFn: async () =>
-      previewImportacaoGoogleForms({ data: { projetoId, arquivo: await arquivoPayload() } }),
+      previewImportacaoGoogleForms({
+        data: { projetoId, arquivo: await arquivoPayload(), reprocessarExistentes },
+      }),
     onSuccess: (resultado) => setPreview(resultado),
     onError: (error: Error) => toast.error(error.message),
   });
   const confirmar = useMutation({
     mutationFn: async () =>
-      confirmarImportacaoGoogleForms({ data: { projetoId, arquivo: await arquivoPayload() } }),
+      confirmarImportacaoGoogleForms({
+        data: { projetoId, arquivo: await arquivoPayload(), reprocessarExistentes },
+      }),
     onSuccess: (resultado) => {
       setPreview(resultado);
-      toast.success(`${resultado.resumo.importar} pré-inscrição(ões) importada(s).`);
+      toast.success(
+        `${resultado.resumo.importar} importada(s) e ${resultado.resumo.atualizar} atualizada(s).`,
+      );
       onImported();
       if (resultado.resumo.erro === 0) {
         onOpenChange(false);
@@ -1172,10 +1180,28 @@ function ImportarGoogleFormsDialog({
             />
             <p className="text-xs text-muted-foreground">CSV ou XLSX, até 20 MB.</p>
           </div>
+          <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+            <Checkbox
+              checked={reprocessarExistentes}
+              onCheckedChange={(valor) => {
+                setReprocessarExistentes(valor === true);
+                setPreview(null);
+              }}
+            />
+            <span>
+              <span className="font-medium">Reprocessar inscrições já importadas</span>
+              <span className="block text-xs text-muted-foreground">
+                Atualiza inscrições existentes encontradas por telefone ou nome+município para
+                preencher campos faltantes, como idade/faixa etária, sem criar duplicatas.
+                Inscrições já aprovadas não são alteradas.
+              </span>
+            </span>
+          </label>
           {preview ? (
             <div className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
+              <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-8">
                 <ResumoMini label="A importar" valor={preview.resumo.importar} />
+                <ResumoMini label="Atualizar" valor={preview.resumo.atualizar} />
                 <ResumoMini label="Duplicadas" valor={preview.resumo.duplicada} />
                 <ResumoMini label="Não elegíveis" valor={preview.resumo.nao_elegivel} />
                 <ResumoMini label="Sem autorização" valor={preview.resumo.sem_autorizacao} />
@@ -1264,7 +1290,11 @@ function ImportarGoogleFormsDialog({
           </Button>
           <Button
             onClick={() => confirmar.mutate()}
-            disabled={!arquivo || !preview?.resumo.importar || confirmar.isPending}
+            disabled={
+              !arquivo ||
+              !(preview?.resumo.importar || preview?.resumo.atualizar) ||
+              confirmar.isPending
+            }
           >
             {confirmar.isPending ? (
               <Loader2 className="mr-2 size-4 animate-spin" />

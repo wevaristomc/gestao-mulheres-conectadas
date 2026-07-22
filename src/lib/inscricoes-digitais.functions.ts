@@ -479,7 +479,7 @@ type ArquivoPlanilhaGoogleForms = {
 };
 
 type StatusLinhaGoogleForms =
-  "importar" | "duplicada" | "nao_elegivel" | "sem_autorizacao" | "erro";
+  "importar" | "atualizar" | "duplicada" | "nao_elegivel" | "sem_autorizacao" | "erro";
 
 type ResumoPreviewGoogleForms = Record<StatusLinhaGoogleForms, number> & {
   total: number;
@@ -878,27 +878,106 @@ function chaveNomeMunicipio(
   return normalizarTextoComparacao(dados.nome) + "::" + normalizarTextoComparacao(dados.municipio);
 }
 
+type InscricaoExistenteGoogleForms = {
+  id: string;
+  status: string;
+  dados: DadosInscricaoDigitalNormalizados;
+};
+
+function valorPreenchidoGoogleForms(valor: unknown): boolean {
+  if (typeof valor === "string") return valor.trim().length > 0;
+  if (typeof valor === "number") return Number.isFinite(valor);
+  if (typeof valor === "boolean") return valor;
+  if (Array.isArray(valor)) return valor.some((item) => valorPreenchidoGoogleForms(item));
+  if (valor && typeof valor === "object")
+    return Object.values(valor).some(valorPreenchidoGoogleForms);
+  return false;
+}
+
+function mesclarDadosGoogleForms(
+  atual: DadosInscricaoDigitalNormalizados,
+  importado: DadosInscricaoDigitalNormalizados,
+): DadosInscricaoDigitalNormalizados {
+  const mesclado: Record<string, unknown> = { ...atual };
+  for (const [campo, valor] of Object.entries(importado)) {
+    if (
+      [
+        "confiancas",
+        "observacoes",
+        "motivo_rejeicao",
+        "arquivo_nome_original",
+        "drive_arquivo_id",
+      ].includes(campo)
+    ) {
+      continue;
+    }
+    const existente = mesclado[campo];
+    if (typeof valor === "boolean") {
+      if (valor === true && existente !== true) mesclado[campo] = true;
+      continue;
+    }
+    if (!valorPreenchidoGoogleForms(existente) && valorPreenchidoGoogleForms(valor)) {
+      mesclado[campo] = valor;
+    }
+  }
+
+  const observacoes = [String(atual.observacoes ?? "")];
+  for (const trecho of String(importado.observacoes ?? "")
+    .split(/(?<=\.)\s+/)
+    .map((parte) => parte.trim())
+    .filter(Boolean)) {
+    if (!observacoes.join(" ").includes(trecho)) observacoes.push(trecho);
+  }
+  mesclado.observacoes = observacoes.filter(Boolean).join(" ").trim();
+  mesclado.confiancas = { ...(atual.confiancas ?? {}), ...(importado.confiancas ?? {}) };
+  mesclado.faixa_etaria = faixaEtariaInscricao({
+    data_nascimento: String(mesclado.data_nascimento ?? ""),
+    idade_informada: String(mesclado.idade_informada ?? ""),
+    faixa_etaria: String(mesclado.faixa_etaria ?? ""),
+  });
+  return normalizarDadosOcr(mesclado, mesclado.confiancas);
+}
+
 async function prepararPreviewGoogleForms(
   admin: any,
   projetoId: string,
   arquivo: ArquivoPlanilhaGoogleForms,
-): Promise<ResultadoPreviewGoogleForms & { dadosImportar: DadosInscricaoDigitalNormalizados[] }> {
+  reprocessarExistentes = false,
+): Promise<
+  ResultadoPreviewGoogleForms & {
+    dadosImportar: DadosInscricaoDigitalNormalizados[];
+    dadosAtualizar: Array<{ id: string; dados: DadosInscricaoDigitalNormalizados }>;
+  }
+> {
   const [turmasRes, inscricoesRes] = await Promise.all([
     admin.from("turmas").select("municipio").eq("projeto_id", projetoId).limit(500),
-    admin.from("inscricoes_digitais").select("dados").eq("projeto_id", projetoId).limit(5000),
+    admin
+      .from("inscricoes_digitais")
+      .select("id, status, dados")
+      .eq("projeto_id", projetoId)
+      .limit(10000),
   ]);
   if (turmasRes.error) throw new Error(turmasRes.error.message);
   if (inscricoesRes.error) throw new Error(inscricoesRes.error.message);
   const municipiosOficiais: string[] = Array.from(
     new Set((turmasRes.data ?? []).map((t: any) => texto(t.municipio)).filter(Boolean)),
   );
-  const telefonesExistentes = new Set<string>();
-  const nomesMunicipiosExistentes = new Set<string>();
+  const inscricoesPorTelefone = new Map<string, InscricaoExistenteGoogleForms>();
+  const inscricoesPorNomeMunicipio = new Map<string, InscricaoExistenteGoogleForms>();
   for (const row of (inscricoesRes.data ?? []) as any[]) {
     const dados = normalizarDadosOcr(row.dados, row.dados?.confiancas);
+    const existente: InscricaoExistenteGoogleForms = {
+      id: String(row.id),
+      status: texto(row.status),
+      dados,
+    };
     const telefone = onlyDigits(dados.telefone);
-    if (telefone) telefonesExistentes.add(telefone);
-    if (dados.nome && dados.municipio) nomesMunicipiosExistentes.add(chaveNomeMunicipio(dados));
+    if (telefone && !inscricoesPorTelefone.has(telefone))
+      inscricoesPorTelefone.set(telefone, existente);
+    if (dados.nome && dados.municipio) {
+      const chave = chaveNomeMunicipio(dados);
+      if (!inscricoesPorNomeMunicipio.has(chave)) inscricoesPorNomeMunicipio.set(chave, existente);
+    }
   }
   const telefonesArquivo = new Set<string>();
   const nomesArquivo = new Set<string>();
@@ -906,6 +985,7 @@ async function prepararPreviewGoogleForms(
   const resumo = {
     total: rows.length,
     importar: 0,
+    atualizar: 0,
     duplicada: 0,
     nao_elegivel: 0,
     sem_autorizacao: 0,
@@ -915,6 +995,7 @@ async function prepararPreviewGoogleForms(
   } satisfies ResumoPreviewGoogleForms;
   const linhas: LinhaPreviewGoogleForms[] = [];
   const dadosImportar: DadosInscricaoDigitalNormalizados[] = [];
+  const dadosAtualizar: Array<{ id: string; dados: DadosInscricaoDigitalNormalizados }> = [];
   rows.forEach((row, index) => {
     try {
       const dados = dadosGoogleForms(row, municipiosOficiais);
@@ -947,26 +1028,42 @@ async function prepararPreviewGoogleForms(
       } else {
         const telefone = onlyDigits(dados.telefone);
         const chaveNome = chaveNomeMunicipio(dados);
-        const duplicadaTelefone =
-          telefone && (telefonesExistentes.has(telefone) || telefonesArquivo.has(telefone));
-        const duplicadaNome =
-          !telefone &&
-          dados.nome &&
-          dados.municipio &&
-          (nomesMunicipiosExistentes.has(chaveNome) || nomesArquivo.has(chaveNome));
-        if (duplicadaTelefone || duplicadaNome) {
+        const duplicadaArquivo = telefone
+          ? telefonesArquivo.has(telefone)
+          : !!(dados.nome && dados.municipio && nomesArquivo.has(chaveNome));
+        const existente = telefone
+          ? inscricoesPorTelefone.get(telefone)
+          : dados.nome && dados.municipio
+            ? inscricoesPorNomeMunicipio.get(chaveNome)
+            : undefined;
+        if (duplicadaArquivo) {
           status = "duplicada";
-          motivo = duplicadaTelefone
-            ? "Telefone já importado/cadastrado"
-            : "Nome e município já importados/cadastrados";
+          motivo = "Linha repetida dentro do próprio arquivo";
+        } else if (existente) {
+          if (reprocessarExistentes && existente.status !== "aprovada") {
+            status = "atualizar";
+            motivo = "Inscrição existente será reprocessada para preencher dados faltantes";
+            dadosAtualizar.push({
+              id: existente.id,
+              dados: mesclarDadosGoogleForms(existente.dados, dados),
+            });
+          } else {
+            status = "duplicada";
+            motivo =
+              existente.status === "aprovada"
+                ? "Inscrição já aprovada; não será reprocessada"
+                : reprocessarExistentes
+                  ? "Inscrição já encontrada"
+                  : "Inscrição já importada/cadastrada";
+          }
         }
       }
-      if (status === "importar") {
+      if (status === "importar" || status === "atualizar") {
         const telefone = onlyDigits(dados.telefone);
         if (telefone) telefonesArquivo.add(telefone);
         if (dados.nome && dados.municipio) nomesArquivo.add(chaveNomeMunicipio(dados));
-        dadosImportar.push(dados);
       }
+      if (status === "importar") dadosImportar.push(dados);
       resumo[status] += 1;
       linhas.push({
         linha: index + 2,
@@ -1002,30 +1099,79 @@ async function prepararPreviewGoogleForms(
       });
     }
   });
-  return { resumo, linhas, dadosImportar };
+  return { resumo, linhas, dadosImportar, dadosAtualizar };
 }
-
 export const previewImportacaoGoogleForms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>
-    z.object({ projetoId: UUID, arquivo: ArquivoGoogleFormsSchema }).parse(input),
+    z
+      .object({
+        projetoId: UUID,
+        arquivo: ArquivoGoogleFormsSchema,
+        reprocessarExistentes: z.boolean().optional().default(false),
+      })
+      .parse(input),
   )
   .handler(async ({ data }): Promise<ResultadoPreviewGoogleForms> => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
-    const preview = await prepararPreviewGoogleForms(admin, data.projetoId, data.arquivo);
+    const preview = await prepararPreviewGoogleForms(
+      admin,
+      data.projetoId,
+      data.arquivo,
+      data.reprocessarExistentes,
+    );
     return { resumo: preview.resumo, linhas: preview.linhas };
   });
 
 export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
   .inputValidator((input: unknown) =>
-    z.object({ projetoId: UUID, arquivo: ArquivoGoogleFormsSchema }).parse(input),
+    z
+      .object({
+        projetoId: UUID,
+        arquivo: ArquivoGoogleFormsSchema,
+        reprocessarExistentes: z.boolean().optional().default(false),
+      })
+      .parse(input),
   )
   .handler(async ({ data }): Promise<ResultadoPreviewGoogleForms> => {
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
-    const preview = await prepararPreviewGoogleForms(admin, data.projetoId, data.arquivo);
+    const preview = await prepararPreviewGoogleForms(
+      admin,
+      data.projetoId,
+      data.arquivo,
+      data.reprocessarExistentes,
+    );
+    for (const item of preview.dadosAtualizar) {
+      try {
+        const { error } = await admin
+          .from("inscricoes_digitais")
+          .update({ dados: item.dados, atualizado_em: new Date().toISOString() })
+          .eq("id", item.id)
+          .eq("projeto_id", data.projetoId);
+        if (error) throw new Error(error.message);
+      } catch (error) {
+        preview.resumo.atualizar -= 1;
+        preview.resumo.erro += 1;
+        preview.linhas.push({
+          linha: 0,
+          nome: item.dados.nome,
+          email: item.dados.email,
+          telefone: item.dados.telefone,
+          idadeInformada: idadeReferenciaInscricao(item.dados)?.toString() ?? "",
+          municipio: item.dados.municipio,
+          bairroReferencia: item.dados.bairro_referencia,
+          turnoPreferido: item.dados.turno_preferido,
+          autorizacaoDados: item.dados.autorizacao_dados,
+          status: "erro",
+          motivo: error instanceof Error ? error.message : String(error),
+          foraArea: false,
+          menorIdade: false,
+        });
+      }
+    }
     for (const dados of preview.dadosImportar) {
       try {
         const { error } = await admin.from("inscricoes_digitais").insert({
