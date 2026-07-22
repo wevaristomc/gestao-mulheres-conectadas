@@ -539,6 +539,74 @@ export type RelatorioInscricoesRegiao = {
   linhas: RelatorioInscricoesLinha[];
 };
 
+export type DashboardDistribuicaoItem = {
+  label: string;
+  total: number;
+  percentual: number;
+};
+
+export type DashboardInscricoesRegiaoItem = DashboardDistribuicaoItem & {
+  idadeMedia: number | null;
+  naoTrabalhando: number;
+  ateUmSalario: number;
+  programaSocial: number;
+  turnos: Record<string, number>;
+  turmas: number;
+  vagas: number;
+};
+
+export type DashboardInscricoesBairroItem = DashboardDistribuicaoItem & {
+  municipio: string;
+  bairro: string;
+  percentualCidade: number;
+  manha: number;
+  noite: number;
+};
+
+export type DashboardInscricoes = {
+  geradoEm: string;
+  total: number;
+  pendentes: number;
+  emRevisao: number;
+  aprovadas: number;
+  rejeitadas: number;
+  duplicadas: number;
+  elegiveisPreliminarmente: number;
+  cadastrosParaRevisao: number;
+  semDocumento: number;
+  menoresDe18: number;
+  acimaDe60: number;
+  foraAreaTurmas: number;
+  idadeMedia: number | null;
+  idadeMediana: number | null;
+  concentracaoPrincipal: {
+    municipio: string;
+    percentual: number;
+  } | null;
+  porMunicipio: DashboardInscricoesRegiaoItem[];
+  porFaixaEtaria: Array<
+    DashboardDistribuicaoItem & {
+      naoTrabalhando: number;
+      ateUmSalario: number;
+      programaSocial: number;
+      manha: number;
+      noite: number;
+    }
+  >;
+  porTrabalho: DashboardDistribuicaoItem[];
+  porRenda: DashboardDistribuicaoItem[];
+  porTurno: DashboardDistribuicaoItem[];
+  porCamisa: DashboardDistribuicaoItem[];
+  porProgramaSocial: DashboardDistribuicaoItem[];
+  porDisponibilidadeTurnos: DashboardDistribuicaoItem[];
+  porRestricaoAlimentar: DashboardDistribuicaoItem[];
+  porDeficiencia: DashboardDistribuicaoItem[];
+  porOrigem: DashboardDistribuicaoItem[];
+  porStatus: DashboardDistribuicaoItem[];
+  porBairro: DashboardInscricoesBairroItem[];
+  pendencias: DashboardDistribuicaoItem[];
+};
+
 const ArquivoGoogleFormsSchema = z.object({
   nome: z.string().trim().min(1).max(240),
   mime: z.string().optional().default(""),
@@ -1209,6 +1277,336 @@ function turnoRelatorio(valor: string): string {
   return valor || "Não informado";
 }
 
+function percentual(total: number, base: number): number {
+  if (!base) return 0;
+  return total / base;
+}
+
+function incrementar(map: Map<string, number>, label: string, valor = 1): void {
+  map.set(label, (map.get(label) ?? 0) + valor);
+}
+
+function distribuicao(map: Map<string, number>, base: number): DashboardDistribuicaoItem[] {
+  return Array.from(map.entries())
+    .map(([label, total]) => ({ label, total, percentual: percentual(total, base) }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+}
+
+function media(valores: number[]): number | null {
+  if (!valores.length) return null;
+  return valores.reduce((sum, valor) => sum + valor, 0) / valores.length;
+}
+
+function mediana(valores: number[]): number | null {
+  if (!valores.length) return null;
+  const ordenados = [...valores].sort((a, b) => a - b);
+  const meio = Math.floor(ordenados.length / 2);
+  if (ordenados.length % 2) return ordenados[meio];
+  return (ordenados[meio - 1] + ordenados[meio]) / 2;
+}
+
+function faixaEtariaDashboard(idade: number | null): string {
+  if (idade == null) return "Não informada";
+  if (idade <= 15) return "Até 15 anos";
+  if (idade <= 17) return "16 a 17 anos";
+  if (idade <= 24) return "18 a 24 anos";
+  if (idade <= 34) return "25 a 34 anos";
+  if (idade <= 44) return "35 a 44 anos";
+  if (idade <= 54) return "45 a 54 anos";
+  if (idade <= 60) return "55 a 60 anos";
+  return "Acima de 60 anos";
+}
+
+function simNaoDashboard(valor: boolean): string {
+  return valor ? "Sim" : "Não";
+}
+
+async function montarDashboardInscricoes(
+  admin: any,
+  projetoId: string,
+): Promise<DashboardInscricoes> {
+  const [inscricoesRes, turmasRes] = await Promise.all([
+    admin
+      .from("inscricoes_digitais")
+      .select("status, origem, dados, documento_path")
+      .eq("projeto_id", projetoId)
+      .limit(10000),
+    admin.from("turmas").select("municipio, turno, vagas").eq("projeto_id", projetoId).limit(1000),
+  ]);
+  if (inscricoesRes.error) throw new Error(inscricoesRes.error.message);
+  if (turmasRes.error) throw new Error(turmasRes.error.message);
+
+  const municipiosComTurma = new Set<string>();
+  const ofertaMunicipio = new Map<string, { turmas: number; vagas: number }>();
+  for (const turma of (turmasRes.data ?? []) as any[]) {
+    const municipio = texto(turma.municipio) || "Não informado";
+    const key = normalizarTextoComparacao(municipio);
+    municipiosComTurma.add(key);
+    const atual = ofertaMunicipio.get(key) ?? { turmas: 0, vagas: 0 };
+    atual.turmas += 1;
+    atual.vagas += Number(turma.vagas ?? 0) || 0;
+    ofertaMunicipio.set(key, atual);
+  }
+
+  const porTrabalho = new Map<string, number>();
+  const porRenda = new Map<string, number>();
+  const porTurno = new Map<string, number>();
+  const porCamisa = new Map<string, number>();
+  const porProgramaSocial = new Map<string, number>();
+  const porDisponibilidadeTurnos = new Map<string, number>();
+  const porRestricaoAlimentar = new Map<string, number>();
+  const porDeficiencia = new Map<string, number>();
+  const porOrigem = new Map<string, number>();
+  const porStatus = new Map<string, number>();
+  const pendencias = new Map<string, number>();
+  const idades: number[] = [];
+  const municipioMap = new Map<
+    string,
+    {
+      label: string;
+      total: number;
+      idades: number[];
+      naoTrabalhando: number;
+      ateUmSalario: number;
+      programaSocial: number;
+      turnos: Record<string, number>;
+    }
+  >();
+  const faixaMap = new Map<
+    string,
+    {
+      label: string;
+      total: number;
+      naoTrabalhando: number;
+      ateUmSalario: number;
+      programaSocial: number;
+      manha: number;
+      noite: number;
+    }
+  >();
+  const bairroMap = new Map<
+    string,
+    {
+      municipio: string;
+      bairro: string;
+      total: number;
+      manha: number;
+      noite: number;
+    }
+  >();
+  const totalPorMunicipio = new Map<string, number>();
+
+  let total = 0;
+  let pendentes = 0;
+  let emRevisao = 0;
+  let aprovadas = 0;
+  let rejeitadas = 0;
+  let duplicadas = 0;
+  let elegiveisPreliminarmente = 0;
+  let cadastrosParaRevisao = 0;
+  let semDocumento = 0;
+  let menoresDe18 = 0;
+  let acimaDe60 = 0;
+  let foraAreaTurmas = 0;
+
+  for (const row of (inscricoesRes.data ?? []) as any[]) {
+    const dados = normalizarDadosOcr(row.dados, row.dados?.confiancas);
+    const status = (row.status as StatusInscricaoDigital) ?? "pendente";
+    const origem = texto(row.origem) || "Não informada";
+    const municipio = dados.municipio || "Não informado";
+    const municipioKey = normalizarTextoComparacao(municipio);
+    const bairro = dados.bairro_referencia || "Não informado";
+    const turno = turnoRelatorio(dados.turno_preferido);
+    const idade = idadeReferenciaInscricao(dados);
+    const faixa = faixaEtariaDashboard(idade);
+    const naoTrabalhando = dados.situacao_trabalho === "Não estou trabalhando";
+    const ateUmSalario = dados.renda_familiar === "Até 1 salário mínimo";
+    const programaSocial = dados.beneficiaria_programa_social || !!dados.qual_programa_social;
+    const temRestricao = dados.restricao_alimentar || !!dados.qual_restricao_alimentar;
+    const temDeficiencia = dados.pcd || !!dados.tipo_deficiencia;
+    const consentimento = dados.autorizacao_dados || !!dados.autorizacao_dados_em;
+    const mulher = dados.identifica_se_mulher === "sim";
+    const foraArea = municipioKey ? !municipiosComTurma.has(municipioKey) : true;
+    const semDoc = !texto(row.documento_path);
+    const precisaRevisao =
+      status === "duplicada" ||
+      semDoc ||
+      foraArea ||
+      !mulher ||
+      !consentimento ||
+      (idade != null && (idade < 16 || idade > 60));
+
+    total += 1;
+    if (status === "pendente") pendentes += 1;
+    if (status === "em_revisao") emRevisao += 1;
+    if (status === "aprovada") aprovadas += 1;
+    if (status === "rejeitada") rejeitadas += 1;
+    if (status === "duplicada") duplicadas += 1;
+    if (semDoc) semDocumento += 1;
+    if (foraArea) foraAreaTurmas += 1;
+    if (idade != null) {
+      idades.push(idade);
+      if (idade < 18) menoresDe18 += 1;
+      if (idade > 60) acimaDe60 += 1;
+    }
+    if (mulher && consentimento && (idade == null || (idade >= 16 && idade <= 60))) {
+      elegiveisPreliminarmente += 1;
+    }
+    if (precisaRevisao) cadastrosParaRevisao += 1;
+
+    incrementar(porTrabalho, dados.situacao_trabalho || "Não informado");
+    incrementar(porRenda, dados.renda_familiar || "Não informado");
+    incrementar(porTurno, turno);
+    incrementar(porCamisa, dados.tamanho_camisa || "Não informado");
+    incrementar(porProgramaSocial, simNaoDashboard(programaSocial));
+    incrementar(porDisponibilidadeTurnos, simNaoDashboard(dados.disponibilidade_outros_turnos));
+    incrementar(porRestricaoAlimentar, simNaoDashboard(temRestricao));
+    incrementar(porDeficiencia, simNaoDashboard(temDeficiencia));
+    incrementar(porOrigem, origem);
+    incrementar(porStatus, status);
+    if (semDoc) incrementar(pendencias, "Documento pendente");
+    if (foraArea) incrementar(pendencias, "Fora da ?rea de turmas");
+    if (!mulher) incrementar(pendencias, "Não se identifica como mulher");
+    if (!consentimento) incrementar(pendencias, "Consentimento não confirmado");
+    if (status === "duplicada") incrementar(pendencias, "Inscrição duplicada");
+    if (idade != null && idade < 16) incrementar(pendencias, "Abaixo de 16 anos");
+    if (idade != null && idade >= 16 && idade < 18) incrementar(pendencias, "Menor de 18 anos");
+    if (idade != null && idade > 60) incrementar(pendencias, "Acima de 60 anos");
+
+    const municipioAtual = municipioMap.get(municipioKey) ?? {
+      label: municipio,
+      total: 0,
+      idades: [],
+      naoTrabalhando: 0,
+      ateUmSalario: 0,
+      programaSocial: 0,
+      turnos: {},
+    };
+    municipioAtual.total += 1;
+    if (idade != null) municipioAtual.idades.push(idade);
+    if (naoTrabalhando) municipioAtual.naoTrabalhando += 1;
+    if (ateUmSalario) municipioAtual.ateUmSalario += 1;
+    if (programaSocial) municipioAtual.programaSocial += 1;
+    municipioAtual.turnos[turno] = (municipioAtual.turnos[turno] ?? 0) + 1;
+    municipioMap.set(municipioKey, municipioAtual);
+    totalPorMunicipio.set(municipioKey, (totalPorMunicipio.get(municipioKey) ?? 0) + 1);
+
+    const faixaAtual = faixaMap.get(faixa) ?? {
+      label: faixa,
+      total: 0,
+      naoTrabalhando: 0,
+      ateUmSalario: 0,
+      programaSocial: 0,
+      manha: 0,
+      noite: 0,
+    };
+    faixaAtual.total += 1;
+    if (naoTrabalhando) faixaAtual.naoTrabalhando += 1;
+    if (ateUmSalario) faixaAtual.ateUmSalario += 1;
+    if (programaSocial) faixaAtual.programaSocial += 1;
+    if (turno === "manha") faixaAtual.manha += 1;
+    if (turno === "noite") faixaAtual.noite += 1;
+    faixaMap.set(faixa, faixaAtual);
+
+    const bairroKey = `${municipioKey}::${normalizarTextoComparacao(bairro)}`;
+    const bairroAtual = bairroMap.get(bairroKey) ?? {
+      municipio,
+      bairro,
+      total: 0,
+      manha: 0,
+      noite: 0,
+    };
+    bairroAtual.total += 1;
+    if (turno === "manha") bairroAtual.manha += 1;
+    if (turno === "noite") bairroAtual.noite += 1;
+    bairroMap.set(bairroKey, bairroAtual);
+  }
+
+  const porMunicipio = Array.from(municipioMap.entries())
+    .map(([key, item]) => {
+      const oferta = ofertaMunicipio.get(key) ?? { turmas: 0, vagas: 0 };
+      return {
+        label: item.label,
+        total: item.total,
+        percentual: percentual(item.total, total),
+        idadeMedia: media(item.idades),
+        naoTrabalhando: item.naoTrabalhando,
+        ateUmSalario: item.ateUmSalario,
+        programaSocial: item.programaSocial,
+        turnos: item.turnos,
+        turmas: oferta.turmas,
+        vagas: oferta.vagas,
+      };
+    })
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+
+  const ordemFaixas = [
+    "Até 15 anos",
+    "16 a 17 anos",
+    "18 a 24 anos",
+    "25 a 34 anos",
+    "35 a 44 anos",
+    "45 a 54 anos",
+    "55 a 60 anos",
+    "Acima de 60 anos",
+    "Não informada",
+  ];
+  const porFaixaEtaria = Array.from(faixaMap.values())
+    .map((item) => ({ ...item, percentual: percentual(item.total, total) }))
+    .sort((a, b) => ordemFaixas.indexOf(a.label) - ordemFaixas.indexOf(b.label));
+
+  const porBairro = Array.from(bairroMap.entries())
+    .map(([key, item]) => {
+      const municipioKey = key.split("::")[0];
+      return {
+        label: `${item.municipio} ? ${item.bairro}`,
+        municipio: item.municipio,
+        bairro: item.bairro,
+        total: item.total,
+        percentual: percentual(item.total, total),
+        percentualCidade: percentual(item.total, totalPorMunicipio.get(municipioKey) ?? 0),
+        manha: item.manha,
+        noite: item.noite,
+      };
+    })
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "pt-BR"));
+
+  return {
+    geradoEm: new Date().toISOString(),
+    total,
+    pendentes,
+    emRevisao,
+    aprovadas,
+    rejeitadas,
+    duplicadas,
+    elegiveisPreliminarmente,
+    cadastrosParaRevisao,
+    semDocumento,
+    menoresDe18,
+    acimaDe60,
+    foraAreaTurmas,
+    idadeMedia: media(idades),
+    idadeMediana: mediana(idades),
+    concentracaoPrincipal: porMunicipio[0]
+      ? { municipio: porMunicipio[0].label, percentual: porMunicipio[0].percentual }
+      : null,
+    porMunicipio,
+    porFaixaEtaria,
+    porTrabalho: distribuicao(porTrabalho, total),
+    porRenda: distribuicao(porRenda, total),
+    porTurno: distribuicao(porTurno, total),
+    porCamisa: distribuicao(porCamisa, total),
+    porProgramaSocial: distribuicao(porProgramaSocial, total),
+    porDisponibilidadeTurnos: distribuicao(porDisponibilidadeTurnos, total),
+    porRestricaoAlimentar: distribuicao(porRestricaoAlimentar, total),
+    porDeficiencia: distribuicao(porDeficiencia, total),
+    porOrigem: distribuicao(porOrigem, total),
+    porStatus: distribuicao(porStatus, total),
+    porBairro,
+    pendencias: distribuicao(pendencias, total),
+  };
+}
+
 async function montarRelatorioInscricoes(
   admin: any,
   projetoId: string,
@@ -1322,6 +1720,15 @@ export const listarRelatorioInscricoesPorRegiao = createServerFn({ method: "POST
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
     return montarRelatorioInscricoes(admin, data.projetoId);
+  });
+
+export const listarDashboardInscricoes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => ProjetoInput.parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    return montarDashboardInscricoes(admin, data.projetoId);
   });
 
 export const gerarAnaliseIaRelatorioInscricoes = createServerFn({ method: "POST" })

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,6 +27,7 @@ import { InscricaoDigitalFields } from "@/components/inscricoes/inscricao-digita
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -73,6 +75,7 @@ import {
   aprovarInscricao,
   confirmarImportacaoGoogleForms,
   gerarAnaliseIaRelatorioInscricoes,
+  listarDashboardInscricoes,
   importarFichaComOcr,
   listarArquivosDriveParaInscricao,
   listarInscricoesDigitais,
@@ -81,6 +84,8 @@ import {
   previewImportacaoGoogleForms,
   rejeitarInscricao,
   salvarRevisaoInscricao,
+  type DashboardDistribuicaoItem,
+  type DashboardInscricoes,
   type RelatorioInscricoesRegiao,
   type ResultadoPreviewGoogleForms,
 } from "@/lib/inscricoes-digitais.functions";
@@ -306,6 +311,12 @@ function InscricoesDigitaisTab() {
     () => (turmasQ.data ?? []).filter((turma) => turma.projetoId === projetoId),
     [projetoId, turmasQ.data],
   );
+  const dashboardKey = ["administrativo", "inscricoes-dashboard", projetoId];
+  const dashboardQ = useQuery({
+    queryKey: dashboardKey,
+    enabled: !!projetoId && podeEditar,
+    queryFn: () => listarDashboardInscricoes({ data: { projetoId: projetoId! } }),
+  });
   const relatorioKey = ["administrativo", "inscricoes-relatorio-regiao", projetoId];
   const relatorioQ = useQuery({
     queryKey: relatorioKey,
@@ -354,6 +365,7 @@ function InscricoesDigitaisTab() {
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({ queryKey: dashboardKey });
     queryClient.invalidateQueries({ queryKey: relatorioKey });
   };
   const salvar = useMutation({
@@ -510,6 +522,14 @@ function InscricoesDigitaisTab() {
           icon={AlertTriangle}
         />
       </div>
+
+      {podeEditar ? (
+        <DashboardInscricoesCard
+          dashboard={dashboardQ.data}
+          carregando={dashboardQ.isLoading}
+          erro={dashboardQ.error as Error | null}
+        />
+      ) : null}
 
       <Card>
         <CardHeader className="gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -962,6 +982,324 @@ function ResumoCard({
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{valor}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatarPercentual(valor: number): string {
+  return `${Math.round(valor * 100)}%`;
+}
+
+function formatarDecimal(valor: number | null | undefined): string {
+  if (valor == null || !Number.isFinite(valor)) return "?";
+  return valor.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+}
+
+function statusDashboardLabel(valor: string): string {
+  return STATUS_LABEL[valor as StatusInscricaoDigital] ?? valor;
+}
+
+function origemDashboardLabel(valor: string): string {
+  return ORIGEM_LABEL[valor as keyof typeof ORIGEM_LABEL] ?? valor;
+}
+
+function DashboardMetricCard({
+  titulo,
+  valor,
+  detalhe,
+}: {
+  titulo: string;
+  valor: string | number;
+  detalhe?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-background p-3">
+      <div className="text-xs font-medium text-muted-foreground">{titulo}</div>
+      <div className="mt-1 text-2xl font-semibold">{valor}</div>
+      {detalhe ? <div className="mt-1 text-xs text-muted-foreground">{detalhe}</div> : null}
+    </div>
+  );
+}
+
+function DistribuicaoLista({
+  titulo,
+  itens,
+  limitar = 6,
+  rotulo = (valor) => valor,
+}: {
+  titulo: string;
+  itens: DashboardDistribuicaoItem[];
+  limitar?: number;
+  rotulo?: (valor: string) => string;
+}) {
+  const exibidos = itens.slice(0, limitar);
+  const maior = Math.max(...exibidos.map((item) => item.total), 1);
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <h3 className="mb-3 text-sm font-semibold">{titulo}</h3>
+      <div className="space-y-3">
+        {exibidos.length ? (
+          exibidos.map((item) => (
+            <div key={item.label} className="space-y-1">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate">{rotulo(item.label)}</span>
+                <span className="shrink-0 font-medium">
+                  {item.total} ? {formatarPercentual(item.percentual)}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-[#f2a62a]"
+                  style={{ width: `${Math.max(6, (item.total / maior) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">Sem dados para exibir.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GraficoBarrasDashboard({
+  titulo,
+  itens,
+  limitar = 8,
+  altura = "h-72",
+}: {
+  titulo: string;
+  itens: DashboardDistribuicaoItem[];
+  limitar?: number;
+  altura?: string;
+}) {
+  const dados = itens.slice(0, limitar).map((item) => ({
+    ...item,
+    nomeCurto: item.label.length > 22 ? `${item.label.slice(0, 21)}?` : item.label,
+  }));
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <h3 className="mb-3 text-sm font-semibold">{titulo}</h3>
+      {dados.length ? (
+        <ChartContainer
+          config={{ total: { label: "Candidatas", color: "#f2a62a" } }}
+          className={altura}
+        >
+          <BarChart data={dados} layout="vertical" margin={{ left: 8, right: 24 }}>
+            <CartesianGrid horizontal={false} />
+            <XAxis type="number" hide />
+            <YAxis
+              dataKey="nomeCurto"
+              type="category"
+              tickLine={false}
+              axisLine={false}
+              width={126}
+            />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent hideLabel formatter={(value) => `${value} candidata(s)`} />
+              }
+            />
+            <Bar dataKey="total" fill="var(--color-total)" radius={4} />
+          </BarChart>
+        </ChartContainer>
+      ) : (
+        <p className="text-sm text-muted-foreground">Sem dados para exibir.</p>
+      )}
+    </div>
+  );
+}
+
+function DashboardInscricoesCard({
+  dashboard,
+  carregando,
+  erro,
+}: {
+  dashboard?: DashboardInscricoes;
+  carregando: boolean;
+  erro: Error | null;
+}) {
+  const pendenciasPrincipais = dashboard?.pendencias.slice(0, 5) ?? [];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Dashboard de pré-inscrições</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Visão inspirada no relatório de pré-inscrições: panorama geral, território, idade, perfil
+          social, logística e pendências para conferência.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {carregando ? (
+          <div className="space-y-3">
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-72 w-full" />
+          </div>
+        ) : erro ? (
+          <p className="text-sm text-destructive">{erro.message}</p>
+        ) : dashboard ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              <DashboardMetricCard titulo="Inscrições na fila" valor={dashboard.total} />
+              <DashboardMetricCard
+                titulo="Eleg?veis preliminarmente"
+                valor={dashboard.elegiveisPreliminarmente}
+                detalhe={`${formatarPercentual(dashboard.total ? dashboard.elegiveisPreliminarmente / dashboard.total : 0)} da base`}
+              />
+              <DashboardMetricCard
+                titulo="Cadastros para revisão"
+                valor={dashboard.cadastrosParaRevisao}
+                detalhe="documento, idade, ?rea, consentimento ou duplicidade"
+              />
+              <DashboardMetricCard
+                titulo="Sem documento"
+                valor={dashboard.semDocumento}
+                detalhe="pendência operacional"
+              />
+              <DashboardMetricCard
+                titulo="Idade média / mediana"
+                valor={`${formatarDecimal(dashboard.idadeMedia)} / ${formatarDecimal(dashboard.idadeMediana)}`}
+                detalhe="anos"
+              />
+              <DashboardMetricCard
+                titulo="Maior concentra??o"
+                valor={dashboard.concentracaoPrincipal?.municipio ?? "?"}
+                detalhe={
+                  dashboard.concentracaoPrincipal
+                    ? formatarPercentual(dashboard.concentracaoPrincipal.percentual)
+                    : undefined
+                }
+              />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+              <GraficoBarrasDashboard
+                titulo="Distribuição por município/região"
+                itens={dashboard.porMunicipio}
+              />
+              <GraficoBarrasDashboard titulo="Perfil etário" itens={dashboard.porFaixaEtaria} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <DistribuicaoLista
+                titulo="Turno preferencial"
+                itens={dashboard.porTurno}
+                rotulo={turnoLabel}
+              />
+              <DistribuicaoLista titulo="Situa??o de trabalho" itens={dashboard.porTrabalho} />
+              <DistribuicaoLista titulo="Renda familiar" itens={dashboard.porRenda} />
+              <DistribuicaoLista titulo="Tamanho de camisa" itens={dashboard.porCamisa} />
+              <DistribuicaoLista titulo="Programa social" itens={dashboard.porProgramaSocial} />
+              <DistribuicaoLista
+                titulo="Mais de um turno"
+                itens={dashboard.porDisponibilidadeTurnos}
+              />
+              <DistribuicaoLista
+                titulo="Restri??o alimentar"
+                itens={dashboard.porRestricaoAlimentar}
+              />
+              <DistribuicaoLista titulo="PCD/necessidade" itens={dashboard.porDeficiencia} />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-lg border bg-background p-4">
+                <h3 className="mb-3 text-sm font-semibold">Região, vulnerabilidade e turnos</h3>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Município</TableHead>
+                        <TableHead>Candidatas</TableHead>
+                        <TableHead>%</TableHead>
+                        <TableHead>Idade média</TableHead>
+                        <TableHead>Não trabalhando</TableHead>
+                        <TableHead>Até 1 SM</TableHead>
+                        <TableHead>Programa social</TableHead>
+                        <TableHead>Manh?</TableHead>
+                        <TableHead>Tarde</TableHead>
+                        <TableHead>Noite</TableHead>
+                        <TableHead>Turmas/vagas</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboard.porMunicipio.slice(0, 12).map((linha) => (
+                        <TableRow key={linha.label}>
+                          <TableCell className="font-medium">{linha.label}</TableCell>
+                          <TableCell>{linha.total}</TableCell>
+                          <TableCell>{formatarPercentual(linha.percentual)}</TableCell>
+                          <TableCell>{formatarDecimal(linha.idadeMedia)}</TableCell>
+                          <TableCell>{linha.naoTrabalhando}</TableCell>
+                          <TableCell>{linha.ateUmSalario}</TableCell>
+                          <TableCell>{linha.programaSocial}</TableCell>
+                          <TableCell>{linha.turnos.manha ?? 0}</TableCell>
+                          <TableCell>{linha.turnos.tarde ?? 0}</TableCell>
+                          <TableCell>{linha.turnos.noite ?? 0}</TableCell>
+                          <TableCell>
+                            {linha.turmas} / {linha.vagas}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <DistribuicaoLista
+                  titulo="Pendências para conferência"
+                  itens={pendenciasPrincipais}
+                  limitar={5}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <DistribuicaoLista
+                    titulo="Origem das inscrições"
+                    itens={dashboard.porOrigem}
+                    rotulo={origemDashboardLabel}
+                  />
+                  <DistribuicaoLista
+                    titulo="Status da fila"
+                    itens={dashboard.porStatus}
+                    rotulo={statusDashboardLabel}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-background p-4">
+              <h3 className="mb-3 text-sm font-semibold">
+                Bairros e refer?ncias com maior demanda
+              </h3>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Município</TableHead>
+                      <TableHead>Bairro/refer?ncia</TableHead>
+                      <TableHead>Candidatas</TableHead>
+                      <TableHead>% da cidade</TableHead>
+                      <TableHead>Manh?</TableHead>
+                      <TableHead>Noite</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dashboard.porBairro.slice(0, 40).map((linha) => (
+                      <TableRow key={`${linha.municipio}-${linha.bairro}`}>
+                        <TableCell>{linha.municipio}</TableCell>
+                        <TableCell className="font-medium">{linha.bairro}</TableCell>
+                        <TableCell>{linha.total}</TableCell>
+                        <TableCell>{formatarPercentual(linha.percentualCidade)}</TableCell>
+                        <TableCell>{linha.manha}</TableCell>
+                        <TableCell>{linha.noite}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );
