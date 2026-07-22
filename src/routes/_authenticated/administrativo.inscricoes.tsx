@@ -1008,6 +1008,12 @@ function RelatorioInscricoesCard({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/administrativo/inscricoes-dashboard">
+              <LayoutDashboard className="mr-2 size-4" />
+              Abrir dashboard
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={onExportar} disabled={!relatorio}>
             <Download className="mr-2 size-4" />
             Exportar PDF
