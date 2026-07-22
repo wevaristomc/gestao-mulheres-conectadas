@@ -70,6 +70,7 @@ import { Route as AuthenticatedConfiguracoesInstrutorTurmasRouteImport } from '.
 import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_authenticated/configuracoes.ia'
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
 import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
+import { Route as AuthenticatedAdministrativoInscricoesDashboardRouteImport } from './routes/_authenticated/administrativo.inscricoes-dashboard'
 import { Route as AuthenticatedAdministrativoInscricoesRouteImport } from './routes/_authenticated/administrativo.inscricoes'
 import { Route as AuthenticatedAdministrativoDepoimentosRouteImport } from './routes/_authenticated/administrativo.depoimentos'
 import { Route as AuthenticatedAdministrativoBeneficiosRouteImport } from './routes/_authenticated/administrativo.beneficios'
@@ -424,6 +425,12 @@ const AuthenticatedAdministrativoMateriaisRoute =
     path: '/materiais',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
+const AuthenticatedAdministrativoInscricoesDashboardRoute =
+  AuthenticatedAdministrativoInscricoesDashboardRouteImport.update({
+    id: '/inscricoes-dashboard',
+    path: '/inscricoes-dashboard',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
 const AuthenticatedAdministrativoInscricoesRoute =
   AuthenticatedAdministrativoInscricoesRouteImport.update({
     id: '/inscricoes',
@@ -505,6 +512,7 @@ export interface FileRoutesByFullPath {
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
   '/administrativo/depoimentos': typeof AuthenticatedAdministrativoDepoimentosRoute
   '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
+  '/administrativo/inscricoes-dashboard': typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
@@ -569,6 +577,7 @@ export interface FileRoutesByTo {
   '/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
   '/administrativo/depoimentos': typeof AuthenticatedAdministrativoDepoimentosRoute
   '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
+  '/administrativo/inscricoes-dashboard': typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
@@ -641,6 +650,7 @@ export interface FileRoutesById {
   '/_authenticated/administrativo/beneficios': typeof AuthenticatedAdministrativoBeneficiosRoute
   '/_authenticated/administrativo/depoimentos': typeof AuthenticatedAdministrativoDepoimentosRoute
   '/_authenticated/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
+  '/_authenticated/administrativo/inscricoes-dashboard': typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
@@ -714,6 +724,7 @@ export interface FileRouteTypes {
     | '/administrativo/beneficios'
     | '/administrativo/depoimentos'
     | '/administrativo/inscricoes'
+    | '/administrativo/inscricoes-dashboard'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
@@ -778,6 +789,7 @@ export interface FileRouteTypes {
     | '/administrativo/beneficios'
     | '/administrativo/depoimentos'
     | '/administrativo/inscricoes'
+    | '/administrativo/inscricoes-dashboard'
     | '/administrativo/materiais'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
@@ -849,6 +861,7 @@ export interface FileRouteTypes {
     | '/_authenticated/administrativo/beneficios'
     | '/_authenticated/administrativo/depoimentos'
     | '/_authenticated/administrativo/inscricoes'
+    | '/_authenticated/administrativo/inscricoes-dashboard'
     | '/_authenticated/administrativo/materiais'
     | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/ia'
@@ -1333,6 +1346,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdministrativoMateriaisRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
     }
+    '/_authenticated/administrativo/inscricoes-dashboard': {
+      id: '/_authenticated/administrativo/inscricoes-dashboard'
+      path: '/inscricoes-dashboard'
+      fullPath: '/administrativo/inscricoes-dashboard'
+      preLoaderRoute: typeof AuthenticatedAdministrativoInscricoesDashboardRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
     '/_authenticated/administrativo/inscricoes': {
       id: '/_authenticated/administrativo/inscricoes'
       path: '/inscricoes'
@@ -1403,6 +1423,7 @@ interface AuthenticatedAdministrativoRouteChildren {
   AuthenticatedAdministrativoBeneficiosRoute: typeof AuthenticatedAdministrativoBeneficiosRoute
   AuthenticatedAdministrativoDepoimentosRoute: typeof AuthenticatedAdministrativoDepoimentosRoute
   AuthenticatedAdministrativoInscricoesRoute: typeof AuthenticatedAdministrativoInscricoesRoute
+  AuthenticatedAdministrativoInscricoesDashboardRoute: typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   AuthenticatedAdministrativoMateriaisRoute: typeof AuthenticatedAdministrativoMateriaisRoute
   AuthenticatedAdministrativoQualificacaoRoute: typeof AuthenticatedAdministrativoQualificacaoRoute
   AuthenticatedAdministrativoIndexRoute: typeof AuthenticatedAdministrativoIndexRoute
@@ -1416,6 +1437,8 @@ const AuthenticatedAdministrativoRouteChildren: AuthenticatedAdministrativoRoute
       AuthenticatedAdministrativoDepoimentosRoute,
     AuthenticatedAdministrativoInscricoesRoute:
       AuthenticatedAdministrativoInscricoesRoute,
+    AuthenticatedAdministrativoInscricoesDashboardRoute:
+      AuthenticatedAdministrativoInscricoesDashboardRoute,
     AuthenticatedAdministrativoMateriaisRoute:
       AuthenticatedAdministrativoMateriaisRoute,
     AuthenticatedAdministrativoQualificacaoRoute:
