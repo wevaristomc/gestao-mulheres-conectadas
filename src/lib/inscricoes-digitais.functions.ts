@@ -845,13 +845,75 @@ function normalizarCamisa(valor: string): string {
   return "";
 }
 
-function formatarDataForms(valor: string): string {
+function partesDataForms(valor: string): {
+  dia: number;
+  mes: number;
+  ano: number;
+  hora: number;
+  minuto: number;
+  segundo: number;
+} | null {
   const v = valor.trim();
-  if (!v) return "";
-  const m = v.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
-  if (!m) return v;
-  const ano = m[3].length === 2 ? "20" + m[3] : m[3];
-  return m[1].padStart(2, "0") + "/" + m[2].padStart(2, "0") + "/" + ano + (m[4] ? " " + m[4] : "");
+  if (!v) return null;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+  const ano = Number(m[3].length === 2 ? "20" + m[3] : m[3]);
+  const dia = Number(m[1]);
+  const mes = Number(m[2]);
+  const hora = Number(m[4] ?? 0);
+  const minuto = Number(m[5] ?? 0);
+  const segundo = Number(m[6] ?? 0);
+  if (
+    !Number.isInteger(ano) ||
+    !Number.isInteger(mes) ||
+    !Number.isInteger(dia) ||
+    mes < 1 ||
+    mes > 12 ||
+    dia < 1 ||
+    dia > 31 ||
+    hora < 0 ||
+    hora > 23 ||
+    minuto < 0 ||
+    minuto > 59 ||
+    segundo < 0 ||
+    segundo > 59
+  ) {
+    return null;
+  }
+  const data = new Date(Date.UTC(ano, mes - 1, dia, hora, minuto, segundo));
+  if (
+    data.getUTCFullYear() !== ano ||
+    data.getUTCMonth() !== mes - 1 ||
+    data.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+  return { dia, mes, ano, hora, minuto, segundo };
+}
+
+function carimboFormsParaIso(valor: string, fallbackIso: string): string {
+  const partes = partesDataForms(valor);
+  if (!partes) return fallbackIso;
+  return new Date(
+    Date.UTC(partes.ano, partes.mes - 1, partes.dia, partes.hora, partes.minuto, partes.segundo),
+  ).toISOString();
+}
+
+function formatarDataForms(valor: string): string {
+  const partes = partesDataForms(valor);
+  if (!partes) return valor.trim();
+  return (
+    String(partes.dia).padStart(2, "0") +
+    "/" +
+    String(partes.mes).padStart(2, "0") +
+    "/" +
+    partes.ano +
+    (partes.hora || partes.minuto || partes.segundo
+      ? ` ${String(partes.hora).padStart(2, "0")}:${String(partes.minuto).padStart(2, "0")}${
+          partes.segundo ? `:${String(partes.segundo).padStart(2, "0")}` : ""
+        }`
+      : "")
+  );
 }
 
 function dadosGoogleForms(
@@ -859,6 +921,8 @@ function dadosGoogleForms(
   municipiosOficiais: string[],
 ): DadosInscricaoDigitalNormalizados {
   const carimbo = valorColuna(row, ["carimbo de data hora", "timestamp", "data hora"]);
+  const importadoEm = new Date().toISOString();
+  const autorizacaoDadosEm = carimboFormsParaIso(carimbo, importadoEm);
   const idade = normalizarIdadeInformada(valorColuna(row, ["idade"]));
   const restricaoRaw = valorColuna(row, ["restricao alimentar"]);
   const restricaoQual = valorColuna(row, ["qual restricao", "qual e a restricao", "qual"]);
@@ -930,7 +994,7 @@ function dadosGoogleForms(
       "deseja participar",
     ]),
     autorizacao_dados: simNao(valorAutorizacaoForms(row)),
-    autorizacao_dados_em: carimbo || new Date().toISOString(),
+    autorizacao_dados_em: autorizacaoDadosEm,
     identifica_se_mulher: identificaMulherRaw
       ? simNao(identificaMulherRaw)
         ? "sim"
@@ -962,6 +1026,12 @@ function valorPreenchidoGoogleForms(valor: unknown): boolean {
   return false;
 }
 
+function dividirEmLotes<T>(itens: T[], tamanho = 150): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < itens.length; i += tamanho) lotes.push(itens.slice(i, i + tamanho));
+  return lotes;
+}
+
 function mesclarDadosGoogleForms(
   atual: DadosInscricaoDigitalNormalizados,
   importado: DadosInscricaoDigitalNormalizados,
@@ -980,6 +1050,14 @@ function mesclarDadosGoogleForms(
       continue;
     }
     const existente = mesclado[campo];
+    if (campo === "autorizacao_dados_em" && valorPreenchidoGoogleForms(valor)) {
+      mesclado[campo] = valor;
+      continue;
+    }
+    if (campo === "autorizacao_dados" && valor === true) {
+      mesclado[campo] = true;
+      continue;
+    }
     if (typeof valor === "boolean") {
       if (valor === true && existente !== true) mesclado[campo] = true;
       continue;
@@ -1212,65 +1290,80 @@ export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
       data.arquivo,
       data.reprocessarExistentes,
     );
-    for (const item of preview.dadosAtualizar) {
+    const resumoFinal = { ...preview.resumo, importar: 0, atualizar: 0 };
+    const linhas = [...preview.linhas];
+
+    for (const lote of dividirEmLotes(preview.dadosAtualizar, 150)) {
+      const atualizadoEm = new Date().toISOString();
+      const registros = lote.map((item) => ({
+        id: item.id,
+        projeto_id: data.projetoId,
+        dados: item.dados,
+        atualizado_em: atualizadoEm,
+      }));
       try {
         const { error } = await admin
           .from("inscricoes_digitais")
-          .update({ dados: item.dados, atualizado_em: new Date().toISOString() })
-          .eq("id", item.id)
-          .eq("projeto_id", data.projetoId);
+          .upsert(registros, { onConflict: "id" });
         if (error) throw new Error(error.message);
+        resumoFinal.atualizar += lote.length;
       } catch (error) {
-        preview.resumo.atualizar -= 1;
-        preview.resumo.erro += 1;
-        preview.linhas.push({
+        resumoFinal.erro += lote.length;
+        linhas.push({
           linha: 0,
-          nome: item.dados.nome,
-          email: item.dados.email,
-          telefone: item.dados.telefone,
-          idadeInformada: idadeReferenciaInscricao(item.dados)?.toString() ?? "",
-          municipio: item.dados.municipio,
-          bairroReferencia: item.dados.bairro_referencia,
-          turnoPreferido: item.dados.turno_preferido,
-          autorizacaoDados: item.dados.autorizacao_dados,
+          nome: `${lote.length} inscri??o(?es) existente(s)`,
+          email: "",
+          telefone: "",
+          idadeInformada: "",
+          municipio: "",
+          bairroReferencia: "",
+          turnoPreferido: "",
+          autorizacaoDados: false,
           status: "erro",
-          motivo: error instanceof Error ? error.message : String(error),
+          motivo: `Falha ao atualizar lote de ${lote.length}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
           foraArea: false,
           menorIdade: false,
         });
       }
     }
-    for (const dados of preview.dadosImportar) {
+
+    for (const lote of dividirEmLotes(preview.dadosImportar, 150)) {
+      const registros = lote.map((dados) => ({
+        projeto_id: data.projetoId,
+        turma_id: null,
+        origem: "google_forms",
+        status: "pendente",
+        dados,
+      }));
       try {
-        const { error } = await admin.from("inscricoes_digitais").insert({
-          projeto_id: data.projetoId,
-          turma_id: null,
-          origem: "google_forms",
-          status: "pendente",
-          dados,
-        });
+        const { error } = await admin.from("inscricoes_digitais").insert(registros);
         if (error) throw new Error(error.message);
+        resumoFinal.importar += lote.length;
       } catch (error) {
-        preview.resumo.importar -= 1;
-        preview.resumo.erro += 1;
-        preview.linhas.push({
+        resumoFinal.erro += lote.length;
+        linhas.push({
           linha: 0,
-          nome: dados.nome,
-          email: dados.email,
-          telefone: dados.telefone,
-          idadeInformada: idadeReferenciaInscricao(dados)?.toString() ?? "",
-          municipio: dados.municipio,
-          bairroReferencia: dados.bairro_referencia,
-          turnoPreferido: dados.turno_preferido,
-          autorizacaoDados: dados.autorizacao_dados,
+          nome: `${lote.length} nova(s) inscri??o(?es)`,
+          email: "",
+          telefone: "",
+          idadeInformada: "",
+          municipio: "",
+          bairroReferencia: "",
+          turnoPreferido: "",
+          autorizacaoDados: false,
           status: "erro",
-          motivo: error instanceof Error ? error.message : String(error),
+          motivo: `Falha ao inserir lote de ${lote.length}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
           foraArea: false,
           menorIdade: false,
         });
       }
     }
-    return { resumo: preview.resumo, linhas: preview.linhas };
+
+    return { resumo: resumoFinal, linhas };
   });
 
 function turnoRelatorio(valor: string): string {
