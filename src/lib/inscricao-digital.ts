@@ -54,6 +54,41 @@ export function municipioDoPoloInscricao(polo: string | null | undefined): strin
   return POLOS_INSCRICAO.find((item) => item.nome === polo)?.municipio ?? "";
 }
 
+export function calcularIdadePorDataNascimento(
+  dataNascimento: string | null | undefined,
+  hoje = new Date(),
+): number | null {
+  if (!dataNascimento) return null;
+  const nascimento = new Date(`${dataNascimento}T12:00:00`);
+  if (Number.isNaN(nascimento.getTime()) || nascimento > hoje) return null;
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const aniversarioPassou =
+    hoje.getMonth() > nascimento.getMonth() ||
+    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() >= nascimento.getDate());
+  if (!aniversarioPassou) idade -= 1;
+  return idade >= 0 && idade <= 130 ? idade : null;
+}
+
+export function normalizarIdadeInformada(valor: unknown): string {
+  const texto = String(valor ?? "").trim();
+  if (!texto) return "";
+  const match = texto.match(/\d{1,3}/);
+  if (!match) return "";
+  const idade = Number(match[0]);
+  return Number.isFinite(idade) && idade >= 0 && idade <= 130 ? String(idade) : "";
+}
+
+export function faixaEtariaPorIdade(idade: number | null | undefined): string {
+  if (idade == null || !Number.isFinite(idade)) return "";
+  if (idade < 18) return "Menor de 18";
+  if (idade <= 24) return "18 a 24";
+  if (idade <= 34) return "25 a 34";
+  if (idade <= 44) return "35 a 44";
+  if (idade <= 54) return "45 a 54";
+  if (idade <= 64) return "55 a 64";
+  return "65+";
+}
+
 const textoOpcional = z.string().trim().max(300).optional().default("");
 const contatoEmergenciaSchema = z.object({
   nome: z.string().trim().max(180).default(""),
@@ -68,6 +103,8 @@ export const dadosInscricaoDigitalSchema = z
     nome_social: textoOpcional,
     cpf: z.string().trim().refine(isValidCpf, "CPF inválido."),
     data_nascimento: textoOpcional,
+    idade_informada: z.string().trim().max(20).optional().default(""),
+    faixa_etaria: textoOpcional,
     genero: textoOpcional,
     raca: textoOpcional,
     pcd: z.boolean().default(false),
@@ -171,15 +208,39 @@ export const dadosInscricaoDigitalSchema = z
       });
     }
   })
-  .transform((dados) => ({
-    ...dados,
-    cpf: onlyDigits(dados.cpf),
-    tipo_deficiencia: dados.pcd ? dados.tipo_deficiencia : "",
-    usa_nome_social: (dados.usa_nome_social === "sim" ? "sim" : "nao") as "sim" | "nao",
-    nome_social: dados.usa_nome_social === "sim" ? dados.nome_social.trim() : "",
-    qual_programa_social: dados.beneficiaria_programa_social ? dados.qual_programa_social : "",
-    qual_restricao_alimentar: dados.restricao_alimentar ? dados.qual_restricao_alimentar : "",
-  }));
+  .transform((dados) => {
+    const idadeInformada = normalizarIdadeInformada(dados.idade_informada);
+    const idadeCalculada = calcularIdadePorDataNascimento(dados.data_nascimento);
+    const idadeReferencia = idadeCalculada ?? (idadeInformada ? Number(idadeInformada) : null);
+    return {
+      ...dados,
+      cpf: onlyDigits(dados.cpf),
+      idade_informada: idadeInformada,
+      faixa_etaria: faixaEtariaPorIdade(idadeReferencia),
+      tipo_deficiencia: dados.pcd ? dados.tipo_deficiencia : "",
+      usa_nome_social: (dados.usa_nome_social === "sim" ? "sim" : "nao") as "sim" | "nao",
+      nome_social: dados.usa_nome_social === "sim" ? dados.nome_social.trim() : "",
+      qual_programa_social: dados.beneficiaria_programa_social ? dados.qual_programa_social : "",
+      qual_restricao_alimentar: dados.restricao_alimentar ? dados.qual_restricao_alimentar : "",
+    };
+  });
+
+export function idadeReferenciaInscricao(
+  dados: Pick<DadosInscricaoDigital, "data_nascimento" | "idade_informada">,
+): number | null {
+  return (
+    calcularIdadePorDataNascimento(dados.data_nascimento) ??
+    (normalizarIdadeInformada(dados.idade_informada)
+      ? Number(normalizarIdadeInformada(dados.idade_informada))
+      : null)
+  );
+}
+
+export function faixaEtariaInscricao(
+  dados: Pick<DadosInscricaoDigital, "data_nascimento" | "idade_informada" | "faixa_etaria">,
+): string {
+  return faixaEtariaPorIdade(idadeReferenciaInscricao(dados)) || dados.faixa_etaria || "";
+}
 
 export type DadosInscricaoDigital = z.input<typeof dadosInscricaoDigitalSchema>;
 export type DadosInscricaoDigitalNormalizados = z.output<typeof dadosInscricaoDigitalSchema>;
@@ -190,6 +251,8 @@ export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   nome_social: "",
   cpf: "",
   data_nascimento: "",
+  idade_informada: "",
+  faixa_etaria: "",
   genero: "",
   raca: "",
   pcd: false,

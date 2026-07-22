@@ -6,6 +6,9 @@ import { formatCpf, isValidCpf, onlyDigits } from "@/lib/cpf";
 import {
   DADOS_INSCRICAO_VAZIOS,
   dadosInscricaoDigitalSchema,
+  faixaEtariaInscricao,
+  idadeReferenciaInscricao,
+  normalizarIdadeInformada,
   type DadosInscricaoDigitalNormalizados,
   type InscricaoDigitalRow,
   type OrigemInscricaoDigital,
@@ -109,6 +112,12 @@ function normalizarDadosOcr(
     nome_social: usaNomeSocial === "sim" ? nomeSocial : "",
     cpf: onlyDigits(texto(fonte.cpf)),
     data_nascimento: texto(fonte.data_nascimento),
+    idade_informada: normalizarIdadeInformada(fonte.idade_informada),
+    faixa_etaria: faixaEtariaInscricao({
+      data_nascimento: texto(fonte.data_nascimento),
+      idade_informada: normalizarIdadeInformada(fonte.idade_informada),
+      faixa_etaria: texto(fonte.faixa_etaria),
+    }),
     genero: texto(fonte.genero),
     raca: texto(fonte.raca),
     pcd: booleano(fonte.pcd),
@@ -782,7 +791,7 @@ function dadosGoogleForms(
   municipiosOficiais: string[],
 ): DadosInscricaoDigitalNormalizados {
   const carimbo = valorColuna(row, ["carimbo de data hora", "timestamp", "data hora"]);
-  const idade = valorColuna(row, ["idade"]);
+  const idade = normalizarIdadeInformada(valorColuna(row, ["idade"]));
   const restricaoRaw = valorColuna(row, ["restricao alimentar"]);
   const restricaoQual = valorColuna(row, ["qual restricao", "qual e a restricao", "qual"]);
   const pcdRaw = valorColuna(row, ["possui alguma deficiencia", "deficiencia", "pcd"]);
@@ -808,6 +817,12 @@ function dadosGoogleForms(
     ...normalizarDadosOcr({}, {}),
     usa_nome_social: "nao",
     nome_social: "",
+    idade_informada: idade,
+    faixa_etaria: faixaEtariaInscricao({
+      data_nascimento: "",
+      idade_informada: idade,
+      faixa_etaria: "",
+    }),
     nome: valorColuna(row, ["nome completo", "nome"]),
     email: valorColuna(row, ["e mail", "email"]),
     telefone: onlyDigits(valorColuna(row, ["telefone whatsapp", "whatsapp", "telefone"])),
@@ -908,7 +923,7 @@ async function prepararPreviewGoogleForms(
           normalizarTextoComparacao(municipio) === normalizarTextoComparacao(dados.municipio),
       );
       const foraArea = !!dados.municipio && !municipioEmArea;
-      const idadeInformada = idadeInformadaGoogleForms(dados.observacoes);
+      const idadeInformada = idadeReferenciaInscricao(dados);
       const menorIdade = idadeInformada != null && idadeInformada < 18;
       if (foraArea) {
         resumo.fora_area += 1;
@@ -1029,7 +1044,7 @@ export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
           nome: dados.nome,
           email: dados.email,
           telefone: dados.telefone,
-          idadeInformada: idadeInformadaGoogleForms(dados.observacoes)?.toString() ?? "",
+          idadeInformada: idadeReferenciaInscricao(dados)?.toString() ?? "",
           municipio: dados.municipio,
           bairroReferencia: dados.bairro_referencia,
           turnoPreferido: dados.turno_preferido,
@@ -1298,7 +1313,7 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
 {
   "dados": {
     "nome": "", "usa_nome_social": "nao", "nome_social": "",
-    "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio",
+    "cpf": "", "data_nascimento": "AAAA-MM-DD ou vazio", "idade_informada": "", "faixa_etaria": "",
     "genero": "", "raca": "", "pcd": false, "tipo_deficiencia": "",
     "telefone": "", "email": "", "endereco": "", "municipio": "",
     "bairro_referencia": "", "turno_preferido": "",
@@ -1321,7 +1336,7 @@ Leia somente o que estiver visível. Não invente dados. Retorne APENAS JSON vá
 Use "sim" ou "nao" em identifica_se_mulher; P, M, G, GG ou XG em tamanho_camisa;
 "manha", "tarde", "noite" ou "qualquer" em turno_preferido; e os textos exatos das opções
 de situação de trabalho e renda familiar apresentados na ficha.
-Inclua em "confiancas" todos os campos retornados, inclusive nome_social, os campos dos dois contatos,
+Inclua em "confiancas" todos os campos retornados, inclusive nome_social, idade_informada, faixa_etaria, os campos dos dois contatos,
 turno_preferido, polo_preferido e bairro_referencia, usando valores entre 0 e 1.
 Campos ausentes ou ilegíveis devem ser string vazia (ou false) e confiança 0.`;
       const visao = await executarVisaoRouter({

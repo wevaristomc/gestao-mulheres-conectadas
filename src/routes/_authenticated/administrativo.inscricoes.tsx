@@ -60,6 +60,8 @@ import { formatCpf } from "@/lib/cpf";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
 import {
   DadosInscricaoDigital,
+  faixaEtariaInscricao,
+  idadeReferenciaInscricao,
   InscricaoDigitalRow,
   StatusInscricaoDigital,
   TURNO_PREFERIDO_LABEL,
@@ -138,26 +140,6 @@ function turnoLabel(valor: string | null | undefined): string {
   if (!valor) return "Não informado";
   return TURNO_PREFERIDO_LABEL[valor as TurnoPreferido] ?? valor;
 }
-function calcularIdade(dataNascimento: string | null | undefined): number | null {
-  if (!dataNascimento) return null;
-  const nascimento = new Date(`${dataNascimento}T12:00:00`);
-  if (Number.isNaN(nascimento.getTime()) || nascimento > new Date()) return null;
-  const hoje = new Date();
-  let idade = hoje.getFullYear() - nascimento.getFullYear();
-  const aniversarioPassou =
-    hoje.getMonth() > nascimento.getMonth() ||
-    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() >= nascimento.getDate());
-  if (!aniversarioPassou) idade -= 1;
-  return idade;
-}
-
-function idadeInformadaObservacoes(observacoes: string | null | undefined): number | null {
-  const match = (observacoes ?? "").match(/Idade informada:\s*(\d{1,3})/i);
-  if (!match) return null;
-  const idade = Number(match[1]);
-  return Number.isFinite(idade) ? idade : null;
-}
-
 function municipioForaDaArea(row: InscricaoDigitalRow, turmas: TurmaInscricaoPublica[]): boolean {
   const municipio = normalizarComparacao(row.dados.municipio);
   if (!municipio) return false;
@@ -174,7 +156,7 @@ function BadgesPendenciasInscricao({
   row: InscricaoDigitalRow;
   turmas: TurmaInscricaoPublica[];
 }) {
-  const idadeInformada = idadeInformadaObservacoes(row.dados.observacoes);
+  const idadeInformada = idadeReferenciaInscricao(row.dados);
   const badges = [
     !row.documentoPath
       ? { label: "Documento pendente", className: "border-amber-300 text-amber-800" }
@@ -636,9 +618,10 @@ function InscricoesDigitaisTab() {
                           ) : null}
                           <div className="text-xs text-muted-foreground">
                             {formatCpf(row.dados.cpf) || "CPF não identificado"}
-                            {calcularIdade(row.dados.data_nascimento) != null ? (
+                            {idadeReferenciaInscricao(row.dados) != null ? (
                               <div className="text-xs text-muted-foreground">
-                                {calcularIdade(row.dados.data_nascimento)} anos
+                                {idadeReferenciaInscricao(row.dados)} anos ·{" "}
+                                {faixaEtariaInscricao(row.dados)}
                               </div>
                             ) : null}
                           </div>
@@ -817,8 +800,13 @@ function InscricoesDigitaisTab() {
                       </div>
                       <div>
                         <strong>Idade:</strong>{" "}
-                        {calcularIdade(dadosEdicao.data_nascimento) ?? "Não calculada"}
-                        {calcularIdade(dadosEdicao.data_nascimento) != null ? " anos" : ""}
+                        {idadeReferenciaInscricao(dadosEdicao) != null
+                          ? `${idadeReferenciaInscricao(dadosEdicao)} anos`
+                          : "Não calculada"}
+                      </div>
+                      <div>
+                        <strong>Faixa etária:</strong>{" "}
+                        {faixaEtariaInscricao(dadosEdicao) || "Não calculada"}
                       </div>
                     </div>
                   </div>

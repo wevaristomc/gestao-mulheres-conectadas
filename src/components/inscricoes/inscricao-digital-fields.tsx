@@ -17,6 +17,8 @@ import { formatCpf, formatPhone, onlyDigits } from "@/lib/cpf";
 import {
   AUTORIZACAO_DADOS_TEXTO,
   campoBaixaConfianca,
+  faixaEtariaInscricao,
+  idadeReferenciaInscricao,
   municipioDoPoloInscricao,
   POLOS_INSCRICAO,
   RENDAS_FAMILIARES,
@@ -85,6 +87,9 @@ export function InscricaoDigitalFields({
     campo,
     destacar: baixa(campo),
   });
+  const idadeReferencia = idadeReferenciaInscricao(value);
+  const faixaEtaria = faixaEtariaInscricao(value);
+
   const setPoloPreferido = (polo: string) => {
     const municipio = municipioDoPoloInscricao(polo);
     onChange({ ...value, polo_preferido: polo, municipio: municipio || value.municipio });
@@ -192,6 +197,26 @@ export function InscricaoDigitalFields({
                 onChange={(e) => set("data_nascimento", e.target.value)}
                 disabled={disabled}
               />
+            </Field>
+            <Field {...propsCampo("idade_informada")} label="Idade informada">
+              <Input
+                value={value.idade_informada ?? ""}
+                onChange={(e) => set("idade_informada", onlyDigits(e.target.value).slice(0, 3))}
+                disabled={disabled}
+                inputMode="numeric"
+                placeholder="Ex.: 32"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Use quando a ficha ou planilha trouxer idade, mas não trouxer data de nascimento.
+              </p>
+            </Field>
+            <Field {...propsCampo("faixa_etaria")} label="Faixa etária">
+              <Input value={faixaEtaria || "Não calculada"} disabled readOnly />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {idadeReferencia != null
+                  ? `Idade de referência: ${idadeReferencia} anos.`
+                  : "Informe data de nascimento ou idade para calcular."}
+              </p>
             </Field>
             <Field {...propsCampo("genero")} label="Gênero">
               <Select
