@@ -1144,14 +1144,14 @@ function DashboardInscricoesCard({
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
               <DashboardMetricCard titulo="Inscrições na fila" valor={dashboard.total} />
               <DashboardMetricCard
-                titulo="Eleg?veis preliminarmente"
+                titulo="Elegíveis preliminarmente"
                 valor={dashboard.elegiveisPreliminarmente}
                 detalhe={`${formatarPercentual(dashboard.total ? dashboard.elegiveisPreliminarmente / dashboard.total : 0)} da base`}
               />
               <DashboardMetricCard
                 titulo="Cadastros para revisão"
                 valor={dashboard.cadastrosParaRevisao}
-                detalhe="documento, idade, ?rea, consentimento ou duplicidade"
+                detalhe="documento, idade, área, consentimento ou duplicidade"
               />
               <DashboardMetricCard
                 titulo="Sem documento"
@@ -1164,7 +1164,7 @@ function DashboardInscricoesCard({
                 detalhe="anos"
               />
               <DashboardMetricCard
-                titulo="Maior concentra??o"
+                titulo="Maior concentração"
                 valor={dashboard.concentracaoPrincipal?.municipio ?? "?"}
                 detalhe={
                   dashboard.concentracaoPrincipal
@@ -1188,7 +1188,7 @@ function DashboardInscricoesCard({
                 itens={dashboard.porTurno}
                 rotulo={turnoLabel}
               />
-              <DistribuicaoLista titulo="Situa??o de trabalho" itens={dashboard.porTrabalho} />
+              <DistribuicaoLista titulo="Situação de trabalho" itens={dashboard.porTrabalho} />
               <DistribuicaoLista titulo="Renda familiar" itens={dashboard.porRenda} />
               <DistribuicaoLista titulo="Tamanho de camisa" itens={dashboard.porCamisa} />
               <DistribuicaoLista titulo="Programa social" itens={dashboard.porProgramaSocial} />
@@ -1197,7 +1197,7 @@ function DashboardInscricoesCard({
                 itens={dashboard.porDisponibilidadeTurnos}
               />
               <DistribuicaoLista
-                titulo="Restri??o alimentar"
+                titulo="Restrição alimentar"
                 itens={dashboard.porRestricaoAlimentar}
               />
               <DistribuicaoLista titulo="PCD/necessidade" itens={dashboard.porDeficiencia} />
@@ -1217,7 +1217,7 @@ function DashboardInscricoesCard({
                         <TableHead>Não trabalhando</TableHead>
                         <TableHead>Até 1 SM</TableHead>
                         <TableHead>Programa social</TableHead>
-                        <TableHead>Manh?</TableHead>
+                        <TableHead>Manhã</TableHead>
                         <TableHead>Tarde</TableHead>
                         <TableHead>Noite</TableHead>
                         <TableHead>Turmas/vagas</TableHead>
@@ -1269,17 +1269,17 @@ function DashboardInscricoesCard({
 
             <div className="rounded-lg border bg-background p-4">
               <h3 className="mb-3 text-sm font-semibold">
-                Bairros e refer?ncias com maior demanda
+                Bairros e referências com maior demanda
               </h3>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Município</TableHead>
-                      <TableHead>Bairro/refer?ncia</TableHead>
+                      <TableHead>Bairro/referência</TableHead>
                       <TableHead>Candidatas</TableHead>
                       <TableHead>% da cidade</TableHead>
-                      <TableHead>Manh?</TableHead>
+                      <TableHead>Manhã</TableHead>
                       <TableHead>Noite</TableHead>
                     </TableRow>
                   </TableHeader>

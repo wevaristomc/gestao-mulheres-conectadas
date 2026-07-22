@@ -1311,7 +1311,7 @@ export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
         resumoFinal.erro += lote.length;
         linhas.push({
           linha: 0,
-          nome: `${lote.length} inscri??o(?es) existente(s)`,
+          nome: `${lote.length} inscrição(ões) existente(s)`,
           email: "",
           telefone: "",
           idadeInformada: "",
@@ -1345,7 +1345,7 @@ export const confirmarImportacaoGoogleForms = createServerFn({ method: "POST" })
         resumoFinal.erro += lote.length;
         linhas.push({
           linha: 0,
-          nome: `${lote.length} nova(s) inscri??o(?es)`,
+          nome: `${lote.length} nova(s) inscrição(ões)`,
           email: "",
           telefone: "",
           idadeInformada: "",
