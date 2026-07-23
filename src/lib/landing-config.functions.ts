@@ -18,12 +18,19 @@ const HERO_POSTER_PATH = z
   .max(500)
   .nullable();
 
+type LandingJson =
+  string | number | boolean | null | LandingJson[] | { [key: string]: LandingJson };
+export interface LandingConteudo {
+  [key: string]: LandingJson;
+}
+
 export type LandingHeroConfig = {
   heroVideoPath: string | null;
   heroVideoUrl: string | null;
   heroPosterPath: string | null;
   heroPosterUrl: string | null;
   heroVideoSom: boolean;
+  conteudo: LandingConteudo | null;
 };
 
 const CONFIG_VAZIA: LandingHeroConfig = {
@@ -32,6 +39,7 @@ const CONFIG_VAZIA: LandingHeroConfig = {
   heroPosterPath: null,
   heroPosterUrl: null,
   heroVideoSom: false,
+  conteudo: null,
 };
 
 function tabelaNaoExiste(error: { code?: string; message?: string } | null): boolean {
@@ -50,7 +58,7 @@ function urlPublica(admin: any, path: string | null): string | null {
 async function buscar(admin: any): Promise<LandingHeroConfig> {
   const { data, error } = await admin
     .from("landing_config")
-    .select("hero_video_path, hero_poster_path, hero_video_som")
+    .select("hero_video_path, hero_poster_path, hero_video_som, conteudo")
     .eq("id", 1)
     .maybeSingle();
   if (error) throw error;
@@ -61,6 +69,7 @@ async function buscar(admin: any): Promise<LandingHeroConfig> {
     heroPosterPath: data.hero_poster_path ?? null,
     heroPosterUrl: urlPublica(admin, data.hero_poster_path ?? null),
     heroVideoSom: !!data.hero_video_som,
+    conteudo: data.conteudo && typeof data.conteudo === "object" ? data.conteudo : null,
   };
 }
 
@@ -104,6 +113,7 @@ export const salvarLandingHeroConfig = createServerFn({ method: "POST" })
         heroVideoPath: HERO_VIDEO_PATH,
         heroPosterPath: HERO_POSTER_PATH,
         heroVideoSom: z.boolean(),
+        conteudo: z.record(z.unknown()).nullable().optional(),
       })
       .parse(input),
   )
@@ -117,6 +127,7 @@ export const salvarLandingHeroConfig = createServerFn({ method: "POST" })
         hero_video_path: data.heroVideoPath,
         hero_poster_path: data.heroPosterPath,
         hero_video_som: data.heroVideoSom,
+        conteudo: data.conteudo ?? null,
         atualizado_em: new Date().toISOString(),
       },
       { onConflict: "id" },

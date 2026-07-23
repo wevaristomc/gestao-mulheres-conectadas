@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -131,6 +132,16 @@ function MulheresConectadasLanding() {
   });
   const depoimentos = depoimentosQ.data?.length ? depoimentosQ.data : DEPOIMENTOS_FALLBACK;
   const heroConfig = heroConfigQ.data;
+  const conteudo = (heroConfig?.conteudo ?? {}) as Record<string, any>;
+  const bloco = (nome: string) =>
+    (conteudo[nome] && typeof conteudo[nome] === "object" ? conteudo[nome] : {}) as Record<
+      string,
+      any
+    >;
+  const heroTexto = bloco("hero");
+  const projetoTexto = bloco("projeto");
+  const jornadaTexto = bloco("jornada");
+  const participarTexto = bloco("comoParticipar");
 
   const municipios = useMemo(() => {
     const base = new Set<string>(MUNICIPIOS_INSCRICAO);
@@ -211,10 +222,11 @@ function MulheresConectadasLanding() {
           <div className="mx-auto grid min-h-[680px] max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:py-24">
             <div>
               <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[#f5b033]">
-                <Sparkles className="size-4" /> Formação, autonomia e novos caminhos
+                <Sparkles className="size-4" />{" "}
+                {heroTexto.selo ?? "Formação, autonomia e novos caminhos"}
               </div>
               <h1 className="max-w-4xl font-display text-5xl font-bold leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-                Tecnologia para transformar possibilidades em futuro.
+                {heroTexto.titulo ?? "Tecnologia para transformar possibilidades em futuro."}
               </h1>
               <p className="mt-7 max-w-2xl text-lg leading-8 text-white/78 sm:text-xl">
                 O Mulheres Conectadas oferece formação gratuita em tecnologia e inovação digital
@@ -226,13 +238,14 @@ function MulheresConectadasLanding() {
                   to="/inscricao"
                   className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-[#f5b033] px-7 font-bold text-[#05244d] shadow-[0_14px_36px_rgba(245,176,51,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ffc24d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
                 >
-                  Quero fazer minha inscrição <ArrowRight className="size-5" />
+                  {heroTexto.cta_texto ?? "Quero fazer minha inscrição"}{" "}
+                  <ArrowRight className="size-5" />
                 </Link>
                 <a
                   href="#formacao"
                   className="inline-flex min-h-14 items-center justify-center rounded-full border border-white/30 px-7 font-semibold transition hover:bg-white/10"
                 >
-                  Conhecer a formação
+                  {heroTexto.cta_secundario_texto ?? "Conhecer a formação"}
                 </a>
               </div>
               <p className="mt-5 flex items-start gap-2 text-sm leading-6 text-white/65">
@@ -285,7 +298,7 @@ function MulheresConectadasLanding() {
             <div>
               <SectionEyebrow>O projeto</SectionEyebrow>
               <h2 className="mt-4 max-w-xl font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                Mais mulheres preparadas para ocupar o presente digital.
+                {projetoTexto.titulo ?? "Mais mulheres preparadas para ocupar o presente digital."}
               </h2>
             </div>
             <div className="space-y-7 text-lg leading-8 text-[#05244d]/75">
@@ -318,7 +331,7 @@ function MulheresConectadasLanding() {
             <div className="max-w-3xl">
               <SectionEyebrow>Sua jornada de aprendizagem</SectionEyebrow>
               <h2 className="mt-4 font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                150 horas para aprender, praticar e avançar.
+                {jornadaTexto.titulo ?? "150 horas para aprender, praticar e avançar."}
               </h2>
               <p className="mt-5 text-lg leading-8 text-[#05244d]/70">
                 A matriz formativa é híbrida e reúne conhecimentos básicos e específicos, com
@@ -387,7 +400,7 @@ function MulheresConectadasLanding() {
                     Como participar
                   </p>
                   <h2 className="mt-4 max-w-2xl font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                    Sua inscrição começa agora.
+                    {participarTexto.titulo ?? "Sua inscrição começa agora."}
                   </h2>
                   <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
                     Preencha seus dados e informe suas preferências de turno e localização. A

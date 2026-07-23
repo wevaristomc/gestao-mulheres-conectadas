@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
@@ -22,6 +22,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useHasRole } from "@/hooks/use-active-context";
+import {
+  listarLandingHeroConfigAdmin,
+  salvarLandingHeroConfig,
+  type LandingConteudo,
+} from "@/lib/landing-config.functions";
 import { supabase } from "@/integrations/supabase/client";
 import {
   alternarLandingDepoimento,
@@ -40,6 +45,83 @@ export const Route = createFileRoute("/_authenticated/administrativo/depoimentos
 const PAPEIS_GESTAO = ["coordenador_geral", "coordenador_pedagogico", "administrativo"] as const;
 const LIMITE_VIDEO = 50 * 1024 * 1024;
 
+function LandingTextEditor({
+  conteudo,
+  config,
+  onChange,
+  onSaved,
+}: {
+  conteudo: LandingConteudo;
+  config?: Awaited<ReturnType<typeof listarLandingHeroConfigAdmin>>;
+  onChange: (value: LandingConteudo) => void;
+  onSaved: () => void;
+}) {
+  const salvar = useMutation({
+    mutationFn: () =>
+      salvarLandingHeroConfig({
+        data: {
+          heroVideoPath: config?.heroVideoPath ?? null,
+          heroPosterPath: config?.heroPosterPath ?? null,
+          heroVideoSom: config?.heroVideoSom ?? false,
+          conteudo,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Textos da landing salvos.");
+      onSaved();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const blocos = ["hero", "metricas", "projeto", "jornada", "comoParticipar"];
+  const atualizar = (bloco: string, texto: string) => {
+    try {
+      const valor = JSON.parse(texto);
+      onChange({ ...conteudo, [bloco]: valor });
+    } catch {
+      /* permite edição até JSON ficar válido */
+    }
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Textos da página</CardTitle>
+        <CardDescription>
+          Edite os blocos textuais sem novo deploy. Arrays de trilhas e passos podem ser
+          adicionados, removidos ou reordenados no JSON de cada seção.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {blocos.map((bloco) => (
+          <div key={bloco} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold">{bloco}</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const proximo = { ...conteudo };
+                  delete proximo[bloco];
+                  onChange(proximo);
+                }}
+              >
+                Restaurar texto original
+              </Button>
+            </div>
+            <Textarea
+              className="min-h-32 font-mono text-xs"
+              value={JSON.stringify(conteudo[bloco] ?? {}, null, 2)}
+              onChange={(e) => atualizar(bloco, e.target.value)}
+            />
+          </div>
+        ))}
+        <Button onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+          Salvar textos
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 function DepoimentosLandingPage() {
   const { hasAnyRole } = useHasRole();
   const podeGerenciar = hasAnyRole([...PAPEIS_GESTAO]);
@@ -51,6 +133,19 @@ function DepoimentosLandingPage() {
     enabled: podeGerenciar,
   });
   const depoimentos = depoimentosQ.data ?? [];
+  const conteudoQ = useQuery({
+    queryKey: ["landing-conteudo", "admin"],
+    queryFn: () => listarLandingHeroConfigAdmin(),
+    enabled: podeGerenciar,
+  });
+  const [conteudo, setConteudo] = useState<LandingConteudo>({});
+  const [conteudoCarregado, setConteudoCarregado] = useState(false);
+  useEffect(() => {
+    if (conteudoQ.data && !conteudoCarregado) {
+      setConteudo(conteudoQ.data.conteudo ?? {});
+      setConteudoCarregado(true);
+    }
+  }, [conteudoQ.data, conteudoCarregado]);
   const [dialogAberto, setDialogAberto] = useState(false);
   const [edicao, setEdicao] = useState<LandingDepoimento | null>(null);
   const [nome, setNome] = useState("");
@@ -86,7 +181,9 @@ function DepoimentosLandingPage() {
       if (nomeTrim.length < 2) throw new Error("Informe o nome (mín. 2 caracteres).");
       if (contextoTrim.length < 2) throw new Error("Informe o contexto (mín. 2 caracteres).");
       if (edicao) {
-        await atualizarLandingDepoimento({ data: { id: edicao.id, nome: nomeTrim, contexto: contextoTrim } });
+        await atualizarLandingDepoimento({
+          data: { id: edicao.id, nome: nomeTrim, contexto: contextoTrim },
+        });
         toast.success("Depoimento atualizado.");
       } else {
         if (!arquivo) throw new Error("Selecione um vídeo MP4.");
@@ -101,7 +198,9 @@ function DepoimentosLandingPage() {
           });
         if (uploadError) throw new Error(`Falha no upload: ${uploadError.message}`);
         try {
-          await criarLandingDepoimento({ data: { nome: nomeTrim, contexto: contextoTrim, videoPath } });
+          await criarLandingDepoimento({
+            data: { nome: nomeTrim, contexto: contextoTrim, videoPath },
+          });
         } catch (error) {
           await supabase.storage.from("landing").remove([videoPath]);
           throw error;
@@ -135,6 +234,15 @@ function DepoimentosLandingPage() {
   return (
     <div className="space-y-5">
       <HeroVideoAdminCard />
+      <LandingTextEditor
+        conteudo={conteudo}
+        config={conteudoQ.data}
+        onChange={setConteudo}
+        onSaved={() => {
+          setConteudoCarregado(false);
+          conteudoQ.refetch();
+        }}
+      />
 
       <Card>
         <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
