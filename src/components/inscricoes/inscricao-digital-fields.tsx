@@ -288,7 +288,7 @@ export function InscricaoDigitalFields({
             </Select>
           </Field>
           <Field {...propsCampo("municipio")} label="Município" required>
-            {municipios ? (
+            {municipios && value.polo_preferido !== "Outros" ? (
               <Select
                 value={value.municipio || undefined}
                 onValueChange={(municipio) => set("municipio", municipio)}
