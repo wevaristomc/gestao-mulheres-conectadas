@@ -28,15 +28,27 @@ export const FAIXAS: { key: FaixaEtariaKey; label: string; min: number; max: num
 
 export type Turno = "manha" | "tarde" | "noite" | "qualquer" | "sem_info";
 
-function calcIdade(nascimento: string | null | undefined): number | null {
-  const d = parseISODateLocal(nascimento ?? "");
-  if (!d) return null;
-  const hoje = new Date();
-  let idade = hoje.getFullYear() - d.getFullYear();
-  const m = hoje.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) idade -= 1;
-  if (idade < 0 || idade > 120) return null;
-  return idade;
+function calcIdade(dados: InscricaoDigitalRow["dados"]): number | null {
+  const d = parseISODateLocal(dados?.data_nascimento ?? "");
+  if (d) {
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - d.getFullYear();
+    const m = hoje.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) idade -= 1;
+    if (idade >= 0 && idade <= 120) return idade;
+  }
+  const direta = (dados as unknown as { idade?: number | string | null })?.idade;
+  if (direta != null && direta !== "") {
+    const n = typeof direta === "number" ? direta : parseInt(String(direta).replace(/\D/g, ""), 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 120) return n;
+  }
+  const obs = String(dados?.observacoes ?? "");
+  const m = obs.match(/idade\s+informada[:\s]+(\d{1,3})/i);
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 0 && n <= 120) return n;
+  }
+  return null;
 }
 
 function faixaDe(idade: number | null): FaixaEtariaKey {
@@ -158,7 +170,7 @@ export function agregarDashboard(rows: InscricaoDigitalRow[]): DashboardInscrico
   // Idade
   const idades: number[] = [];
   for (const r of unicas) {
-    const i = calcIdade(r.dados?.data_nascimento);
+    const i = calcIdade(r.dados);
     if (i != null) idades.push(i);
   }
   const idadeMedia = idades.length ? idades.reduce((s, n) => s + n, 0) / idades.length : 0;
@@ -201,7 +213,7 @@ export function agregarDashboard(rows: InscricaoDigitalRow[]): DashboardInscrico
 
   for (const r of unicas) {
     const d = r.dados ?? ({} as InscricaoDigitalRow["dados"]);
-    const idade = calcIdade(d.data_nascimento);
+    const idade = calcIdade(d);
     const faixa = faixaDe(idade);
     const turno = turnoDe(d.turno_preferido);
     const cidade = tituloCidade(d.municipio);

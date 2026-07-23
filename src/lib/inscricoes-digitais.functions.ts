@@ -109,6 +109,12 @@ function normalizarDadosOcr(
     nome_social: usaNomeSocial === "sim" ? nomeSocial : "",
     cpf: onlyDigits(texto(fonte.cpf)),
     data_nascimento: texto(fonte.data_nascimento),
+    idade: (() => {
+      const raw = fonte.idade;
+      if (raw == null || raw === "") return null;
+      const n = typeof raw === "number" ? raw : parseInt(String(raw).replace(/\D/g, ""), 10);
+      return Number.isFinite(n) && n >= 0 && n <= 120 ? n : null;
+    })(),
     genero: texto(fonte.genero),
     raca: texto(fonte.raca),
     pcd: booleano(fonte.pcd),
@@ -386,6 +392,64 @@ export const criarInscricaoFormulario = createServerFn({ method: "POST" })
       if (enviados.length) await admin.storage.from("evidencias").remove(enviados);
       throw error;
     }
+  });
+
+export const reprocessarIdadesInscricoes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel([...PAPEIS_COORDENACAO])])
+  .inputValidator((input: unknown) => ProjetoInput.parse(input))
+  .handler(async ({ data }): Promise<{ atualizadas: number; semIdade: number; total: number }> => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    const { data: rows, error } = await admin
+      .from("inscricoes_digitais")
+      .select("id, dados")
+      .eq("projeto_id", data.projetoId);
+    if (error) throw new Error(error.message);
+
+    let atualizadas = 0;
+    let semIdade = 0;
+    const lista = (rows ?? []) as Array<{ id: string; dados: Record<string, unknown> | null }>;
+    for (const row of lista) {
+      const dados = (row.dados ?? {}) as Record<string, unknown>;
+      const atual = dados.idade;
+      const atualNum =
+        typeof atual === "number"
+          ? atual
+          : typeof atual === "string" && atual !== ""
+            ? parseInt(atual.replace(/\D/g, ""), 10)
+            : NaN;
+      if (Number.isFinite(atualNum) && atualNum >= 0 && atualNum <= 120) continue;
+
+      let idade: number | null = null;
+      const obs = String(dados.observacoes ?? "");
+      const match = obs.match(/idade\s+informada[:\s]+(\d{1,3})/i);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (Number.isFinite(n) && n >= 0 && n <= 120) idade = n;
+      }
+      if (idade == null) {
+        const dn = typeof dados.data_nascimento === "string" ? dados.data_nascimento : "";
+        const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(dn);
+        if (partes) {
+          const ano = parseInt(partes[1], 10);
+          const hoje = new Date();
+          const cand = hoje.getFullYear() - ano;
+          if (cand >= 0 && cand <= 120) idade = cand;
+        }
+      }
+      if (idade == null) {
+        semIdade += 1;
+        continue;
+      }
+      const novosDados = { ...dados, idade };
+      const { error: upErr } = await admin
+        .from("inscricoes_digitais")
+        .update({ dados: novosDados })
+        .eq("id", row.id);
+      if (upErr) throw new Error(upErr.message);
+      atualizadas += 1;
+    }
+    return { atualizadas, semIdade, total: lista.length };
   });
 
 const ProjetoInput = z.object({ projetoId: UUID });
@@ -808,6 +872,11 @@ function dadosGoogleForms(
 ): DadosInscricaoDigitalNormalizados {
   const carimbo = valorColuna(row, ["carimbo de data hora", "timestamp", "data hora"]);
   const idade = valorColuna(row, ["idade"]);
+  const idadeNumero = (() => {
+    if (!idade) return null;
+    const n = parseInt(String(idade).replace(/\D/g, ""), 10);
+    return Number.isFinite(n) && n >= 0 && n <= 120 ? n : null;
+  })();
   const restricaoRaw = valorColuna(row, ["restricao alimentar"]);
   const restricaoQual = valorColuna(row, ["qual restricao", "qual e a restricao", "qual"]);
   const pcdRaw = valorColuna(row, ["possui alguma deficiencia", "deficiencia", "pcd"]);
@@ -834,6 +903,7 @@ function dadosGoogleForms(
     usa_nome_social: "nao",
     nome_social: "",
     nome: valorColuna(row, ["nome completo", "nome"]),
+    idade: idadeNumero,
     email: valorColuna(row, ["e mail", "email"]),
     telefone: onlyDigits(valorColuna(row, ["telefone whatsapp", "whatsapp", "telefone"])),
     endereco: valorColuna(row, [
