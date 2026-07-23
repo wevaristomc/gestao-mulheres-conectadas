@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Download, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Download, Loader2, RefreshCw, Wand2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import {
   Bar,
   BarChart,
@@ -39,7 +41,10 @@ import {
   exportarDashboardXlsx,
   type DashboardInscricoes,
 } from "@/lib/inscricoes-dashboard";
-import { listarInscricoesDigitais } from "@/lib/inscricoes-digitais.functions";
+import {
+  listarInscricoesDigitais,
+  reprocessarIdadesInscricoes,
+} from "@/lib/inscricoes-digitais.functions";
 
 export const Route = createFileRoute("/_authenticated/administrativo/inscricoes-dashboard")({
   head: () => ({
@@ -74,6 +79,9 @@ function fmtNum(n: number | null | undefined, casas = 1) {
 function DashboardInscricoesPage() {
   const { projetoId, projetoNome } = useActiveContext();
   const listar = useServerFn(listarInscricoesDigitais);
+  const reprocessar = useServerFn(reprocessarIdadesInscricoes);
+  const queryClient = useQueryClient();
+  const [reprocessando, setReprocessando] = useState(false);
 
   const q = useQuery({
     queryKey: ["inscricoes", "dashboard", projetoId],
@@ -125,6 +133,33 @@ function DashboardInscricoesPage() {
           />
         </div>
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!projetoId || reprocessando}
+            onClick={async () => {
+              if (!projetoId) return;
+              setReprocessando(true);
+              try {
+                const r = await reprocessar({ data: { projetoId } });
+                toast.success(
+                  `Idades atualizadas: ${r.atualizadas} · sem idade: ${r.semIdade} · total: ${r.total}`,
+                );
+                await queryClient.invalidateQueries({ queryKey: ["inscricoes", "dashboard"] });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Falha ao reprocessar idades");
+              } finally {
+                setReprocessando(false);
+              }
+            }}
+          >
+            {reprocessando ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Wand2 className="mr-2 h-4 w-4" />
+            )}
+            Reprocessar idades
+          </Button>
           <Button size="sm" variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}>
             {q.isFetching ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
