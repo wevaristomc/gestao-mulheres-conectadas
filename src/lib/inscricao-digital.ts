@@ -158,6 +158,10 @@ export const dadosInscricaoDigitalSchema = z
     motivo_rejeicao: textoOpcional,
     arquivo_nome_original: textoOpcional,
     drive_arquivo_id: textoOpcional,
+    latitude: z.number().finite().nullable().optional(),
+    longitude: z.number().finite().nullable().optional(),
+    endereco_formatado: textoOpcional,
+    geocodificado_em: textoOpcional,
   })
   .superRefine((dados, contexto) => {
     if (dados.usa_nome_social === "sim" && !dados.nome_social.trim()) {
@@ -247,6 +251,10 @@ export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   motivo_rejeicao: "",
   arquivo_nome_original: "",
   drive_arquivo_id: "",
+  latitude: null,
+  longitude: null,
+  endereco_formatado: "",
+  geocodificado_em: "",
 };
 
 export type TurmaInscricaoPublica = {

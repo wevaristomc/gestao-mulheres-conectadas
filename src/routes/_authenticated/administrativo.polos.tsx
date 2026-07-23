@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MapPin, Plus, Save, Trash2 } from "lucide-react";
@@ -167,7 +167,7 @@ function PolosInscricaoPage() {
                 <Button variant="outline" onClick={() => setEditando(polo)}>
                   Editar
                 </Button>
-                {polo.id !== "Outros" && (
+                {polo.nome !== "Outros" && (
                   <Button
                     variant="ghost"
                     size="icon"

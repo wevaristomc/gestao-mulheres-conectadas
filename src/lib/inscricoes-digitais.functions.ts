@@ -156,7 +156,7 @@ function normalizarDadosOcr(
     motivo_rejeicao: "",
     arquivo_nome_original: "",
     drive_arquivo_id: "",
-  };
+  } as DadosInscricaoDigitalNormalizados;
 }
 
 function bytesDeBase64(base64: string): Uint8Array {

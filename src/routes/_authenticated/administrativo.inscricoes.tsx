@@ -14,6 +14,7 @@ import {
   FileText,
   FolderPlus,
   Loader2,
+  MapPin,
   Printer,
   RefreshCw,
   Search,
@@ -83,9 +84,13 @@ import {
   salvarRevisaoInscricao,
   type RelatorioInscricoesRegiao,
   type ResultadoPreviewGoogleForms,
+  distanciaHaversineKm,
+  geocodificarInscricoesPendentes,
+  realocarInscricoes,
 } from "@/lib/inscricoes-digitais.functions";
 import { gerarPdfRelatorioInscricoesPorRegiao } from "@/lib/relatorio-inscricoes-pdf";
 import { criarPastaDriveCursista } from "@/lib/cursistas-drive.functions";
+import { listarPolosInscricaoPublica } from "@/lib/polos-inscricao.functions";
 
 export const Route = createFileRoute("/_authenticated/administrativo/inscricoes")({
   component: InscricoesDigitaisTab,
@@ -322,6 +327,10 @@ function InscricoesDigitaisTab() {
   const turmasQ = useQuery({
     queryKey: ["inscricao-publica", "turmas"],
     queryFn: () => listarTurmasInscricaoPublica(),
+  });
+  const polosQ = useQuery({
+    queryKey: ["inscricao-publica", "polos"],
+    queryFn: () => listarPolosInscricaoPublica(),
   });
   const turmas = useMemo(
     () => (turmasQ.data ?? []).filter((turma) => turma.projetoId === projetoId),
@@ -1033,6 +1042,170 @@ function InscricoesDigitaisTab() {
   );
 }
 
+type PoloAnalise = {
+  id: string;
+  nome: string;
+  municipio: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+function AnaliseProximidadeCard({
+  rows,
+  polos,
+  podeEditar,
+  onRefresh,
+}: {
+  rows: InscricaoDigitalRow[];
+  polos: PoloAnalise[];
+  podeEditar: boolean;
+  onRefresh: () => void;
+}) {
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
+  const geocodificar = useMutation({
+    mutationFn: geocodificarInscricoesPendentes,
+    onSuccess: (r) => {
+      toast.success(
+        `Geocodificação concluída: ${r.geocodificados} geocodificados, ${r.falharam} falharam e ${r.jaTinham} já tinham coordenadas.`,
+      );
+      onRefresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const realocar = useMutation({
+    mutationFn: realocarInscricoes,
+    onSuccess: (r) => {
+      toast.success(`${r.atualizadas} inscrição(ões) realocada(s).`);
+      setSelecionadas([]);
+      onRefresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const itens = rows
+    .map((row) => {
+      const lat = Number(row.dados.latitude),
+        lng = Number(row.dados.longitude);
+      const localizado = Number.isFinite(lat) && Number.isFinite(lng);
+      const escolhido = polos.find((p) => p.nome === row.dados.polo_preferido);
+      const distanciaEscolhido =
+        localizado && escolhido?.latitude != null && escolhido.longitude != null
+          ? distanciaHaversineKm(lat, lng, escolhido.latitude, escolhido.longitude)
+          : null;
+      const candidatos = localizado
+        ? polos
+            .filter((p) => p.latitude != null && p.longitude != null)
+            .map((p) => ({
+              polo: p,
+              distancia: distanciaHaversineKm(lat, lng, p.latitude!, p.longitude!),
+            }))
+            .sort((a, b) => a.distancia - b.distancia)
+        : [];
+      const maisProximo =
+        candidatos[0] &&
+        (!escolhido ||
+          candidatos[0].polo.nome !== escolhido.nome ||
+          (distanciaEscolhido != null && candidatos[0].distancia + 3 < distanciaEscolhido))
+          ? candidatos[0]
+          : null;
+      return { row, localizado, escolhido, distanciaEscolhido, maisProximo };
+    })
+    .filter((item) => item.maisProximo || !item.localizado);
+  return (
+    <Card>
+      <CardHeader className="gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <CardTitle>Análise de proximidade</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Compare o endereço informado com o polo escolhido e encontre realocações sugeridas.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {podeEditar && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => geocodificar.mutate({})}
+              disabled={geocodificar.isPending}
+            >
+              <MapPin className="mr-2 size-4" /> Geocodificar endereços pendentes
+            </Button>
+          )}
+          {podeEditar && selecionadas.length > 0 && (
+            <Button
+              size="sm"
+              onClick={() =>
+                realocar.mutate({
+                  data: {
+                    itens: itens
+                      .filter((i) => selecionadas.includes(i.row.id) && i.maisProximo)
+                      .map((i) => ({
+                        inscricaoId: i.row.id,
+                        poloNome: i.maisProximo!.polo.nome,
+                        municipio: i.maisProximo!.polo.municipio,
+                      })),
+                  },
+                })
+              }
+            >
+              Realocar selecionadas
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead></TableHead>
+              <TableHead>Candidata</TableHead>
+              <TableHead>Polo escolhido</TableHead>
+              <TableHead>Distância</TableHead>
+              <TableHead>Polo mais próximo</TableHead>
+              <TableHead>Distância sugerida</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {itens.map(({ row, localizado, escolhido, distanciaEscolhido, maisProximo }) => (
+              <TableRow key={row.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selecionadas.includes(row.id)}
+                    onCheckedChange={(v) =>
+                      setSelecionadas((atual) =>
+                        v ? [...new Set([...atual, row.id])] : atual.filter((id) => id !== row.id),
+                      )
+                    }
+                    disabled={!maisProximo}
+                  />
+                </TableCell>
+                <TableCell className="font-medium">{row.dados.nome}</TableCell>
+                <TableCell>{escolhido?.nome ?? row.dados.polo_preferido ?? "—"}</TableCell>
+                <TableCell>
+                  {!localizado ? (
+                    <Badge variant="outline">Não foi possível localizar</Badge>
+                  ) : distanciaEscolhido == null ? (
+                    "—"
+                  ) : (
+                    `${distanciaEscolhido.toFixed(1)} km`
+                  )}
+                </TableCell>
+                <TableCell>{maisProximo?.polo.nome ?? "—"}</TableCell>
+                <TableCell>
+                  {maisProximo ? `${maisProximo.distancia.toFixed(1)} km` : "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {itens.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nenhuma inscrição com divergência de proximidade ou endereço pendente.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 function ResumoCard({
   titulo,
   valor,
