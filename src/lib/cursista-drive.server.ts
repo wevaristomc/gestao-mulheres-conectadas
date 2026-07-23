@@ -115,7 +115,7 @@ function nomeArquivoAnexo(
   path: string,
   mime: string,
 ): string {
-  const base = tipo === "documento" ? "Documento pessoal" : "Comprovante de endere?o";
+  const base = tipo === "documento" ? "Documento pessoal" : "Comprovante de endereço";
   const nome = nomeSeguroPasta(nomeCursista, "Cursista");
   return `${base} - ${nome}.${extensaoArquivo(path, mime)}`;
 }
@@ -338,7 +338,7 @@ export async function sincronizarDocumentosCursistaNoDrive(params: {
     .eq("id", params.cursistaId)
     .maybeSingle();
   if (cursistaError || !cursista) {
-    throw new Error(cursistaError?.message ?? "Cursista nÃ£o encontrada.");
+    throw new Error(cursistaError?.message ?? "Cursista não encontrada.");
   }
 
   let pasta: PastaDriveCursista = {

@@ -349,7 +349,7 @@ export async function updateFile(input: {
   );
   const text = await res.text();
   if (!res.ok)
-    throw new Error(`Google Drive: atualizaÃ§Ã£o falhou (${res.status}) ${text.slice(0, 200)}`);
+    throw new Error(`Google Drive: atualização falhou (${res.status}) ${text.slice(0, 200)}`);
   return JSON.parse(text) as GDriveFile;
 }
 
