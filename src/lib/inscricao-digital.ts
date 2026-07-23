@@ -52,6 +52,16 @@ export const POLOS_INSCRICAO = [
 
 export type PoloInscricao = (typeof POLOS_INSCRICAO)[number]["nome"];
 
+export type PoloInscricaoPublico = {
+  id: string;
+  nome: string;
+  municipio: string;
+  enderecoReferencia: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  ordem: number;
+};
+
 export function municipioDoPoloInscricao(polo: string | null | undefined): string {
   return POLOS_INSCRICAO.find((item) => item.nome === polo)?.municipio ?? "";
 }

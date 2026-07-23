@@ -24,6 +24,7 @@ import {
   criarInscricaoFormulario,
   listarTurmasInscricaoPublica,
 } from "@/lib/inscricoes-digitais.functions";
+import { listarPolosInscricaoPublica } from "@/lib/polos-inscricao.functions";
 import { ORIGEM_PUBLICA } from "@/lib/site";
 
 export const Route = createFileRoute("/inscricao")({
@@ -100,6 +101,11 @@ function InscricaoPublicaPage() {
   const turmasQ = useQuery({
     queryKey: ["inscricao-publica", "turmas"],
     queryFn: () => listarTurmasInscricaoPublica(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const polosQ = useQuery({
+    queryKey: ["inscricao-publica", "polos"],
+    queryFn: () => listarPolosInscricaoPublica(),
     staleTime: 5 * 60 * 1000,
   });
   const municipios = useMemo(() => {
@@ -242,6 +248,7 @@ function InscricaoPublicaPage() {
                 onChange={setDados}
                 encerrarSeInelegivel
                 municipios={municipios}
+                polos={polosQ.data}
               />
 
               <section hidden={inelegivel} className="space-y-4">

@@ -25,6 +25,7 @@ import {
   TURNOS_PREFERIDOS,
   TURNO_PREFERIDO_LABEL,
   type DadosInscricaoDigital,
+  type PoloInscricaoPublico,
 } from "@/lib/inscricao-digital";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ type Props = {
   disabled?: boolean;
   encerrarSeInelegivel?: boolean;
   municipios?: readonly string[];
+  polos?: readonly PoloInscricaoPublico[];
 };
 
 export function InscricaoDigitalFields({
@@ -76,6 +78,7 @@ export function InscricaoDigitalFields({
   disabled = false,
   encerrarSeInelegivel = false,
   municipios,
+  polos,
 }: Props) {
   const set = <K extends keyof DadosInscricaoDigital>(campo: K, valor: DadosInscricaoDigital[K]) =>
     onChange({ ...value, [campo]: valor });
@@ -85,8 +88,21 @@ export function InscricaoDigitalFields({
     campo,
     destacar: baixa(campo),
   });
+  const polosDisponiveis =
+    polos ??
+    POLOS_INSCRICAO.map((polo, index) => ({
+      id: polo.nome,
+      nome: polo.nome,
+      municipio: polo.municipio,
+      enderecoReferencia: null,
+      latitude: null,
+      longitude: null,
+      ordem: index + 1,
+    }));
   const setPoloPreferido = (polo: string) => {
-    const municipio = municipioDoPoloInscricao(polo);
+    const municipio =
+      polosDisponiveis.find((item) => item.nome === polo)?.municipio ??
+      municipioDoPoloInscricao(polo);
     onChange({ ...value, polo_preferido: polo, municipio: municipio || value.municipio });
   };
 
@@ -279,7 +295,7 @@ export function InscricaoDigitalFields({
                 <SelectValue placeholder="Selecione o polo mais próximo" />
               </SelectTrigger>
               <SelectContent>
-                {POLOS_INSCRICAO.map((polo) => (
+                {polosDisponiveis.map((polo) => (
                   <SelectItem key={polo.nome} value={polo.nome}>
                     {polo.nome}
                   </SelectItem>

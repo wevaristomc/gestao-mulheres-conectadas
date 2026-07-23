@@ -14,6 +14,7 @@ function AdministrativoLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const tabs = [
     { to: "/administrativo/inscricoes", label: "Inscrições" },
+    { to: "/administrativo/polos", label: "Polos de inscrição" },
     { to: "/administrativo/depoimentos", label: "Landing" },
     { to: "/administrativo/qualificacao", label: "Qualificação para Certificado" },
     { to: "/administrativo/beneficios", label: "Benefícios" },

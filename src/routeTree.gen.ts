@@ -69,6 +69,7 @@ import { Route as AuthenticatedConfiguracoesLocaisRouteImport } from './routes/_
 import { Route as AuthenticatedConfiguracoesInstrutorTurmasRouteImport } from './routes/_authenticated/configuracoes.instrutor-turmas'
 import { Route as AuthenticatedConfiguracoesIaRouteImport } from './routes/_authenticated/configuracoes.ia'
 import { Route as AuthenticatedAdministrativoQualificacaoRouteImport } from './routes/_authenticated/administrativo.qualificacao'
+import { Route as AuthenticatedAdministrativoPolosRouteImport } from './routes/_authenticated/administrativo.polos'
 import { Route as AuthenticatedAdministrativoMateriaisRouteImport } from './routes/_authenticated/administrativo.materiais'
 import { Route as AuthenticatedAdministrativoInscricoesDashboardRouteImport } from './routes/_authenticated/administrativo.inscricoes-dashboard'
 import { Route as AuthenticatedAdministrativoInscricoesRouteImport } from './routes/_authenticated/administrativo.inscricoes'
@@ -419,6 +420,12 @@ const AuthenticatedAdministrativoQualificacaoRoute =
     path: '/qualificacao',
     getParentRoute: () => AuthenticatedAdministrativoRoute,
   } as any)
+const AuthenticatedAdministrativoPolosRoute =
+  AuthenticatedAdministrativoPolosRouteImport.update({
+    id: '/polos',
+    path: '/polos',
+    getParentRoute: () => AuthenticatedAdministrativoRoute,
+  } as any)
 const AuthenticatedAdministrativoMateriaisRoute =
   AuthenticatedAdministrativoMateriaisRouteImport.update({
     id: '/materiais',
@@ -514,6 +521,7 @@ export interface FileRoutesByFullPath {
   '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/administrativo/inscricoes-dashboard': typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
+  '/administrativo/polos': typeof AuthenticatedAdministrativoPolosRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
@@ -579,6 +587,7 @@ export interface FileRoutesByTo {
   '/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/administrativo/inscricoes-dashboard': typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   '/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
+  '/administrativo/polos': typeof AuthenticatedAdministrativoPolosRoute
   '/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
@@ -652,6 +661,7 @@ export interface FileRoutesById {
   '/_authenticated/administrativo/inscricoes': typeof AuthenticatedAdministrativoInscricoesRoute
   '/_authenticated/administrativo/inscricoes-dashboard': typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   '/_authenticated/administrativo/materiais': typeof AuthenticatedAdministrativoMateriaisRoute
+  '/_authenticated/administrativo/polos': typeof AuthenticatedAdministrativoPolosRoute
   '/_authenticated/administrativo/qualificacao': typeof AuthenticatedAdministrativoQualificacaoRoute
   '/_authenticated/configuracoes/ia': typeof AuthenticatedConfiguracoesIaRoute
   '/_authenticated/configuracoes/instrutor-turmas': typeof AuthenticatedConfiguracoesInstrutorTurmasRoute
@@ -726,6 +736,7 @@ export interface FileRouteTypes {
     | '/administrativo/inscricoes'
     | '/administrativo/inscricoes-dashboard'
     | '/administrativo/materiais'
+    | '/administrativo/polos'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
     | '/configuracoes/instrutor-turmas'
@@ -791,6 +802,7 @@ export interface FileRouteTypes {
     | '/administrativo/inscricoes'
     | '/administrativo/inscricoes-dashboard'
     | '/administrativo/materiais'
+    | '/administrativo/polos'
     | '/administrativo/qualificacao'
     | '/configuracoes/ia'
     | '/configuracoes/instrutor-turmas'
@@ -863,6 +875,7 @@ export interface FileRouteTypes {
     | '/_authenticated/administrativo/inscricoes'
     | '/_authenticated/administrativo/inscricoes-dashboard'
     | '/_authenticated/administrativo/materiais'
+    | '/_authenticated/administrativo/polos'
     | '/_authenticated/administrativo/qualificacao'
     | '/_authenticated/configuracoes/ia'
     | '/_authenticated/configuracoes/instrutor-turmas'
@@ -1339,6 +1352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdministrativoQualificacaoRouteImport
       parentRoute: typeof AuthenticatedAdministrativoRoute
     }
+    '/_authenticated/administrativo/polos': {
+      id: '/_authenticated/administrativo/polos'
+      path: '/polos'
+      fullPath: '/administrativo/polos'
+      preLoaderRoute: typeof AuthenticatedAdministrativoPolosRouteImport
+      parentRoute: typeof AuthenticatedAdministrativoRoute
+    }
     '/_authenticated/administrativo/materiais': {
       id: '/_authenticated/administrativo/materiais'
       path: '/materiais'
@@ -1425,6 +1445,7 @@ interface AuthenticatedAdministrativoRouteChildren {
   AuthenticatedAdministrativoInscricoesRoute: typeof AuthenticatedAdministrativoInscricoesRoute
   AuthenticatedAdministrativoInscricoesDashboardRoute: typeof AuthenticatedAdministrativoInscricoesDashboardRoute
   AuthenticatedAdministrativoMateriaisRoute: typeof AuthenticatedAdministrativoMateriaisRoute
+  AuthenticatedAdministrativoPolosRoute: typeof AuthenticatedAdministrativoPolosRoute
   AuthenticatedAdministrativoQualificacaoRoute: typeof AuthenticatedAdministrativoQualificacaoRoute
   AuthenticatedAdministrativoIndexRoute: typeof AuthenticatedAdministrativoIndexRoute
 }
@@ -1441,6 +1462,8 @@ const AuthenticatedAdministrativoRouteChildren: AuthenticatedAdministrativoRoute
       AuthenticatedAdministrativoInscricoesDashboardRoute,
     AuthenticatedAdministrativoMateriaisRoute:
       AuthenticatedAdministrativoMateriaisRoute,
+    AuthenticatedAdministrativoPolosRoute:
+      AuthenticatedAdministrativoPolosRoute,
     AuthenticatedAdministrativoQualificacaoRoute:
       AuthenticatedAdministrativoQualificacaoRoute,
     AuthenticatedAdministrativoIndexRoute:
