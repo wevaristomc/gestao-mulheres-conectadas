@@ -109,6 +109,12 @@ function normalizarDadosOcr(
     nome_social: usaNomeSocial === "sim" ? nomeSocial : "",
     cpf: onlyDigits(texto(fonte.cpf)),
     data_nascimento: texto(fonte.data_nascimento),
+    idade: (() => {
+      const raw = fonte.idade;
+      if (raw == null || raw === "") return null;
+      const n = typeof raw === "number" ? raw : parseInt(String(raw).replace(/\D/g, ""), 10);
+      return Number.isFinite(n) && n >= 0 && n <= 120 ? n : null;
+    })(),
     genero: texto(fonte.genero),
     raca: texto(fonte.raca),
     pcd: booleano(fonte.pcd),
