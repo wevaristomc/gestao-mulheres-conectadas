@@ -413,14 +413,23 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
       ),
     );
     const formatos = cpfs.flatMap((cpf) => [cpf, formatCpf(cpf)]);
-    const [cursistasRes, beneficiariasRes] = await Promise.all([
-      formatos.length
-        ? admin.from("cursistas").select("id, nome, cpf").in("cpf", formatos)
-        : Promise.resolve({ data: [], error: null }),
-      formatos.length
-        ? admin.from("beneficiarias").select("id, nome, cpf").in("cpf", formatos)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+    let cursistasRes = formatos.length
+      ? await admin
+          .from("cursistas")
+          .select("id, nome, cpf, pasta_drive_id, pasta_drive_url")
+          .in("cpf", formatos)
+      : { data: [], error: null };
+    if (
+      cursistasRes.error &&
+      /pasta_drive_id|pasta_drive_url|schema cache|does not exist/i.test(cursistasRes.error.message)
+    ) {
+      cursistasRes = await admin.from("cursistas").select("id, nome, cpf").in("cpf", formatos);
+    }
+    const beneficiariasRes = formatos.length
+      ? await admin.from("beneficiarias").select("id, nome, cpf").in("cpf", formatos)
+      : { data: [], error: null };
+    if (cursistasRes.error) throw new Error(cursistasRes.error.message);
+    if (beneficiariasRes.error) throw new Error(beneficiariasRes.error.message);
     const existentes = [...(cursistasRes.data ?? []), ...(beneficiariasRes.data ?? [])] as any[];
     const porCpf = new Map<string, any>();
     for (const existente of existentes) porCpf.set(onlyDigits(existente.cpf ?? ""), existente);
@@ -429,6 +438,17 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
       ((rows ?? []) as any[]).map(async (row): Promise<InscricaoDigitalRow> => {
         const cpf = onlyDigits(texto(row.dados?.cpf));
         const duplicada = porCpf.get(cpf);
+        const driveSync = (row.dados?.drive_documentos_sincronizados ?? {}) as any;
+        const documentoDriveOk =
+          !row.documento_path ||
+          (driveSync.documento?.storage_path === row.documento_path &&
+            driveSync.documento?.drive_file_id &&
+            driveSync.documento?.pasta_drive_id === duplicada?.pasta_drive_id);
+        const comprovanteDriveOk =
+          !row.comprovante_path ||
+          (driveSync.comprovante?.storage_path === row.comprovante_path &&
+            driveSync.comprovante?.drive_file_id &&
+            driveSync.comprovante?.pasta_drive_id === duplicada?.pasta_drive_id);
         return {
           id: row.id,
           projetoId: row.projeto_id,
@@ -450,6 +470,11 @@ export const listarInscricoesDigitais = createServerFn({ method: "POST" })
           comprovanteUrl: await urlArquivo(admin, row.comprovante_path),
           confiancaOcr: row.confianca_ocr == null ? null : Number(row.confianca_ocr),
           cursistaId: row.cursista_id,
+          pastaDriveId: duplicada?.pasta_drive_id ?? null,
+          pastaDriveUrl: duplicada?.pasta_drive_url ?? null,
+          documentosDriveSincronizados: Boolean(
+            (row.documento_path || row.comprovante_path) && documentoDriveOk && comprovanteDriveOk,
+          ),
           revisadoPor: row.revisado_por,
           revisadoEm: row.revisado_em,
           criadoEm: row.criado_em,
@@ -1374,7 +1399,7 @@ export const anexarDocumentoInscricao = createServerFn({ method: "POST" })
     const admin: any = getSupabaseAdmin();
     const { data: row, error: readError } = await admin
       .from("inscricoes_digitais")
-      .select("id, documento_path, comprovante_path")
+      .select("id, dados, documento_path, comprovante_path, cursista_id, status")
       .eq("id", data.id)
       .eq("projeto_id", data.projetoId)
       .maybeSingle();
@@ -1405,9 +1430,29 @@ export const anexarDocumentoInscricao = createServerFn({ method: "POST" })
       .update(patch)
       .eq("id", data.id)
       .eq("projeto_id", data.projetoId)
-      .select("documento_path, comprovante_path")
+      .select("id, dados, documento_path, comprovante_path, cursista_id, status")
       .single();
     if (updateError) throw new Error(updateError.message);
+
+    if (atualizado.status === "aprovada" && atualizado.cursista_id) {
+      try {
+        const { sincronizarDocumentosInscricaoNoDrive } =
+          await import("@/lib/cursista-drive.server");
+        const resultadoDrive = await sincronizarDocumentosInscricaoNoDrive({
+          admin,
+          inscricaoId: data.id,
+          cursistaId: atualizado.cursista_id as string,
+        });
+        if (resultadoDrive.erros.length) {
+          console.warn(
+            "[inscricoes] Falha parcial ao sincronizar anexos no Drive",
+            resultadoDrive.erros,
+          );
+        }
+      } catch (driveError) {
+        console.warn("[inscricoes] Não foi possível sincronizar anexos no Drive", driveError);
+      }
+    }
 
     return {
       documentoPath: atualizado.documento_path ?? null,
@@ -1567,6 +1612,8 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
     };
     let beneficiariaCriada = false;
     let cursistaCriada = false;
+    let pastaDriveId: string | null = null;
+    let pastaDriveUrl: string | null = null;
     try {
       const { error: beneficiariaError } = await admin.from("beneficiarias").insert(beneficiaria);
       if (beneficiariaError) throw new Error(beneficiariaError.message);
@@ -1581,6 +1628,22 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
       });
       if (cursistaError) throw new Error(cursistaError.message);
       cursistaCriada = true;
+      try {
+        const { criarOuGarantirPastaDriveCursista } = await import("@/lib/cursista-drive.server");
+        const pastaDrive = await criarOuGarantirPastaDriveCursista({
+          admin,
+          cursistaId: pessoaId,
+          nome: dados.nome,
+          cpf: dados.cpf,
+        });
+        pastaDriveId = pastaDrive.pastaDriveId;
+        pastaDriveUrl = pastaDrive.pastaDriveUrl;
+      } catch (driveError) {
+        console.warn(
+          "[inscricoes] Não foi possível criar a pasta da cursista no Drive",
+          driveError,
+        );
+      }
       const { error: matriculaError } = await admin.from("matriculas").insert({
         turma_id: row.turma_id,
         cursista_id: pessoaId,
@@ -1610,7 +1673,26 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
         })
         .eq("id", data.id);
       if (updateError) throw new Error(updateError.message);
-      return { duplicada: false, cursistaId: pessoaId };
+      try {
+        const { sincronizarDocumentosInscricaoNoDrive } =
+          await import("@/lib/cursista-drive.server");
+        const resultadoDrive = await sincronizarDocumentosInscricaoNoDrive({
+          admin,
+          inscricaoId: data.id,
+          cursistaId: pessoaId,
+          pastaDriveId,
+          nome: dados.nome,
+        });
+        if (resultadoDrive.erros.length) {
+          console.warn(
+            "[inscricoes] Falha parcial ao sincronizar anexos no Drive",
+            resultadoDrive.erros,
+          );
+        }
+      } catch (driveError) {
+        console.warn("[inscricoes] Não foi possível sincronizar anexos no Drive", driveError);
+      }
+      return { duplicada: false, cursistaId: pessoaId, pastaDriveId, pastaDriveUrl };
     } catch (error) {
       await admin.from("matriculas").delete().eq("cursista_id", pessoaId);
       if (cursistaCriada) await admin.from("cursistas").delete().eq("id", pessoaId);

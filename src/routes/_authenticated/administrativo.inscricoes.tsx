@@ -12,6 +12,7 @@ import {
   FileScan,
   FileSpreadsheet,
   FileText,
+  FolderPlus,
   Loader2,
   Printer,
   RefreshCw,
@@ -84,6 +85,7 @@ import {
   type ResultadoPreviewGoogleForms,
 } from "@/lib/inscricoes-digitais.functions";
 import { gerarPdfRelatorioInscricoesPorRegiao } from "@/lib/relatorio-inscricoes-pdf";
+import { criarPastaDriveCursista } from "@/lib/cursistas-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/administrativo/inscricoes")({
   component: InscricoesDigitaisTab,
@@ -449,6 +451,29 @@ function InscricoesDigitaisTab() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const criarPastaDrive = useMutation({
+    mutationFn: async (cursistaId: string) => criarPastaDriveCursista({ data: { cursistaId } }),
+    onSuccess: (resultado) => {
+      setRevisao((atual) =>
+        atual
+          ? {
+              ...atual,
+              pastaDriveId: resultado.pastaDriveId,
+              pastaDriveUrl: resultado.pastaDriveUrl,
+              documentosDriveSincronizados: resultado.erros.length === 0,
+            }
+          : atual,
+      );
+      toast.success(
+        resultado.sincronizados > 0
+          ? "Pasta e documentos sincronizados no Drive."
+          : "Pasta da cursista pronta no Drive.",
+      );
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const confirmarAprovacao = () => {
     if (!revisao) return;
     if (!revisao.documentoPath) {
@@ -781,6 +806,56 @@ function InscricoesDigitaisTab() {
                     uploading={anexarDocumento.isPending}
                     disabled={anexarDocumento.isPending}
                   />
+                  {revisao.status === "aprovada" && revisao.cursistaId ? (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Pasta da cursista no Drive</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-muted-foreground">
+                        {revisao.pastaDriveUrl ? (
+                          <>
+                            <Button asChild variant="outline" className="w-full justify-start">
+                              <a href={revisao.pastaDriveUrl} target="_blank" rel="noreferrer">
+                                <ExternalLink className="mr-2 size-4" />
+                                Abrir pasta no Drive
+                              </a>
+                            </Button>
+                            {!revisao.documentosDriveSincronizados && podeEditar ? (
+                              <Button
+                                variant="secondary"
+                                className="w-full justify-start"
+                                onClick={() => criarPastaDrive.mutate(revisao.cursistaId!)}
+                                disabled={criarPastaDrive.isPending}
+                              >
+                                {criarPastaDrive.isPending ? (
+                                  <Loader2 className="mr-2 size-4 animate-spin" />
+                                ) : (
+                                  <FolderPlus className="mr-2 size-4" />
+                                )}
+                                Sincronizar documentos no Drive
+                              </Button>
+                            ) : null}
+                          </>
+                        ) : podeEditar ? (
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={() => criarPastaDrive.mutate(revisao.cursistaId!)}
+                            disabled={criarPastaDrive.isPending}
+                          >
+                            {criarPastaDrive.isPending ? (
+                              <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                              <FolderPlus className="mr-2 size-4" />
+                            )}
+                            Criar pasta e sincronizar documentos
+                          </Button>
+                        ) : (
+                          <p>Pasta da cursista ainda não registrada.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : null}
                 </div>
               </ScrollArea>
               <ScrollArea className="h-[calc(94vh-150px)]">

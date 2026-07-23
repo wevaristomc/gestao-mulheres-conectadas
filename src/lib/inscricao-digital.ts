@@ -260,6 +260,9 @@ export type InscricaoDigitalRow = {
   comprovanteUrl: string | null;
   confiancaOcr: number | null;
   cursistaId: string | null;
+  pastaDriveId: string | null;
+  pastaDriveUrl: string | null;
+  documentosDriveSincronizados: boolean;
   revisadoPor: string | null;
   revisadoEm: string | null;
   criadoEm: string;
