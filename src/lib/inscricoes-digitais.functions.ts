@@ -814,6 +814,11 @@ function dadosGoogleForms(
 ): DadosInscricaoDigitalNormalizados {
   const carimbo = valorColuna(row, ["carimbo de data hora", "timestamp", "data hora"]);
   const idade = valorColuna(row, ["idade"]);
+  const idadeNumero = (() => {
+    if (!idade) return null;
+    const n = parseInt(String(idade).replace(/\D/g, ""), 10);
+    return Number.isFinite(n) && n >= 0 && n <= 120 ? n : null;
+  })();
   const restricaoRaw = valorColuna(row, ["restricao alimentar"]);
   const restricaoQual = valorColuna(row, ["qual restricao", "qual e a restricao", "qual"]);
   const pcdRaw = valorColuna(row, ["possui alguma deficiencia", "deficiencia", "pcd"]);
@@ -840,6 +845,7 @@ function dadosGoogleForms(
     usa_nome_social: "nao",
     nome_social: "",
     nome: valorColuna(row, ["nome completo", "nome"]),
+    idade: idadeNumero,
     email: valorColuna(row, ["e mail", "email"]),
     telefone: onlyDigits(valorColuna(row, ["telefone whatsapp", "whatsapp", "telefone"])),
     endereco: valorColuna(row, [
