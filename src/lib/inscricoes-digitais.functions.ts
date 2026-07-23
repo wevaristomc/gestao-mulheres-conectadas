@@ -1770,3 +1770,106 @@ export const aprovarInscricao = createServerFn({ method: "POST" })
       throw error;
     }
   });
+
+export function distanciaHaversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const rad = (v: number) => (v * Math.PI) / 180;
+  const a =
+    Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export const geocodificarInscricoesPendentes = createServerFn({ method: "POST" }).handler(
+  async () => {
+    await requirePapel(PAPEIS_COORDENACAO);
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { geocodificarEndereco } = await import("@/lib/polos-inscricao.functions");
+    const admin: any = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from("inscricoes_digitais")
+      .select("id,dados")
+      .in("status", ["pendente", "em_revisao"]);
+    if (error) throw new Error(error.message);
+    let geocodificados = 0,
+      falharam = 0,
+      jaTinham = 0;
+    for (const row of (data ?? []) as any[]) {
+      const d = (row.dados ?? {}) as Record<string, unknown>;
+      if (Number.isFinite(Number(d.latitude)) && Number.isFinite(Number(d.longitude))) {
+        jaTinham++;
+        continue;
+      }
+      const endereco = [d.endereco, d.bairro_referencia, d.municipio, "MG", "Brasil"]
+        .filter(Boolean)
+        .join(", ");
+      if (endereco.length < 5) {
+        falharam++;
+        continue;
+      }
+      try {
+        const resultado = await geocodificarEndereco({ data: { enderecoCompleto: endereco } });
+        const novoDados = {
+          ...d,
+          latitude: resultado.latitude,
+          longitude: resultado.longitude,
+          endereco_formatado: resultado.enderecoFormatado,
+          geocodificado_em: new Date().toISOString(),
+        };
+        await admin
+          .from("inscricoes_digitais")
+          .update({ dados: novoDados, atualizado_em: new Date().toISOString() })
+          .eq("id", row.id);
+        geocodificados++;
+      } catch {
+        falharam++;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return { geocodificados, falharam, jaTinham };
+  },
+);
+
+export const realocarInscricoes = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        itens: z.array(
+          z.object({
+            inscricaoId: z.string().uuid(),
+            poloNome: z.string().min(1),
+            municipio: z.string(),
+          }),
+        ),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    await requirePapel(PAPEIS_COORDENACAO);
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin: any = getSupabaseAdmin();
+    for (const item of data.itens) {
+      const { data: row } = await admin
+        .from("inscricoes_digitais")
+        .select("dados")
+        .eq("id", item.inscricaoId)
+        .maybeSingle();
+      if (row)
+        await admin
+          .from("inscricoes_digitais")
+          .update({
+            dados: {
+              ...(row.dados ?? {}),
+              polo_preferido: item.poloNome,
+              municipio: item.municipio,
+            },
+            atualizado_em: new Date().toISOString(),
+          })
+          .eq("id", item.inscricaoId);
+    }
+    return { atualizadas: data.itens.length };
+  });
