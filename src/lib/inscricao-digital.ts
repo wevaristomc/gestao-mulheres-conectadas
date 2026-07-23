@@ -43,9 +43,11 @@ export const MUNICIPIOS_INSCRICAO = ["Belo Horizonte", "Betim", "Juatuba"] as co
 export const POLOS_INSCRICAO = [
   { nome: "BH - Conjunto Santa Maria", municipio: "Belo Horizonte" },
   { nome: "BH - Polo Barreiro", municipio: "Belo Horizonte" },
+  { nome: "BH - Polo Pedreira Lopes", municipio: "Belo Horizonte" },
   { nome: "Juatuba - Cidade Satelite", municipio: "Juatuba" },
   { nome: "Juatuba - SINE", municipio: "Juatuba" },
   { nome: "Betim - SETER", municipio: "Betim" },
+  { nome: "Outros", municipio: "" },
 ] as const;
 
 export type PoloInscricao = (typeof POLOS_INSCRICAO)[number]["nome"];
