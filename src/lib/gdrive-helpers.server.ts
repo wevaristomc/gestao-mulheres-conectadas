@@ -21,7 +21,10 @@ function requireEnv(): { lovableKey: string; connKey: string } {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const connKey = process.env.GOOGLE_DRIVE_API_KEY;
   if (!lovableKey) throw new Error("LOVABLE_API_KEY não configurada");
-  if (!connKey) throw new Error("GOOGLE_DRIVE_API_KEY não configurada — conecte o Google Drive nas configurações.");
+  if (!connKey)
+    throw new Error(
+      "GOOGLE_DRIVE_API_KEY não configurada — conecte o Google Drive nas configurações.",
+    );
   return { lovableKey, connKey };
 }
 
@@ -97,7 +100,9 @@ async function gwJson<T>(path: string, init: RequestInit = {}): Promise<T> {
     try {
       const j = JSON.parse(text);
       msg = j?.error?.message || j?.message || text;
-    } catch { /* keep raw */ }
+    } catch {
+      /* keep raw */
+    }
     throw new Error(`Google Drive: ${res.status} ${msg.slice(0, 300)}`);
   }
   return JSON.parse(text) as T;
@@ -198,7 +203,9 @@ export async function isDescendantOf(fileId: string, rootId: string): Promise<bo
 export async function downloadFileBase64(
   fileId: string,
 ): Promise<{ base64: string; contentType: string; size: number }> {
-  const res = await gwFetch(`/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`);
+  const res = await gwFetch(
+    `/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+  );
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`Google Drive: falha ao baixar (${res.status}) ${t.slice(0, 200)}`);
@@ -220,7 +227,9 @@ export async function exportGoogleFile(
   targetMime: string,
 ): Promise<{ text: string; contentType: string; size: number }> {
   const usp = new URLSearchParams({ mimeType: targetMime, supportsAllDrives: "true" });
-  const res = await gwFetch(`/drive/v3/files/${encodeURIComponent(fileId)}/export?${usp.toString()}`);
+  const res = await gwFetch(
+    `/drive/v3/files/${encodeURIComponent(fileId)}/export?${usp.toString()}`,
+  );
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`Google Drive: export falhou (${res.status}) ${t.slice(0, 200)}`);
@@ -231,7 +240,10 @@ export async function exportGoogleFile(
 }
 
 /** Lista arquivos e pastas recursivamente sob rootId (BFS). */
-export async function listRecursive(rootId: string, maxItems = 5000): Promise<Array<GDriveFile & { pasta_caminho: string }>> {
+export async function listRecursive(
+  rootId: string,
+  maxItems = 5000,
+): Promise<Array<GDriveFile & { pasta_caminho: string }>> {
   const out: Array<GDriveFile & { pasta_caminho: string }> = [];
   // BFS: fila de { folderId, path }
   const queue: Array<{ folderId: string; path: string }> = [{ folderId: rootId, path: "" }];
@@ -240,7 +252,10 @@ export async function listRecursive(rootId: string, maxItems = 5000): Promise<Ar
     let pageToken: string | null | undefined = null;
     do {
       const page: { files: GDriveFile[]; nextPageToken?: string | null } = await listChildren({
-        folderId, pageToken, pageSize: 500, orderBy: "folder,name",
+        folderId,
+        pageToken,
+        pageSize: 500,
+        orderBy: "folder,name",
       });
       for (const f of page.files ?? []) {
         if (out.length >= maxItems) break;
@@ -257,11 +272,14 @@ export async function listRecursive(rootId: string, maxItems = 5000): Promise<Ar
 }
 
 export async function createFolder(name: string, parentId: string): Promise<GDriveFile> {
-  return gwJson<GDriveFile>(`/drive/v3/files?fields=id,name,mimeType,parents,webViewLink&supportsAllDrives=true`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] }),
-  });
+  return gwJson<GDriveFile>(
+    `/drive/v3/files?fields=id,name,mimeType,parents,webViewLink&supportsAllDrives=true`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] }),
+    },
+  );
 }
 
 export async function uploadFile(input: {
@@ -296,6 +314,42 @@ export async function uploadFile(input: {
   );
   const text = await res.text();
   if (!res.ok) throw new Error(`Google Drive: upload falhou (${res.status}) ${text.slice(0, 200)}`);
+  return JSON.parse(text) as GDriveFile;
+}
+
+export async function updateFile(input: {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  base64: string;
+}): Promise<GDriveFile> {
+  const boundary = `----lovable-${Math.random().toString(36).slice(2)}`;
+  const meta = { name: input.name, mimeType: input.mimeType };
+  const bin = atob(input.base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  const enc = new TextEncoder();
+  const pre = enc.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
+      `--${boundary}\r\nContent-Type: ${input.mimeType}\r\nContent-Transfer-Encoding: binary\r\n\r\n`,
+  );
+  const post = enc.encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(pre.length + bytes.length + post.length);
+  body.set(pre, 0);
+  body.set(bytes, pre.length);
+  body.set(post, pre.length);
+
+  const res = await gwFetch(
+    `/upload/drive/v3/files/${encodeURIComponent(input.fileId)}?uploadType=multipart&fields=id,name,mimeType,parents,webViewLink&supportsAllDrives=true`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+      body,
+    },
+  );
+  const text = await res.text();
+  if (!res.ok)
+    throw new Error(`Google Drive: atualização falhou (${res.status}) ${text.slice(0, 200)}`);
   return JSON.parse(text) as GDriveFile;
 }
 

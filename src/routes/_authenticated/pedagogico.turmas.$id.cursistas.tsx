@@ -1,19 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Download, Landmark } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Download, ExternalLink, FolderPlus, Landmark, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { cursistasByTurmaOptions, pickFirst, type Row } from "@/lib/pedagogico-queries";
-import { BankFieldsInlineDialog, type BankInlineTarget } from "@/components/mte/bank-fields-inline-dialog";
+import {
+  BankFieldsInlineDialog,
+  type BankInlineTarget,
+} from "@/components/mte/bank-fields-inline-dialog";
 import { useHasRole } from "@/hooks/use-active-context";
 import { formatCpf } from "@/lib/cpf";
 import { downloadCSV, toCSV } from "@/lib/csv";
+import { criarPastaDriveCursista } from "@/lib/cursistas-drive.functions";
 
 export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/cursistas")({
   component: CursistasTab,
@@ -21,6 +31,7 @@ export const Route = createFileRoute("/_authenticated/pedagogico/turmas/$id/curs
 
 function CursistasTab() {
   const { id: turmaId } = Route.useParams();
+  const queryClient = useQueryClient();
   const q = useQuery(cursistasByTurmaOptions(turmaId));
   const rows = q.data?.rows ?? [];
   const erro = q.data?.error ?? (q.isError ? String(q.error) : null);
@@ -39,6 +50,9 @@ function CursistasTab() {
     agencia: string | null;
     conta: string | null;
     beneficiariaId: string | null;
+    cursistaId: string | null;
+    pastaDriveId: string | null;
+    pastaDriveUrl: string | null;
   };
 
   const extrair = (m: Row): Extraido => {
@@ -70,11 +84,27 @@ function CursistasTab() {
       banco: (pickFirst(beneficiaria, ["banco"]) as string | null) ?? null,
       agencia: (pickFirst(beneficiaria, ["agencia"]) as string | null) ?? null,
       conta: (pickFirst(beneficiaria, ["conta"]) as string | null) ?? null,
-      beneficiariaId: (beneficiaria?.id as string | undefined) ?? (m.beneficiaria_id as string | undefined) ?? null,
+      beneficiariaId:
+        (beneficiaria?.id as string | undefined) ??
+        (m.beneficiaria_id as string | undefined) ??
+        null,
+      cursistaId:
+        (cursista?.id as string | undefined) ?? (m.cursista_id as string | undefined) ?? null,
+      pastaDriveId: (cursista?.pasta_drive_id as string | undefined) ?? null,
+      pastaDriveUrl: (cursista?.pasta_drive_url as string | undefined) ?? null,
     };
   };
 
   const linhas = rows.map(extrair);
+
+  const criarPastaDrive = useMutation({
+    mutationFn: async (cursistaId: string) => criarPastaDriveCursista({ data: { cursistaId } }),
+    onSuccess: () => {
+      toast.success("Pasta e documentos prontos no Drive.");
+      queryClient.invalidateQueries({ queryKey: ["pedagogico", "cursistas", turmaId] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const abrirBanco = (e: Extraido) => {
     if (!e.cpf) return;
@@ -111,7 +141,10 @@ function CursistasTab() {
       conta: l.conta ?? "",
       status: l.status,
     }));
-    downloadCSV(`contas-turma-${turmaId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.csv`, toCSV(data, cols));
+    downloadCSV(
+      `contas-turma-${turmaId.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.csv`,
+      toCSV(data, cols),
+    );
   };
 
   if (erro) {
@@ -128,118 +161,241 @@ function CursistasTab() {
 
   return (
     <>
-    <div className="mb-3 flex items-center justify-end">
-      <Button size="sm" variant="outline" onClick={exportarContas} disabled={linhas.length === 0}>
-        <Download className="mr-1 h-4 w-4" /> Exportar contas (CSV)
-      </Button>
-    </div>
-    <div className="rounded-md border">
-      {/* Mobile: card list — desktop: table */}
-      <ul className="divide-y md:hidden">
-        {q.isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <li key={i} className="p-3">
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="mt-2 h-3 w-56" />
-            </li>
-          ))
-        ) : linhas.length === 0 ? (
-          <li className="p-6 text-center text-sm text-muted-foreground">
-            Nenhuma cursista matriculada nesta turma.
-          </li>
-        ) : (
-          linhas.map((l) => (
-            <li key={l.id} className="flex min-w-0 items-start justify-between gap-3 p-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="truncate text-sm font-semibold">{l.nome}</div>
-                <div className="truncate text-xs text-muted-foreground">{l.email}</div>
-                <div className="text-xs">
-                  {l.banco || l.agencia || l.conta ? (
-                    <span className="text-muted-foreground">
-                      {l.banco ?? "—"} • Ag. {l.agencia ?? "—"} • Conta {l.conta ?? "—"}
-                    </span>
-                  ) : (
-                    <Badge variant="destructive" className="text-[10px]">sem conta bancária</Badge>
-                  )}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                {canWrite && l.cpf ? (
-                  <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => abrirBanco(l)} title="Dados bancários">
-                    <Landmark className="h-4 w-4" />
-                  </Button>
-                ) : null}
-                <Badge variant="secondary" className="shrink-0 capitalize">{l.status}</Badge>
-              </div>
-            </li>
-          ))
-        )}
-      </ul>
-      <div className="hidden md:block">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Cursista</TableHead>
-            <TableHead>E-mail</TableHead>
-            <TableHead>Dados bancários</TableHead>
-            <TableHead className="w-32">Status</TableHead>
-            <TableHead className="w-20 text-right"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      <div className="mb-3 flex items-center justify-end">
+        <Button size="sm" variant="outline" onClick={exportarContas} disabled={linhas.length === 0}>
+          <Download className="mr-1 h-4 w-4" /> Exportar contas (CSV)
+        </Button>
+      </div>
+      <div className="rounded-md border">
+        {/* Mobile: card list — desktop: table */}
+        <ul className="divide-y md:hidden">
           {q.isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-56" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-              </TableRow>
+              <li key={i} className="p-3">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="mt-2 h-3 w-56" />
+              </li>
             ))
           ) : linhas.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
-                Nenhuma cursista matriculada nesta turma.
-              </TableCell>
-            </TableRow>
+            <li className="p-6 text-center text-sm text-muted-foreground">
+              Nenhuma cursista matriculada nesta turma.
+            </li>
           ) : (
             linhas.map((l) => (
-              <TableRow key={l.id}>
-                <TableCell className="font-medium">{l.nome}</TableCell>
-                <TableCell className="text-muted-foreground">{l.email}</TableCell>
-                <TableCell className="text-sm">
-                  {l.banco || l.agencia || l.conta ? (
-                    <span className="text-muted-foreground">
-                      {l.banco ?? "—"} • Ag. {l.agencia ?? "—"} • Conta {l.conta ?? "—"}
-                    </span>
-                  ) : (
-                    <Badge variant="destructive" className="text-[10px]">sem conta</Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="capitalize">{l.status}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  {canWrite && l.cpf ? (
-                    <Button size="icon" variant="ghost" onClick={() => abrirBanco(l)} title="Dados bancários">
-                      <Landmark className="h-3.5 w-3.5" />
+              <li key={l.id} className="flex min-w-0 items-start justify-between gap-3 p-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="truncate text-sm font-semibold">{l.nome}</div>
+                  <div className="truncate text-xs text-muted-foreground">{l.email}</div>
+                  <div className="text-xs">
+                    {l.banco || l.agencia || l.conta ? (
+                      <span className="text-muted-foreground">
+                        {l.banco ?? "—"} • Ag. {l.agencia ?? "—"} • Conta {l.conta ?? "—"}
+                      </span>
+                    ) : (
+                      <Badge variant="destructive" className="text-[10px]">
+                        sem conta bancária
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {l.pastaDriveUrl ? (
+                    <>
+                      <Button
+                        asChild
+                        size="icon"
+                        variant="ghost"
+                        className="h-9 w-9"
+                        title="Abrir pasta no Drive"
+                      >
+                        <a href={l.pastaDriveUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                      {canWrite ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9"
+                          onClick={() => criarPastaDrive.mutate(l.cursistaId!)}
+                          disabled={criarPastaDrive.isPending || !l.cursistaId}
+                          title="Sincronizar documentos no Drive"
+                        >
+                          {criarPastaDrive.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FolderPlus className="h-4 w-4" />
+                          )}
+                        </Button>
+                      ) : null}
+                    </>
+                  ) : canWrite && l.cursistaId ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9"
+                      onClick={() => criarPastaDrive.mutate(l.cursistaId!)}
+                      disabled={criarPastaDrive.isPending}
+                      title="Criar pasta e sincronizar documentos"
+                    >
+                      {criarPastaDrive.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FolderPlus className="h-4 w-4" />
+                      )}
                     </Button>
                   ) : null}
-                </TableCell>
-              </TableRow>
+                  {canWrite && l.cpf ? (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9"
+                      onClick={() => abrirBanco(l)}
+                      title="Dados bancários"
+                    >
+                      <Landmark className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                  <Badge variant="secondary" className="shrink-0 capitalize">
+                    {l.status}
+                  </Badge>
+                </div>
+              </li>
             ))
           )}
-        </TableBody>
-      </Table>
+        </ul>
+        <div className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cursista</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>Dados bancários</TableHead>
+                <TableHead className="w-32">Status</TableHead>
+                <TableHead className="w-20 text-right"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {q.isLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell>
+                      <Skeleton className="h-4 w-40" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-56" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-40" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-16" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-8" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : linhas.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                    Nenhuma cursista matriculada nesta turma.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                linhas.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-medium">{l.nome}</TableCell>
+                    <TableCell className="text-muted-foreground">{l.email}</TableCell>
+                    <TableCell className="text-sm">
+                      {l.banco || l.agencia || l.conta ? (
+                        <span className="text-muted-foreground">
+                          {l.banco ?? "—"} • Ag. {l.agencia ?? "—"} • Conta {l.conta ?? "—"}
+                        </span>
+                      ) : (
+                        <Badge variant="destructive" className="text-[10px]">
+                          sem conta
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="capitalize">
+                        {l.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {l.pastaDriveUrl ? (
+                          <>
+                            <Button
+                              asChild
+                              size="icon"
+                              variant="ghost"
+                              title="Abrir pasta no Drive"
+                            >
+                              <a href={l.pastaDriveUrl} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            </Button>
+                            {canWrite ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => criarPastaDrive.mutate(l.cursistaId!)}
+                                disabled={criarPastaDrive.isPending || !l.cursistaId}
+                                title="Sincronizar documentos no Drive"
+                              >
+                                {criarPastaDrive.isPending ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <FolderPlus className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            ) : null}
+                          </>
+                        ) : canWrite && l.cursistaId ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => criarPastaDrive.mutate(l.cursistaId!)}
+                            disabled={criarPastaDrive.isPending}
+                            title="Criar pasta e sincronizar documentos"
+                          >
+                            {criarPastaDrive.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <FolderPlus className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        ) : null}
+                        {canWrite && l.cpf ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => abrirBanco(l)}
+                            title="Dados bancários"
+                          >
+                            <Landmark className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-    </div>
-    <BankFieldsInlineDialog
-      open={!!bankTarget}
-      onOpenChange={(o) => !o && setBankTarget(null)}
-      target={bankTarget}
-      invalidateKeys={[["pedagogico", "cursistas", turmaId], ["mte", "beneficiarias"]]}
-    />
+      <BankFieldsInlineDialog
+        open={!!bankTarget}
+        onOpenChange={(o) => !o && setBankTarget(null)}
+        target={bankTarget}
+        invalidateKeys={[
+          ["pedagogico", "cursistas", turmaId],
+          ["mte", "beneficiarias"],
+        ]}
+      />
     </>
   );
 }
