@@ -68,6 +68,14 @@ export const dadosInscricaoDigitalSchema = z
     nome_social: textoOpcional,
     cpf: z.string().trim().refine(isValidCpf, "CPF inválido."),
     data_nascimento: textoOpcional,
+    idade: z
+      .union([z.number(), z.string(), z.null()])
+      .optional()
+      .transform((v) => {
+        if (v == null || v === "") return null;
+        const n = typeof v === "number" ? v : parseInt(String(v).replace(/\D/g, ""), 10);
+        return Number.isFinite(n) && n >= 0 && n <= 120 ? n : null;
+      }),
     genero: textoOpcional,
     raca: textoOpcional,
     pcd: z.boolean().default(false),
@@ -190,6 +198,7 @@ export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   nome_social: "",
   cpf: "",
   data_nascimento: "",
+  idade: null,
   genero: "",
   raca: "",
   pcd: false,
