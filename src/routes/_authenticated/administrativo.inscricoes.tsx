@@ -856,7 +856,10 @@ function InscricoesDigitaisTab() {
                       </CardContent>
                     </Card>
                   ) : null}
-                {dadosEdicao.respostas_customizadas && Object.keys(dadosEdicao.respostas_customizadas).length > 0 ? (\n                  <div className="rounded-lg border bg-muted/20 p-4"><h3 className="mb-3 font-semibold">Respostas adicionais</h3><div className="space-y-2 text-sm">{Object.values(dadosEdicao.respostas_customizadas).map((item: any, index) => (<div key={index}><span className="font-medium">{item.label}:</span>{" "}{Array.isArray(item.valor) ? item.valor.join(", ") : String(item.valor ?? "—")}</div>))}</div></div>\n                ) : null}\n                </div>
+                {dadosEdicao.respostas_customizadas && Object.keys(dadosEdicao.respostas_customizadas).length > 0 ? (
+                  <div className="rounded-lg border bg-muted/20 p-4"><h3 className="mb-3 font-semibold">Respostas adicionais</h3><div className="space-y-2 text-sm">{Object.values(dadosEdicao.respostas_customizadas).map((item: any, index) => (<div key={index}><span className="font-medium">{item.label}:</span>{" "}{Array.isArray(item.valor) ? item.valor.join(", ") : String(item.valor ?? "—")}</div>))}</div></div>
+                ) : null}
+                </div>
               </ScrollArea>
               <ScrollArea className="h-[calc(94vh-150px)]">
                 <div className="space-y-5 p-6">
