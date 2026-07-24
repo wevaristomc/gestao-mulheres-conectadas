@@ -97,3 +97,18 @@ export const removerInscricaoPergunta = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const reordenarInscricaoPerguntas = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requirePapel(PAPEIS_COORDENACAO)])
+  .inputValidator((input: unknown) => z.object({ ids: z.array(z.string().uuid()) }).parse(input))
+  .handler(async ({ data }) => {
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    for (const [ordem, id] of data.ids.entries()) {
+      const { error } = await getSupabaseAdmin()
+        .from("inscricao_perguntas_customizadas")
+        .update({ ordem, atualizado_em: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
+  });

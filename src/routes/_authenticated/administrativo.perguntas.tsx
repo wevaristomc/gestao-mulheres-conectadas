@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   listarInscricaoPerguntasAdmin,
   removerInscricaoPergunta,
   salvarInscricaoPergunta,
+  reordenarInscricaoPerguntas,
   type PerguntaCustomizada,
 } from "@/lib/inscricao-perguntas.functions";
 export const Route = createFileRoute("/_authenticated/administrativo/perguntas")({
@@ -49,6 +50,17 @@ function PerguntasPage() {
       qc.invalidateQueries({ queryKey: ["admin", "perguntas"] });
     },
   });
+  const mover = (indice: number, delta: number) => {
+    const lista = [...(q.data ?? [])];
+    const destino = indice + delta;
+    if (destino < 0 || destino >= lista.length) return;
+    [lista[indice], lista[destino]] = [lista[destino], lista[indice]];
+    reordenarInscricaoPerguntas({
+      data: { ids: lista.filter((item) => item.id).map((item) => item.id!) },
+    })
+      .then(() => qc.invalidateQueries({ queryKey: ["admin", "perguntas"] }))
+      .catch((e: Error) => toast.error(e.message));
+  };
   const novo = () =>
     setEdicao({
       id: undefined,
@@ -158,6 +170,30 @@ function PerguntasPage() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    mover(
+                      (q.data ?? []).findIndex((item) => item.id === p.id),
+                      -1,
+                    )
+                  }
+                >
+                  ↑
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    mover(
+                      (q.data ?? []).findIndex((item) => item.id === p.id),
+                      1,
+                    )
+                  }
+                >
+                  ↓
+                </Button>
                 <Button variant="outline" onClick={() => setEdicao(p)}>
                   Editar
                 </Button>

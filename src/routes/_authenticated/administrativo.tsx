@@ -15,6 +15,7 @@ function AdministrativoLayout() {
   const tabs = [
     { to: "/administrativo/inscricoes", label: "Inscrições" },
     { to: "/administrativo/depoimentos", label: "Landing" },
+    { to: "/administrativo/perguntas", label: "Perguntas da inscrição" },
     { to: "/administrativo/qualificacao", label: "Qualificação para Certificado" },
     { to: "/administrativo/beneficios", label: "Benefícios" },
     { to: "/administrativo/materiais", label: "Materiais" },
