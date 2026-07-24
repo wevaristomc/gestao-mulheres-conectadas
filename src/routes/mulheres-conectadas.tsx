@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -131,6 +132,51 @@ function MulheresConectadasLanding() {
   });
   const depoimentos = depoimentosQ.data?.length ? depoimentosQ.data : DEPOIMENTOS_FALLBACK;
   const heroConfig = heroConfigQ.data;
+  const conteudo = (heroConfig?.conteudo ?? {}) as Record<string, any>;
+  const bloco = (nome: string) =>
+    (conteudo[nome] && typeof conteudo[nome] === "object" ? conteudo[nome] : {}) as Record<
+      string,
+      any
+    >;
+  const heroTexto = bloco("hero");
+  const projetoTexto = bloco("projeto");
+  const jornadaTexto = bloco("jornada");
+  const participarTexto = bloco("comoParticipar");
+  const metricas =
+    Array.isArray(conteudo.metricas) && conteudo.metricas.length
+      ? conteudo.metricas
+      : [
+          { valor: "150h", rotulo: "de formação híbrida" },
+          { valor: "600", rotulo: "mulheres nos dois ciclos" },
+          { valor: "12", rotulo: "turmas previstas" },
+          { valor: "75%", rotulo: "frequência para certificação" },
+        ];
+  const trilhas =
+    Array.isArray(jornadaTexto.trilhas) && jornadaTexto.trilhas.length
+      ? jornadaTexto.trilhas
+      : TRILHAS;
+  const passos =
+    Array.isArray(participarTexto.passos) && participarTexto.passos.length
+      ? participarTexto.passos
+      : [
+          {
+            titulo: "Preencha",
+            texto: "Informe seus dados e suas preferências de turno e localização.",
+          },
+          {
+            titulo: "Aguarde",
+            texto: "A coordenação analisa a inscrição e faz a alocação na turma.",
+          },
+          { titulo: "Assine", texto: "Imprima e assine a ficha física obrigatória." },
+        ];
+  const elegibilidade =
+    Array.isArray(participarTexto.elegibilidade) && participarTexto.elegibilidade.length
+      ? participarTexto.elegibilidade
+      : [
+          "Mulheres em situação de vulnerabilidade social.",
+          "Residentes em Belo Horizonte, Betim ou Juatuba.",
+          "Pessoas com deficiência: 10% das vagas de cada turma são reservadas.",
+        ];
 
   const municipios = useMemo(() => {
     const base = new Set<string>(MUNICIPIOS_INSCRICAO);
@@ -211,33 +257,35 @@ function MulheresConectadasLanding() {
           <div className="mx-auto grid min-h-[680px] max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:py-24">
             <div>
               <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[#f5b033]">
-                <Sparkles className="size-4" /> Formação, autonomia e novos caminhos
+                <Sparkles className="size-4" />{" "}
+                {heroTexto.selo ?? "Formação, autonomia e novos caminhos"}
               </div>
               <h1 className="max-w-4xl font-display text-5xl font-bold leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-                Tecnologia para transformar possibilidades em futuro.
+                {heroTexto.titulo ?? "Tecnologia para transformar possibilidades em futuro."}
               </h1>
               <p className="mt-7 max-w-2xl text-lg leading-8 text-white/78 sm:text-xl">
-                O Mulheres Conectadas oferece formação gratuita em tecnologia e inovação digital
-                para mulheres de Belo Horizonte, Betim e Juatuba, com aprendizado prático,
-                acolhimento e conexão com o mundo do trabalho.
+                {heroTexto.subtitulo ??
+                  "O Mulheres Conectadas oferece formação gratuita em tecnologia e inovação digital para mulheres de Belo Horizonte, Betim e Juatuba, com aprendizado prático, acolhimento e conexão com o mundo do trabalho."}
               </p>
               <div className="mt-10 flex flex-col gap-3 sm:flex-row">
                 <Link
                   to="/inscricao"
                   className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-[#f5b033] px-7 font-bold text-[#05244d] shadow-[0_14px_36px_rgba(245,176,51,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ffc24d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
                 >
-                  Quero fazer minha inscrição <ArrowRight className="size-5" />
+                  {heroTexto.cta_texto ?? "Quero fazer minha inscrição"}{" "}
+                  <ArrowRight className="size-5" />
                 </Link>
                 <a
                   href="#formacao"
                   className="inline-flex min-h-14 items-center justify-center rounded-full border border-white/30 px-7 font-semibold transition hover:bg-white/10"
                 >
-                  Conhecer a formação
+                  {heroTexto.cta_secundario_texto ?? "Conhecer a formação"}
                 </a>
               </div>
               <p className="mt-5 flex items-start gap-2 text-sm leading-6 text-white/65">
-                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[#f5b033]" />A inscrição é
-                gratuita e passa por análise. O envio do formulário não garante a vaga.
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[#f5b033]" />
+                {heroTexto.aviso_analise ??
+                  "A inscrição é gratuita e passa por análise. O envio do formulário não garante a vaga."}
               </p>
             </div>
 
@@ -248,13 +296,13 @@ function MulheresConectadasLanding() {
                 permitirSom={heroConfig.heroVideoSom}
               />
             ) : (
-              <HeroMetricsCard />
+              <HeroMetricsCard metricas={metricas} />
             )}
           </div>
 
           {heroConfig?.heroVideoUrl ? (
             <div className="mx-auto -mt-8 max-w-7xl px-4 pb-14 sm:px-6 lg:px-8">
-              <HeroMetricsBand />
+              <HeroMetricsBand metricas={metricas} />
             </div>
           ) : null}
         </section>
@@ -285,28 +333,32 @@ function MulheresConectadasLanding() {
             <div>
               <SectionEyebrow>O projeto</SectionEyebrow>
               <h2 className="mt-4 max-w-xl font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                Mais mulheres preparadas para ocupar o presente digital.
+                {projetoTexto.titulo ?? "Mais mulheres preparadas para ocupar o presente digital."}
               </h2>
             </div>
             <div className="space-y-7 text-lg leading-8 text-[#05244d]/75">
               <p>
-                Mulheres Conectadas é uma ação de qualificação social e profissional que aproxima
-                mulheres em situação de vulnerabilidade das competências mais usadas na vida digital
-                e em áreas de tecnologia.
+                {projetoTexto.paragrafo1 ??
+                  "Mulheres Conectadas é uma ação de qualificação social e profissional que aproxima mulheres em situação de vulnerabilidade das competências mais usadas na vida digital e em áreas de tecnologia."}
               </p>
               <p>
-                A proposta combina conhecimento, prática e acompanhamento para fortalecer a
-                autonomia, ampliar possibilidades de inserção produtiva e reduzir desigualdades de
-                gênero no setor tecnológico.
+                {projetoTexto.paragrafo2 ??
+                  "A proposta combina conhecimento, prática e acompanhamento para fortalecer a autonomia, ampliar possibilidades de inserção produtiva e reduzir desigualdades de gênero no setor tecnológico."}
               </p>
               <div className="grid gap-4 pt-2 sm:grid-cols-2">
-                <Feature icon={HeartHandshake} title="Acolhimento e permanência">
-                  Materiais, transporte e lanche estão previstos no plano de trabalho para apoiar a
-                  participação, conforme as regras da execução.
+                <Feature
+                  icon={HeartHandshake}
+                  title={projetoTexto.feature1_titulo ?? "Acolhimento e permanência"}
+                >
+                  {projetoTexto.feature1_texto ??
+                    "Materiais, transporte e lanche estão previstos no plano de trabalho para apoiar a participação, conforme as regras da execução."}
                 </Feature>
-                <Feature icon={BriefcaseBusiness} title="Conexão com oportunidades">
-                  Desenvolvimento de competências alinhadas a Programação Web e Suporte de TI, sem
-                  promessa de contratação.
+                <Feature
+                  icon={BriefcaseBusiness}
+                  title={projetoTexto.feature2_titulo ?? "Conexão com oportunidades"}
+                >
+                  {projetoTexto.feature2_texto ??
+                    "Desenvolvimento de competências alinhadas a Programação Web e Suporte de TI, sem promessa de contratação."}
                 </Feature>
               </div>
             </div>
@@ -318,15 +370,15 @@ function MulheresConectadasLanding() {
             <div className="max-w-3xl">
               <SectionEyebrow>Sua jornada de aprendizagem</SectionEyebrow>
               <h2 className="mt-4 font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                150 horas para aprender, praticar e avançar.
+                {jornadaTexto.titulo ?? "150 horas para aprender, praticar e avançar."}
               </h2>
               <p className="mt-5 text-lg leading-8 text-[#05244d]/70">
-                A matriz formativa é híbrida e reúne conhecimentos básicos e específicos, com
-                atividades práticas e acompanhamento de frequência.
+                {jornadaTexto.subtitulo ??
+                  "A matriz formativa é híbrida e reúne conhecimentos básicos e específicos, com atividades práticas e acompanhamento de frequência."}
               </p>
             </div>
             <div className="mt-12 grid gap-5 lg:grid-cols-3">
-              {TRILHAS.map((trilha, index) => (
+              {trilhas.map((trilha: any, index) => (
                 <article
                   key={trilha.titulo}
                   className="group relative overflow-hidden rounded-[2rem] border border-[#05244d]/10 bg-white p-7 shadow-[0_18px_60px_rgba(5,36,77,0.06)] transition hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(5,36,77,0.12)]"
@@ -387,38 +439,29 @@ function MulheresConectadasLanding() {
                     Como participar
                   </p>
                   <h2 className="mt-4 max-w-2xl font-display text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">
-                    Sua inscrição começa agora.
+                    {participarTexto.titulo ?? "Sua inscrição começa agora."}
                   </h2>
                   <p className="mt-5 max-w-2xl text-lg leading-8 text-white/80">
-                    Preencha seus dados e informe suas preferências de turno e localização. A
-                    coordenação analisa a inscrição e faz a alocação na turma mais adequada.
+                    {participarTexto.subtitulo ??
+                      "Preencha seus dados e informe suas preferências de turno e localização. A coordenação analisa a inscrição e faz a alocação na turma mais adequada."}
                   </p>
                   <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                    <Step
-                      number="1"
-                      title="Preencha"
-                      text="Informe seus dados e suas preferências de turno e localização."
-                    />
-                    <Step
-                      number="2"
-                      title="Aguarde"
-                      text="A coordenação analisa a inscrição e faz a alocação na turma."
-                    />
-                    <Step
-                      number="3"
-                      title="Assine"
-                      text="Imprima e assine a ficha física obrigatória."
-                    />
+                    {passos.map((passo: any, index: number) => (
+                      <Step
+                        key={index}
+                        number={String(index + 1)}
+                        title={passo.titulo}
+                        text={passo.texto}
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="flex flex-col justify-center bg-[#05244d] p-8 sm:p-12 lg:p-14">
                   <p className="font-display text-2xl font-bold">Quem pode se inscrever?</p>
                   <ul className="mt-6 space-y-4 text-sm leading-6 text-white/80">
-                    <Eligibility>Mulheres em situação de vulnerabilidade social.</Eligibility>
-                    <Eligibility>Residentes em Belo Horizonte, Betim ou Juatuba.</Eligibility>
-                    <Eligibility>
-                      Pessoas com deficiência: 10% das vagas de cada turma são reservadas.
-                    </Eligibility>
+                    {elegibilidade.map((item: string, index: number) => (
+                      <Eligibility key={`${item}-${index}`}>{item}</Eligibility>
+                    ))}
                   </ul>
                   <Link
                     to="/inscricao"
@@ -508,16 +551,32 @@ function MulheresConectadasLanding() {
   );
 }
 
-function HeroMetricsCard() {
+function HeroMetricsCard({ metricas }: { metricas: any[] }) {
   return (
     <div className="relative mx-auto w-full max-w-xl">
       <div className="absolute -inset-4 rotate-3 rounded-[2.5rem] border border-[#f5b033]/45" />
       <div className="relative overflow-hidden rounded-[2.25rem] border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur md:p-7">
         <div className="grid grid-cols-2 gap-4">
-          <MetricCard value="150h" label="de formação híbrida" icon={Clock3} />
-          <MetricCard value="600" label="mulheres nos dois ciclos" icon={Users} />
-          <MetricCard value="12" label="turmas previstas" icon={GraduationCap} />
-          <MetricCard value="75%" label="frequência para certificação" icon={CheckCircle2} />
+          <MetricCard
+            value={metricas[0]?.valor ?? "150h"}
+            label={metricas[0]?.rotulo ?? "de formação híbrida"}
+            icon={Clock3}
+          />
+          <MetricCard
+            value={metricas[1]?.valor ?? "600"}
+            label={metricas[1]?.rotulo ?? "mulheres nos dois ciclos"}
+            icon={Users}
+          />
+          <MetricCard
+            value={metricas[2]?.valor ?? "12"}
+            label={metricas[2]?.rotulo ?? "turmas previstas"}
+            icon={GraduationCap}
+          />
+          <MetricCard
+            value={metricas[3]?.valor ?? "75%"}
+            label={metricas[3]?.rotulo ?? "frequência para certificação"}
+            icon={CheckCircle2}
+          />
         </div>
         <div className="mt-5 rounded-2xl bg-[#f5b033] p-5 text-[#05244d]">
           <p className="text-xs font-bold uppercase tracking-[0.15em]">Qualificação profissional</p>
@@ -530,14 +589,34 @@ function HeroMetricsCard() {
   );
 }
 
-function HeroMetricsBand() {
+function HeroMetricsBand({ metricas }: { metricas: any[] }) {
   return (
     <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-xl backdrop-blur">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard compact value="150h" label="de formação híbrida" icon={Clock3} />
-        <MetricCard compact value="600" label="mulheres nos dois ciclos" icon={Users} />
-        <MetricCard compact value="12" label="turmas previstas" icon={GraduationCap} />
-        <MetricCard compact value="75%" label="frequência para certificação" icon={CheckCircle2} />
+        <MetricCard
+          compact
+          value={metricas[0]?.valor ?? "150h"}
+          label={metricas[0]?.rotulo ?? "de formação híbrida"}
+          icon={Clock3}
+        />
+        <MetricCard
+          compact
+          value={metricas[1]?.valor ?? "600"}
+          label={metricas[1]?.rotulo ?? "mulheres nos dois ciclos"}
+          icon={Users}
+        />
+        <MetricCard
+          compact
+          value={metricas[2]?.valor ?? "12"}
+          label={metricas[2]?.rotulo ?? "turmas previstas"}
+          icon={GraduationCap}
+        />
+        <MetricCard
+          compact
+          value={metricas[3]?.valor ?? "75%"}
+          label={metricas[3]?.rotulo ?? "frequência para certificação"}
+          icon={CheckCircle2}
+        />
       </div>
     </div>
   );
