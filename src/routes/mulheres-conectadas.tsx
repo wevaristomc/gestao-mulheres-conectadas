@@ -446,21 +446,14 @@ function MulheresConectadasLanding() {
                       "Preencha seus dados e informe suas preferências de turno e localização. A coordenação analisa a inscrição e faz a alocação na turma mais adequada."}
                   </p>
                   <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                    <Step
-                      number="1"
-                      title="Preencha"
-                      text="Informe seus dados e suas preferências de turno e localização."
-                    />
-                    <Step
-                      number="2"
-                      title="Aguarde"
-                      text="A coordenação analisa a inscrição e faz a alocação na turma."
-                    />
-                    <Step
-                      number="3"
-                      title="Assine"
-                      text="Imprima e assine a ficha física obrigatória."
-                    />
+                    {passos.map((passo: any, index: number) => (
+                      <Step
+                        key={index}
+                        number={String(index + 1)}
+                        title={passo.titulo}
+                        text={passo.texto}
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="flex flex-col justify-center bg-[#05244d] p-8 sm:p-12 lg:p-14">
