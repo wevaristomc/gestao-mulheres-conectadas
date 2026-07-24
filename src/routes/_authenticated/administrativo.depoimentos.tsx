@@ -414,6 +414,13 @@ function LandingTextEditor({
             Restaurar texto original
           </Button>
         </section>
+        <section>
+          <h3 className="mb-3 text-lg font-semibold">Aviso da inscrição</h3>{" "}
+          {campo("inscricao", "aviso", "Aviso exibido no topo do formulário", true)}{" "}
+          <Button variant="ghost" onClick={() => restaurar("inscricao")}>
+            Restaurar texto original{" "}
+          </Button>{" "}
+        </section>{" "}
         <Button onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar textos
         </Button>

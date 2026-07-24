@@ -308,6 +308,15 @@ export const criarInscricaoFormulario = createServerFn({ method: "POST" })
 
     const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin: any = getSupabaseAdmin();
+    const { data: perguntasAtivas } = await admin
+      .from("inscricao_perguntas_customizadas")
+      .select("chave,label,obrigatoria")
+      .eq("ativo", true);
+    for (const pergunta of perguntasAtivas ?? []) {
+      const valor = (data.dados as any).respostas_customizadas?.[pergunta.chave]?.valor;
+      const vazio = valor == null || valor === "" || (Array.isArray(valor) && valor.length === 0);
+      if (pergunta.obrigatoria && vazio) throw new Error(`Preencha a pergunta: ${pergunta.label}`);
+    }
     let { data: projeto, error: projetoError } = await admin
       .from("projetos")
       .select("id")

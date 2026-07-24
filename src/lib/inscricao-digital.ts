@@ -148,6 +148,10 @@ export const dadosInscricaoDigitalSchema = z
     motivo_rejeicao: textoOpcional,
     arquivo_nome_original: textoOpcional,
     drive_arquivo_id: textoOpcional,
+    respostas_customizadas: z
+      .record(z.object({ label: z.string(), valor: z.any() }))
+      .optional()
+      .default({}),
   })
   .superRefine((dados, contexto) => {
     if (dados.usa_nome_social === "sim" && !dados.nome_social.trim()) {
@@ -237,6 +241,7 @@ export const DADOS_INSCRICAO_VAZIOS: DadosInscricaoDigital = {
   motivo_rejeicao: "",
   arquivo_nome_original: "",
   drive_arquivo_id: "",
+  respostas_customizadas: {},
 };
 
 export type TurmaInscricaoPublica = {
