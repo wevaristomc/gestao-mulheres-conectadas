@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -10,9 +11,11 @@ import {
 } from "@/components/inscricoes/inscricao-digital-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { abrirFichaInscricaoParaImpressao } from "@/lib/ficha-inscricao-print";
 import {
   DADOS_INSCRICAO_VAZIOS,
@@ -25,6 +28,11 @@ import {
   listarTurmasInscricaoPublica,
 } from "@/lib/inscricoes-digitais.functions";
 import { ORIGEM_PUBLICA } from "@/lib/site";
+import { listarLandingHeroConfig } from "@/lib/landing-config.functions";
+import {
+  listarInscricaoPerguntasPublicas,
+  type PerguntaCustomizada,
+} from "@/lib/inscricao-perguntas.functions";
 
 export const Route = createFileRoute("/inscricao")({
   head: () => ({
@@ -96,12 +104,112 @@ function validarArquivo(file: File, rotulo: string): void {
   }
 }
 
+function PerguntasCustomizadas({
+  perguntas,
+  respostas,
+  onChange,
+}: {
+  perguntas: PerguntaCustomizada[];
+  respostas: Record<string, { label: string; valor: unknown }>;
+  onChange: (value: Record<string, { label: string; valor: unknown }>) => void;
+}) {
+  const atualizar = (pergunta: PerguntaCustomizada, valor: unknown) =>
+    onChange({ ...respostas, [pergunta.chave]: { label: pergunta.label, valor } });
+  return (
+    <section className="space-y-4 rounded-lg border bg-muted/20 p-4">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        Perguntas adicionais
+      </h3>
+      {perguntas.map((p) => {
+        const valor = respostas[p.chave]?.valor ?? (p.tipo === "selecao_multipla" ? [] : "");
+        return (
+          <div key={p.id} className="space-y-2">
+            <Label>
+              {p.label}
+              {p.obrigatoria ? " *" : ""}
+            </Label>
+            {p.ajuda ? <p className="text-xs text-muted-foreground">{p.ajuda}</p> : null}
+            {p.tipo === "texto_longo" ? (
+              <Textarea
+                value={String(valor)}
+                required={p.obrigatoria}
+                onChange={(e) => atualizar(p, e.target.value)}
+              />
+            ) : p.tipo === "selecao_unica" ? (
+              <select
+                className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={String(valor)}
+                required={p.obrigatoria}
+                onChange={(e) => atualizar(p, e.target.value)}
+              >
+                <option value="">Selecione</option>
+                {p.opcoes.map((opcao) => (
+                  <option key={opcao}>{opcao}</option>
+                ))}
+              </select>
+            ) : p.tipo === "selecao_multipla" ? (
+              <div className="grid gap-2">
+                {p.opcoes.map((opcao) => (
+                  <label key={opcao} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={(Array.isArray(valor) ? valor : []).includes(opcao)}
+                      onCheckedChange={(marcado) => {
+                        const atual = Array.isArray(valor) ? valor : [];
+                        atualizar(
+                          p,
+                          marcado ? [...atual, opcao] : atual.filter((item) => item !== opcao),
+                        );
+                      }}
+                    />
+                    {opcao}
+                  </label>
+                ))}
+              </div>
+            ) : p.tipo === "sim_nao" ? (
+              <select
+                className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={String(valor)}
+                required={p.obrigatoria}
+                onChange={(e) => atualizar(p, e.target.value)}
+              >
+                <option value="">Selecione</option>
+                <option value="sim">Sim</option>
+                <option value="nao">Não</option>
+              </select>
+            ) : (
+              <Input
+                type={p.tipo === "numero" ? "number" : p.tipo === "data" ? "date" : "text"}
+                value={String(valor)}
+                required={p.obrigatoria}
+                onChange={(e) => atualizar(p, e.target.value)}
+              />
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
 function InscricaoPublicaPage() {
   const turmasQ = useQuery({
     queryKey: ["inscricao-publica", "turmas"],
     queryFn: () => listarTurmasInscricaoPublica(),
     staleTime: 5 * 60 * 1000,
   });
+  const landingQ = useQuery({
+    queryKey: ["landing-publica", "hero-config"],
+    queryFn: () => listarLandingHeroConfig(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const perguntasQ = useQuery({
+    queryKey: ["inscricao-publica", "perguntas"],
+    queryFn: () => listarInscricaoPerguntasPublicas(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const perguntas = perguntasQ.data ?? [];
+  const [respostasCustomizadas, setRespostasCustomizadas] = useState<
+    Record<string, { label: string; valor: unknown }>
+  >({});
   const municipios = useMemo(() => {
     const encontrados = Array.from(
       new Set(
@@ -132,6 +240,12 @@ function InscricaoPublicaPage() {
       if (dados.identifica_se_mulher === "nao") {
         throw new Error(MENSAGEM_INELEGIBILIDADE);
       }
+      for (const pergunta of perguntas) {
+        const valor = respostasCustomizadas[pergunta.chave]?.valor;
+        const vazio = valor == null || valor === "" || (Array.isArray(valor) && valor.length === 0);
+        if (pergunta.obrigatoria && vazio)
+          throw new Error(`Preencha a pergunta: ${pergunta.label}`);
+      }
       if (!documento) throw new Error("Anexe um documento com foto (RG ou CNH).");
       validarArquivo(documento, "Documento com foto");
       if (comprovante) validarArquivo(comprovante, "Comprovante de endereço");
@@ -144,7 +258,7 @@ function InscricaoPublicaPage() {
       ]);
       return criarInscricaoFormulario({
         data: {
-          dados: validacao.data,
+          dados: { ...validacao.data, respostas_customizadas: respostasCustomizadas },
           aceiteFisico: true,
           website,
           documento: {
@@ -237,6 +351,21 @@ function InscricaoPublicaPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-7">
+              {(landingQ.data?.conteudo?.inscricao as any)?.aviso ? (
+                <Alert className="border-primary/30 bg-primary/5">
+                  <AlertTitle>Aviso importante</AlertTitle>
+                  <AlertDescription>
+                    {(landingQ.data?.conteudo?.inscricao as any).aviso}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              {perguntas.length ? (
+                <PerguntasCustomizadas
+                  perguntas={perguntas}
+                  respostas={respostasCustomizadas}
+                  onChange={setRespostasCustomizadas}
+                />
+              ) : null}
               <InscricaoDigitalFields
                 value={dados}
                 onChange={setDados}
